@@ -18,4 +18,9 @@ Read `../AGENTS.md` and the relevant documents under `../docs` before adding fro
 - `npm run dev`: run the WeChat Mini Program dev build.
 - `npm run build`: build the WeChat Mini Program output.
 - `npm run dev:h5`: run the H5 dev server for browser debugging.
+- `npm run test`: run frontend unit tests.
 - `npm run type-check`: run TypeScript checks.
+
+## Source Layout
+
+See `src/README.md` before adding frontend source files.

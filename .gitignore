@@ -1,0 +1,49 @@
+# OS and editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+logs/
+
+# Node / frontend
+node_modules/
+dist/
+build/
+.output/
+.vite/
+.nuxt/
+coverage/
+
+# Python / backend
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+env/
+
+# FastAPI / local uploads
+uploads/
+media/
+
+# Database / local runtime
+*.sqlite
+*.sqlite3
+postgres-data/
+
+# Temporary files
+tmp/
+temp/

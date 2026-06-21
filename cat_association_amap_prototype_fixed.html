@@ -1,0 +1,1197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>猫协地图｜湖北师范大学高德地图原型</title>
+  <style>
+    :root {
+      --page-bg: #f7f8f5;
+      --card: rgba(255,255,255,.9);
+      --card-strong: rgba(255,255,255,.97);
+      --text: #171a20;
+      --muted: #6f7683;
+      --line: rgba(17,24,39,.08);
+      --green: #51ae57;
+      --blue: #2276ff;
+      --red: #ef3038;
+      --orange: #ff8b22;
+      --purple: #8754e8;
+      --shadow: 0 14px 40px rgba(30,39,60,.12);
+      --header-h: 128px;
+      --header-opacity: 1;
+      --drawer-h: 292px;
+      --drawer-content-opacity: 1;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --tab-h: 78px;
+      --radius: 24px;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 50% -10%, #fff 0, var(--page-bg) 42%, #eef5ee 100%);
+    }
+    button { font: inherit; border: 0; background: transparent; color: inherit; cursor: pointer; }
+
+    .app {
+      width: 100%;
+      max-width: 430px;
+      height: 100dvh;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(180deg, #fff 0%, #f7f8f5 65%, #fff 100%);
+      display: flex;
+      flex-direction: column;
+      padding: 0 14px calc(var(--safe-bottom) + 0px);
+    }
+
+    .header {
+      height: var(--header-h);
+      flex: 0 0 var(--header-h);
+      display: flex;
+      align-items: center;
+      padding: 20px 12px 12px;
+      overflow: hidden;
+      transition: height .2s ease, flex-basis .2s ease, padding .2s ease;
+    }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      opacity: var(--header-opacity);
+      transform: translateY(calc((1 - var(--header-opacity)) * -20px));
+      filter: blur(calc((1 - var(--header-opacity)) * 3px));
+      transition: opacity .16s ease, transform .2s ease, filter .2s ease;
+      pointer-events: none;
+    }
+    .brand-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 31px;
+      line-height: 1;
+      font-weight: 850;
+      letter-spacing: -1.1px;
+    }
+    .brand-title svg { width: 36px; height: 36px; flex: 0 0 auto; }
+    .brand-subtitle { font-size: 15px; color: var(--muted); letter-spacing: .7px; }
+
+    .map-wrap {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 260px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #dfeadc;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(255,255,255,.85);
+      transform: translateZ(0);
+    }
+    #amap { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+    .map-placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      background:
+        linear-gradient(29deg, rgba(255,255,255,0) 0 47%, rgba(255,255,255,.78) 48% 52%, rgba(255,255,255,0) 53% 100%) 0 0/190px 140px,
+        linear-gradient(-33deg, rgba(255,255,255,0) 0 45%, rgba(255,255,255,.72) 46% 52%, rgba(255,255,255,0) 53% 100%) 0 0/170px 150px,
+        radial-gradient(ellipse at 46% 66%, rgba(67,154,228,.34) 0 13%, transparent 14%),
+        linear-gradient(135deg, #e6f2de, #f7f8f6 49%, #e4f2dd);
+      z-index: 1;
+    }
+    .map-placeholder.is-hidden { display: none; }
+    .placeholder-card {
+      width: min(315px, 100%);
+      border-radius: 20px;
+      background: rgba(255,255,255,.9);
+      box-shadow: 0 14px 36px rgba(17,24,39,.14);
+      padding: 18px;
+      line-height: 1.65;
+      color: #4b5563;
+      font-size: 13px;
+      backdrop-filter: blur(14px);
+    }
+    .placeholder-card b { color: #111827; }
+    .placeholder-card code { background: #eef6ee; color: #237d36; padding: 2px 5px; border-radius: 6px; }
+
+    .map-chip {
+      position: absolute;
+      left: 14px;
+      top: 14px;
+      z-index: 20;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 14px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.9);
+      box-shadow: 0 10px 26px rgba(17,24,39,.1);
+      backdrop-filter: blur(18px);
+      font-size: 15px;
+      font-weight: 760;
+      user-select: none;
+    }
+    .map-chip svg { width: 20px; height: 20px; }
+    .map-chip .chevron { width: 16px; height: 16px; opacity: .75; }
+
+    .filter-menu {
+      position: absolute;
+      left: 14px;
+      top: 62px;
+      z-index: 45;
+      width: 184px;
+      display: none;
+      padding: 8px;
+      border-radius: 20px;
+      background: rgba(255,255,255,.94);
+      border: 1px solid rgba(255,255,255,.86);
+      box-shadow: 0 18px 38px rgba(17,24,39,.16);
+      backdrop-filter: blur(20px) saturate(150%);
+      -webkit-backdrop-filter: blur(20px) saturate(150%);
+    }
+    .filter-menu.is-open { display: grid; gap: 4px; }
+    .filter-option {
+      width: 100%;
+      min-width: 0;
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr);
+      align-items: center;
+      gap: 9px;
+      padding: 9px 10px;
+      border-radius: 14px;
+      font-size: 13px;
+      font-weight: 760;
+      color: #2a313d;
+      text-align: left;
+      transition: background .16s ease, color .16s ease, transform .16s ease;
+    }
+    .filter-option:active { transform: scale(.98); }
+    .filter-option.is-active {
+      color: #248437;
+      background: rgba(81,174,87,.12);
+    }
+    .filter-option-icon {
+      width: 26px;
+      height: 26px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      box-shadow: 0 7px 16px rgba(17,24,39,.10);
+      overflow: hidden;
+    }
+    .filter-option-icon img {
+      width: 20px;
+      height: 20px;
+      display: block;
+      object-fit: contain;
+      pointer-events: none;
+    }
+    .filter-option[data-filter="all"] .filter-option-icon {
+      color: #29313d;
+      background: rgba(17,24,39,.06);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.9);
+    }
+    .filter-option-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .point-float {
+      position: absolute;
+      left: 14px;
+      right: 14px;
+      bottom: 14px;
+      z-index: 25;
+      display: none;
+      align-items: center;
+      gap: 11px;
+      padding: 12px 13px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 12px 34px rgba(17,24,39,.14);
+      backdrop-filter: blur(18px);
+    }
+    .point-float.is-visible { display: flex; }
+    .point-float .icon-pill {
+      width: 42px;
+      height: 42px;
+      flex: 0 0 42px;
+      border-radius: 16px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(17,24,39,.18);
+    }
+    .point-float h3 { margin: 0 0 4px; font-size: 15px; line-height: 1.2; }
+    .point-float p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.35; }
+
+    /* 高德 Marker 的真实内容。这里没有把点位写成屏幕绝对定位，位置完全交给 AMap.Marker 的经纬度控制。 */
+    .real-marker {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+      user-select: none;
+      transform: translateY(-2px);
+      cursor: pointer;
+    }
+    .marker-pin {
+      position: relative;
+      width: 32px;
+      height: 41px;
+      display: grid;
+      place-items: center;
+      color: #fff;
+      filter: drop-shadow(0 8px 12px rgba(0,0,0,.18));
+      flex: 0 0 32px;
+    }
+    .marker-pin svg { width: 100%; height: 100%; display: block; }
+    .marker-label {
+      margin-left: -2px;
+      padding: 8px 12px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 8px 24px rgba(20,28,40,.12);
+      font-size: 13px;
+      font-weight: 760;
+      color: #29313d;
+      backdrop-filter: blur(12px);
+    }
+    .badge-count {
+      position: absolute;
+      left: 24px;
+      top: -8px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: var(--red);
+      color: #fff;
+      display: grid;
+      place-items: center;
+      border: 2px solid #fff;
+      font-size: 12px;
+      font-weight: 900;
+      box-shadow: 0 5px 12px rgba(239,48,56,.34);
+    }
+
+    /*
+      下拉面板和底部 Tab 已分离：
+      - .drawer 是可以上下拖拽的内容面板。
+      - .tabs 是固定底部主菜单，不会被拖没。
+      - .drawer 收起时只剩一条横线，地图会吃掉释放出来的空间。
+    */
+    .drawer {
+      height: var(--drawer-h);
+      flex: 0 0 var(--drawer-h);
+      min-height: 34px;
+      margin: 10px 0 0;
+      border-radius: 26px 26px 0 0;
+      background: rgba(255,255,255,.92);
+      border: 1px solid rgba(255,255,255,.85);
+      border-bottom: 0;
+      box-shadow: 0 -14px 40px rgba(30,39,60,.1);
+      overflow: hidden;
+      backdrop-filter: blur(18px);
+      transition: height .2s ease, flex-basis .2s ease, margin .2s ease;
+      display: flex;
+      flex-direction: column;
+      touch-action: none;
+      z-index: 30;
+    }
+    .drawer-grip-area { flex: 0 0 34px; display: grid; place-items: center; cursor: grab; user-select: none; }
+    .drawer-grip-area:active { cursor: grabbing; }
+    .grip { width: 45px; height: 5px; border-radius: 999px; background: #d6dae2; }
+
+    .drawer-content {
+      flex: 1 1 auto;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      opacity: var(--drawer-content-opacity);
+      transform: translateY(calc((1 - var(--drawer-content-opacity)) * 8px));
+      pointer-events: auto;
+      transition: opacity .16s ease, transform .18s ease;
+    }
+    .drawer.is-collapsed .drawer-content {
+      pointer-events: none;
+    }
+
+    .task-panel {
+      margin: 0 0 12px;
+      padding: 8px 14px 0;
+      border-top: 0;
+      flex: 1 1 auto;
+      overflow: auto;
+    }
+    .task-panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .task-panel h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1;
+      letter-spacing: -.45px;
+      font-weight: 850;
+    }
+    .task-panel-head a {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      color: #7e8591;
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 760;
+    }
+    .task-list { display: grid; gap: 10px; }
+    .task-card {
+      display: grid;
+      grid-template-columns: 36px minmax(0,1fr) auto;
+      align-items: center;
+      gap: 14px;
+      padding: 16px 14px;
+      min-height: 82px;
+      border-radius: 22px;
+      background: rgba(255,255,255,.98);
+      border: 1px solid rgba(17,24,39,.06);
+      box-shadow: 0 12px 28px rgba(30,39,60,.05);
+    }
+    .task-card > div:nth-child(2) { min-width: 0; }
+    .task-card h3 {
+      margin: 0 0 7px;
+      font-size: 15px;
+      line-height: 1.2;
+      font-weight: 800;
+      letter-spacing: -.18px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .task-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      color: #8b919b;
+      flex-wrap: wrap;
+    }
+    .task-tag {
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-weight: 760;
+      font-size: 11px;
+      line-height: 1.2;
+    }
+    .tag-red { color: var(--red); background: rgba(239,48,56,.09); }
+    .tag-blue { color: var(--blue); background: rgba(34,118,255,.09); }
+    .task-state-wrap {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding-left: 6px;
+      color: #a1a7b2;
+    }
+    .task-state { font-size: 11px; font-weight: 800; }
+    .state-red { color: var(--red); }
+    .state-blue { color: var(--blue); }
+    .task-arrow { width: 15px; height: 15px; display: block; }
+    .task-icon {
+      color:#fff;
+      width:30px;
+      height:30px;
+      border-radius:50%;
+      display:grid;
+      place-items:center;
+      box-shadow: 0 8px 18px rgba(17,24,39,.12);
+    }
+
+    .tabs {
+      flex: 0 0 calc(var(--tab-h) + var(--safe-bottom));
+      height: calc(var(--tab-h) + var(--safe-bottom));
+      margin: 0;
+      padding-bottom: var(--safe-bottom);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      align-items: center;
+      border-top: 1px solid var(--line);
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 -12px 30px rgba(30,39,60,.08);
+      backdrop-filter: blur(18px);
+      z-index: 35;
+    }
+    .tab { height: var(--tab-h); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; color: #656b75; font-size: 13px; font-weight: 700; }
+    .tab.is-active { color: var(--green); }
+    .tab-icon { width: 29px; height: 29px; display: grid; place-items: center; }
+    .tab-icon svg { width: 29px; height: 29px; }
+
+    .amap-logo, .amap-copyright { opacity: .45; transform: scale(.85); transform-origin: left bottom; }
+
+    .marker-pin {
+      width: 44px;
+      height: 52px;
+      flex: 0 0 44px;
+    }
+    .marker-pin img,
+    .legend-icon img,
+    .task-icon img,
+    .tab-icon img,
+    .point-float img,
+    .locate-btn img {
+      width: 100%;
+      height: 100%;
+      display: block;
+      object-fit: contain;
+      pointer-events: none;
+    }
+    .legend-icon img { width: 14px; height: 14px; }
+    .task-icon img { width: 18px; height: 18px; }
+    .point-float .icon-pill {
+      background: transparent !important;
+      box-shadow: none;
+      border-radius: 0;
+    }
+    .point-float > div:nth-child(2) { min-width: 0; flex: 1 1 auto; }
+    .point-actions { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; }
+    .nav-btn {
+      height: 34px;
+      padding: 0 13px;
+      border-radius: 999px;
+      background: var(--green);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      box-shadow: 0 8px 18px rgba(81,174,87,.24);
+    }
+    .locate-btn {
+      position: absolute;
+      right: 14px;
+      top: 14px;
+      z-index: 22;
+      width: 43px;
+      height: 43px;
+      display: grid;
+      place-items: center;
+      padding: 9px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 10px 26px rgba(17,24,39,.1);
+      backdrop-filter: blur(18px);
+    }
+    .map-toast {
+      position: absolute;
+      left: 50%;
+      top: 66px;
+      z-index: 40;
+      display: none;
+      max-width: calc(100% - 40px);
+      transform: translateX(-50%);
+      padding: 8px 12px;
+      border-radius: 999px;
+      background: rgba(23,26,32,.82);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.3;
+      box-shadow: 0 10px 26px rgba(17,24,39,.18);
+      backdrop-filter: blur(12px);
+      white-space: nowrap;
+    }
+    .map-toast.is-visible { display: block; }
+    .current-location-marker {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transform: translateY(-2px);
+      white-space: nowrap;
+      user-select: none;
+    }
+    .current-location-marker .dot {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #19a7ff;
+      border: 4px solid #fff;
+      box-shadow: 0 0 0 8px rgba(25,167,255,.18), 0 7px 18px rgba(25,167,255,.35);
+    }
+    .current-location-marker .text {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 7px 20px rgba(20,28,40,.12);
+      font-size: 12px;
+      font-weight: 800;
+      color: #167fd8;
+    }
+
+
+    /* 底部菜单栏 UI 优化：悬浮玻璃胶囊 + 圆润选中态 */
+    :root {
+      --tab-h: 74px;
+      --tab-radius: 32px;
+      --tab-green-soft: rgba(81,174,87,.13);
+      --tab-green-glow: rgba(81,174,87,.24);
+    }
+
+    .tabs {
+      position: relative;
+      flex: 0 0 calc(var(--tab-h) + var(--safe-bottom) + 18px);
+      height: calc(var(--tab-h) + var(--safe-bottom) + 18px);
+      margin: 10px 0 10px;
+      padding: 8px 8px calc(var(--safe-bottom) + 8px);
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      align-items: stretch;
+      gap: 6px;
+      border: 1px solid rgba(255,255,255,.82);
+      border-radius: var(--tab-radius);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.76)),
+        radial-gradient(circle at 18% 0%, rgba(81,174,87,.16), transparent 42%),
+        radial-gradient(circle at 86% 20%, rgba(34,118,255,.10), transparent 38%);
+      box-shadow:
+        0 -10px 34px rgba(35,48,72,.10),
+        0 18px 42px rgba(30,39,60,.14),
+        inset 0 1px 0 rgba(255,255,255,.9),
+        inset 0 -1px 0 rgba(17,24,39,.04);
+      backdrop-filter: blur(22px) saturate(150%);
+      -webkit-backdrop-filter: blur(22px) saturate(150%);
+      overflow: hidden;
+      z-index: 35;
+    }
+
+    .tabs::before {
+      content: "";
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      top: 0;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255,255,255,.95), transparent);
+      pointer-events: none;
+    }
+
+    .tab {
+      position: relative;
+      height: auto;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      border-radius: 24px;
+      color: #7a818c;
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: -.1px;
+      transition:
+        color .18s ease,
+        background .18s ease,
+        box-shadow .18s ease,
+        transform .18s ease;
+    }
+
+    .tab::after {
+      content: "";
+      position: absolute;
+      inset: 7px 5px;
+      border-radius: 22px;
+      background: transparent;
+      transition: background .18s ease, box-shadow .18s ease, transform .18s ease;
+      z-index: -1;
+    }
+
+    .tab:active {
+      transform: scale(.97);
+    }
+
+    .tab.is-active {
+      color: #248437;
+    }
+
+    .tab.is-active::after {
+      background:
+        linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.58)),
+        var(--tab-green-soft);
+      box-shadow:
+        0 10px 22px var(--tab-green-glow),
+        inset 0 1px 0 rgba(255,255,255,.85),
+        inset 0 -1px 0 rgba(81,174,87,.08);
+    }
+
+    .tab-icon {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 15px;
+      padding: 4px;
+      background: rgba(17,24,39,.035);
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.72);
+      transition: background .18s ease, box-shadow .18s ease, transform .18s ease;
+    }
+
+    .tab-icon svg,
+    .tab-icon img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+      display: block;
+      opacity: .68;
+      transform: translateZ(0);
+      transition: opacity .18s ease, transform .18s ease, filter .18s ease;
+    }
+
+    .tab.is-active .tab-icon {
+      background: linear-gradient(180deg, rgba(81,174,87,.18), rgba(81,174,87,.08));
+      box-shadow:
+        0 7px 16px rgba(81,174,87,.18),
+        inset 0 1px 0 rgba(255,255,255,.95);
+      transform: translateY(-1px);
+    }
+
+    .tab.is-active .tab-icon svg,
+    .tab.is-active .tab-icon img {
+      opacity: 1;
+      transform: scale(1.04);
+      filter: drop-shadow(0 4px 7px rgba(81,174,87,.16));
+    }
+
+    .tab span:last-child {
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      transform: translateY(1px);
+    }
+
+    @media (max-width: 380px) {
+      .tabs {
+        gap: 3px;
+        padding-left: 6px;
+        padding-right: 6px;
+      }
+      .tab { font-size: 11px; }
+      .tab-icon { width: 30px; height: 30px; }
+      .tab-icon svg,
+      .tab-icon img { width: 23px; height: 23px; }
+    }
+
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <header class="header">
+      <section class="brand" aria-label="页面标题">
+        <div class="brand-title">
+          <span>猫协地图</span>
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M23 31c4.9-.5 8.4 3.6 10.2 7.4 1.9-3.8 5.6-7.9 10.4-7.4 6.3.7 9 9.9 5.2 15-3.9 5.4-9.3 5-14.3 2.5a4 4 0 0 0-3.5 0c-5 2.5-10.4 2.9-14.3-2.5-3.8-5.1-1.1-14.3 6.3-15Z" fill="#51ae57"/>
+            <ellipse cx="17" cy="22" rx="6" ry="8" fill="#51ae57"/>
+            <ellipse cx="31.5" cy="16" rx="6" ry="8" fill="#51ae57"/>
+            <ellipse cx="46" cy="22" rx="6" ry="8" fill="#51ae57"/>
+          </svg>
+        </div>
+        <div class="brand-subtitle">探索校园 · 守护猫咪</div>
+      </section>
+    </header>
+
+    <section class="map-wrap" id="mapWrap">
+      <div id="amap"></div>
+      <div class="map-placeholder" id="mapPlaceholder">
+        <div class="placeholder-card">
+          <b>等待加载高德地图。</b><br />
+          把代码里的 <code>AMAP_KEY</code> 换成你的高德 Web JS API Key。点位会用 <code>AMap.Marker</code> 绑定湖北师范大学附近的真实经纬度；拖动、缩放地图时，点位会跟着地图移动。
+        </div>
+      </div>
+
+      <button class="map-chip" type="button" id="filterChip" aria-label="打开地图点位筛选">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M5 5.2h14a1.7 1.7 0 0 1 1.7 1.7v10.2a1.7 1.7 0 0 1-1.7 1.7H5a1.7 1.7 0 0 1-1.7-1.7V6.9A1.7 1.7 0 0 1 5 5.2Z" fill="none" stroke="currentColor" stroke-width="2"/>
+          <path d="m7.8 9.2 3.3 3.3 5.1-5.1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7.2 16.2h9.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <span id="filterLabel">全部标记</span>
+        <svg class="chevron" viewBox="0 0 20 20" aria-hidden="true">
+          <path d="m5.5 7.5 4.5 4.5 4.5-4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+
+      <div class="filter-menu" id="filterMenu" role="menu" aria-label="地图点位筛选">
+        <button class="filter-option is-active" type="button" role="menuitem" data-filter="all">
+          <span class="filter-option-icon" data-icon="mapIcon"></span>
+          <span class="filter-option-label">全部标记</span>
+        </button>
+        <button class="filter-option" type="button" role="menuitem" data-filter="cat">
+          <span class="filter-option-icon" data-icon="catMarker" style="background: var(--purple)"></span>
+          <span class="filter-option-label">常驻猫咪</span>
+        </button>
+        <button class="filter-option" type="button" role="menuitem" data-filter="supply">
+          <span class="filter-option-icon" data-icon="supplyMarker" style="background: var(--orange)"></span>
+          <span class="filter-option-label">物资点</span>
+        </button>
+        <button class="filter-option" type="button" role="menuitem" data-filter="daily_task">
+          <span class="filter-option-icon" data-icon="taskMarker" style="background: var(--blue)"></span>
+          <span class="filter-option-label">日常任务</span>
+        </button>
+        <button class="filter-option" type="button" role="menuitem" data-filter="emergency_task">
+          <span class="filter-option-icon" data-icon="emergencyMarker" style="background: var(--red)"></span>
+          <span class="filter-option-label">紧急任务</span>
+        </button>
+      </div>
+
+      <button class="locate-btn" type="button" id="locateBtn" aria-label="定位到我的位置"></button>
+      <div class="map-toast" id="mapToast" role="status" aria-live="polite"></div>
+
+      <aside class="point-float" id="pointFloat">
+        <div class="icon-pill" id="pointFloatIcon"></div>
+        <div>
+          <h3 id="pointFloatTitle">点位标题</h3>
+          <p id="pointFloatDesc">点位说明</p>
+        </div>
+        <div class="point-actions">
+          <button class="nav-btn" type="button" id="navigateBtn">导航</button>
+        </div>
+      </aside>
+    </section>
+
+    <section class="drawer" id="drawer">
+      <div class="drawer-grip-area" id="drawerGrip" title="向下拖动收起，向上拖动展开">
+        <div class="grip"></div>
+      </div>
+
+      <div class="drawer-content">
+        <section class="task-panel" id="taskPanel">
+          <div class="task-panel-head">
+            <h2>最新任务</h2>
+            <a href="javascript:void(0)">查看全部
+              <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><path d="m7.5 4.5 5.5 5.5-5.5 5.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </a>
+          </div>
+          <div class="task-list">
+            <article class="task-card">
+              <div class="task-icon" style="background:var(--red);"></div>
+              <div>
+                <h3>北门草丛紧急救助任务</h3>
+                <div class="task-meta"><span class="task-tag tag-red">紧急任务</span><span>·</span><span>距离 120m</span></div>
+              </div>
+              <div class="task-state-wrap">
+                <div class="task-state state-red">进行中</div>
+                <svg class="task-arrow" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4.5 5.5 5.5L7 15.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </article>
+            <article class="task-card">
+              <div class="task-icon" style="background:var(--blue);"></div>
+              <div>
+                <h3>食堂后方投喂清洁</h3>
+                <div class="task-meta"><span class="task-tag tag-blue">日常任务</span><span>·</span><span>距离 250m</span></div>
+              </div>
+              <div class="task-state-wrap">
+                <div class="task-state state-blue">可接取</div>
+                <svg class="task-arrow" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4.5 5.5 5.5L7 15.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </div>
+            </article>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <nav class="tabs" aria-label="底部导航">
+      <button class="tab is-active" type="button"><span class="tab-icon"></span><span>地图</span></button>
+      <button class="tab" type="button"><span class="tab-icon"></span><span>猫咪库</span></button>
+      <button class="tab" type="button"><span class="tab-icon"></span><span>任务</span></button>
+      <button class="tab" type="button"><span class="tab-icon"></span><span>我的</span></button>
+    </nav>
+  </main>
+
+  <script>
+    /**
+     * 只需要改这里：
+     * 1. AMAP_KEY：你的高德 Web JS API Key。
+     * 2. businessPoints：后续替换成后端接口返回的真实点位。
+     *
+     * 湖北师范大学在高德页面显示的坐标是：30.229910,115.062202。
+     * 高德 JS API 的 center / position 格式是 [经度, 纬度]，所以这里写成 [115.062202, 30.229910]。
+     */
+    const AMAP_KEY = 'replace-with-amap-web-key';
+    // 如果你的 Key 是 2021-12-02 之后申请的，一般还需要填写安全密钥 securityJsCode。
+    // 正式项目建议走后端/Nginx 代理，不要把安全密钥明文放在前端。
+    const AMAP_SECURITY_JS_CODE = 'replace-with-amap-security-js-code';
+
+    if (AMAP_SECURITY_JS_CODE) {
+      window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_JS_CODE };
+    }
+
+    const SVG_ASSETS = {
+          "catMarker": "data:image/svg+xml;base64,PHN2Zw0KICB3aWR0aD0iMTI4Ig0KICBoZWlnaHQ9IjE0OCINCiAgdmlld0JveD0iMCAwIDEyOCAxNDgiDQogIGZpbGw9Im5vbmUiDQogIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyINCiAgc3R5bGU9Ii0tcGluOiNhNTZjZmY7IC0tcGluLWRhcms6IzZlMzFlYTsiDQo+DQogIDxkZWZzPg0KICAgIDwhLS0g5Zyw5Zu+6ZKJ5Li75L2T5riQ5Y+YIC0tPg0KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0icGluR3JhZCIgeDE9IjY0IiB5MT0iMTAiIHgyPSI2NCIgeTI9IjEzMiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluKSIgLz4NCiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluLWRhcmspIiAvPg0KICAgIDwvbGluZWFyR3JhZGllbnQ+DQoNCiAgICA8IS0tIOmrmOWFiSAtLT4NCiAgICA8cmFkaWFsR3JhZGllbnQNCiAgICAgIGlkPSJwaW5HbG9zcyINCiAgICAgIGN4PSIwIg0KICAgICAgY3k9IjAiDQogICAgICByPSIxIg0KICAgICAgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiDQogICAgICBncmFkaWVudFRyYW5zZm9ybT0idHJhbnNsYXRlKDY0IDI0KSByb3RhdGUoOTApIHNjYWxlKDU2IDY0KSINCiAgICA+DQogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSJ3aGl0ZSIgc3RvcC1vcGFjaXR5PSIwLjMwIi8+DQogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IndoaXRlIiBzdG9wLW9wYWNpdHk9IjAiLz4NCiAgICA8L3JhZGlhbEdyYWRpZW50Pg0KDQogICAgPCEtLSDkuLvkvZPpmLTlvbEgLS0+DQogICAgPGZpbHRlciBpZD0icGluU2hhZG93IiB4PSI2IiB5PSI0IiB3aWR0aD0iMTE2IiBoZWlnaHQ9IjE0MiIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIj4NCiAgICAgIDxmZURyb3BTaGFkb3cgZHg9IjAiIGR5PSI4IiBzdGREZXZpYXRpb249IjgiIGZsb29kLWNvbG9yPSIjM2ExZjgwIiBmbG9vZC1vcGFjaXR5PSIwLjIyIi8+DQogICAgPC9maWx0ZXI+DQoNCiAgICA8IS0tIOeIquWNsOmYtOW9sSAtLT4NCiAgICA8ZmlsdGVyIGlkPSJwYXdTaGFkb3ciIHg9IjE4IiB5PSIxOCIgd2lkdGg9IjkyIiBoZWlnaHQ9IjkyIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiPg0KICAgICAgPGZlRHJvcFNoYWRvdyBkeD0iMCIgZHk9IjQiIHN0ZERldmlhdGlvbj0iNCIgZmxvb2QtY29sb3I9IiMyYTE2NWMiIGZsb29kLW9wYWNpdHk9IjAuMTgiLz4NCiAgICA8L2ZpbHRlcj4NCg0KICAgIDwhLS0g5bqV6YOo5oKs5rWu6Zi05b2xIC0tPg0KICAgIDxyYWRpYWxHcmFkaWVudA0KICAgICAgaWQ9ImJvdHRvbVNoYWRvdyINCiAgICAgIGN4PSIwIg0KICAgICAgY3k9IjAiDQogICAgICByPSIxIg0KICAgICAgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiDQogICAgICBncmFkaWVudFRyYW5zZm9ybT0idHJhbnNsYXRlKDY0IDEzOSkgc2NhbGUoMTggNikiDQogICAgPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzI0MzI0QSIgc3RvcC1vcGFjaXR5PSIwLjE4Ii8+DQogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMyNDMyNEEiIHN0b3Atb3BhY2l0eT0iMCIvPg0KICAgIDwvcmFkaWFsR3JhZGllbnQ+DQogIDwvZGVmcz4NCg0KICA8IS0tIOW6lemDqOaKleW9sSAtLT4NCiAgPGVsbGlwc2UgY3g9IjY0IiBjeT0iMTM5IiByeD0iMTgiIHJ5PSI2IiBmaWxsPSJ1cmwoI2JvdHRvbVNoYWRvdykiIC8+DQoNCiAgPCEtLSDlnLDlm77pkonkuLvkvZMgLS0+DQogIDxnIGZpbHRlcj0idXJsKCNwaW5TaGFkb3cpIj4NCiAgICA8cGF0aA0KICAgICAgZD0iTTY0IDEwQzM2LjQgMTAgMTggMjkuNSAxOCA1Ni44QzE4IDkyLjcgNTguNiAxMzAuNSA2Mi4zIDEzMy45QzYzLjMgMTM0LjggNjQuNyAxMzQuOCA2NS43IDEzMy45QzY5LjQgMTMwLjUgMTEwIDkyLjcgMTEwIDU2LjhDMTEwIDI5LjUgOTEuNiAxMCA2NCAxMFoiDQogICAgICBmaWxsPSJ1cmwoI3BpbkdyYWQpIg0KICAgIC8+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik02NCAxMEMzNi40IDEwIDE4IDI5LjUgMTggNTYuOEMxOCA5Mi43IDU4LjYgMTMwLjUgNjIuMyAxMzMuOUM2My4zIDEzNC44IDY0LjcgMTM0LjggNjUuNyAxMzMuOUM2OS40IDEzMC41IDExMCA5Mi43IDExMCA1Ni44QzExMCAyOS41IDkxLjYgMTAgNjQgMTBaIg0KICAgICAgZmlsbD0idXJsKCNwaW5HbG9zcykiDQogICAgLz4NCiAgPC9nPg0KDQogIDwhLS0g54iq5Y2wIC0tPg0KICA8ZyBmaWx0ZXI9InVybCgjcGF3U2hhZG93KSIgZmlsbD0id2hpdGUiPg0KICAgIDwhLS0g5Zub5Liq6ISa6La+77ya5b285q2k5a6M5YWo5YiG5byA77yM6Ze06ZqU57qmIDVweCAtLT4NCiAgICA8ZWxsaXBzZSBjeD0iMzEuNSIgY3k9IjUzIiByeD0iOCIgcnk9IjEzIi8+DQogICAgPGVsbGlwc2UgY3g9IjUyLjUiIGN5PSI0Mi41IiByeD0iOCIgcnk9IjE0LjUiLz4NCiAgICA8ZWxsaXBzZSBjeD0iNzUuNSIgY3k9IjQyLjUiIHJ4PSI4IiByeT0iMTQuNSIvPg0KICAgIDxlbGxpcHNlIGN4PSI5Ni41IiBjeT0iNTMiIHJ4PSI4IiByeT0iMTMiLz4NCg0KICAgIDwhLS0g5LiL5pa55aSn6IKJ5Z6r77ya5pu06LS06L+R5Y+C6ICD5Zu+IC0tPg0KICAgIDxwYXRoDQogICAgICBkPSJNNjQgNjINCiAgICAgICAgIEM3MiA2MiA3OC4yIDY1LjQgODMuNSA3Mi44DQogICAgICAgICBDODguMSA3OS4zIDkxIDg1LjggOTEgOTIuOA0KICAgICAgICAgQzkxIDEwMS4yIDg1LjIgMTA0LjUgNzguNyAxMDQuNQ0KICAgICAgICAgQzc0LjcgMTA0LjUgNzEgMTAzLjUgNjcuNCAxMDIuNQ0KICAgICAgICAgQzY1LjIgMTAxLjkgNjIuOCAxMDEuOSA2MC42IDEwMi41DQogICAgICAgICBDNTcgMTAzLjUgNTMuMyAxMDQuNSA0OS4zIDEwNC41DQogICAgICAgICBDNDIuOCAxMDQuNSAzNyAxMDEuMiAzNyA5Mi44DQogICAgICAgICBDMzcgODUuOCAzOS45IDc5LjMgNDQuNSA3Mi44DQogICAgICAgICBDNDkuOCA2NS40IDU2IDYyIDY0IDYyWiINCiAgICAvPg0KICA8L2c+DQo8L3N2Zz4=",
+          "supplyMarker": "data:image/svg+xml;base64,PHN2Zw0KICB3aWR0aD0iMTI4Ig0KICBoZWlnaHQ9IjE0OCINCiAgdmlld0JveD0iMCAwIDEyOCAxNDgiDQogIGZpbGw9Im5vbmUiDQogIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyINCiAgc3R5bGU9Ii0tcGluOiNmZjlhMmY7IC0tcGluLWRhcms6I2ZmNmEwMDsgLS1pbms6I2ZmN2MxMjsiDQo+DQogIDxkZWZzPg0KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ic3VwcGx5LXBpbi1ncmFkIiB4MT0iNjQiIHkxPSIxMCIgeDI9IjY0IiB5Mj0iMTMyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+DQogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjp2YXIoLS1waW4pIiAvPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjp2YXIoLS1waW4tZGFyaykiIC8+DQogICAgPC9saW5lYXJHcmFkaWVudD4NCg0KICAgIDxyYWRpYWxHcmFkaWVudCBpZD0ic3VwcGx5LXBpbi1nbG9zcyIgY3g9IjAiIGN5PSIwIiByPSIxIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSINCiAgICAgIGdyYWRpZW50VHJhbnNmb3JtPSJ0cmFuc2xhdGUoNjQgMjYpIHJvdGF0ZSg5MCkgc2NhbGUoNTIgNjIpIj4NCiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IndoaXRlIiBzdG9wLW9wYWNpdHk9IjAuMzQiLz4NCiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0id2hpdGUiIHN0b3Atb3BhY2l0eT0iMCIvPg0KICAgIDwvcmFkaWFsR3JhZGllbnQ+DQoNCiAgICA8ZmlsdGVyIGlkPSJzdXBwbHktcGluLXNoYWRvdyIgeD0iOCIgeT0iNCIgd2lkdGg9IjExMiIgaGVpZ2h0PSIxNDAiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+DQogICAgICA8ZmVEcm9wU2hhZG93IGR4PSIwIiBkeT0iOCIgc3RkRGV2aWF0aW9uPSI4IiBmbG9vZC1jb2xvcj0iIzdhMzUwOSIgZmxvb2Qtb3BhY2l0eT0iMC4yMCIvPg0KICAgIDwvZmlsdGVyPg0KDQogICAgPGZpbHRlciBpZD0ic3VwcGx5LWdseXBoLXNoYWRvdyIgeD0iMTgiIHk9IjE0IiB3aWR0aD0iOTIiIGhlaWdodD0iOTIiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+DQogICAgICA8ZmVEcm9wU2hhZG93IGR4PSIwIiBkeT0iNCIgc3RkRGV2aWF0aW9uPSI0IiBmbG9vZC1jb2xvcj0iIzdhMzUwOSIgZmxvb2Qtb3BhY2l0eT0iMC4xNiIvPg0KICAgIDwvZmlsdGVyPg0KDQogICAgPHJhZGlhbEdyYWRpZW50IGlkPSJzdXBwbHktYm90dG9tLXNoYWRvdyIgY3g9IjAiIGN5PSIwIiByPSIxIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSINCiAgICAgIGdyYWRpZW50VHJhbnNmb3JtPSJ0cmFuc2xhdGUoNjQgMTM5KSBzY2FsZSgxOCA2KSI+DQogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMjMzMDRBIiBzdG9wLW9wYWNpdHk9IjAuMTgiLz4NCiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzIzMzA0QSIgc3RvcC1vcGFjaXR5PSIwIi8+DQogICAgPC9yYWRpYWxHcmFkaWVudD4NCiAgPC9kZWZzPg0KDQogIDxlbGxpcHNlIGN4PSI2NCIgY3k9IjEzOSIgcng9IjE4IiByeT0iNiIgZmlsbD0idXJsKCNzdXBwbHktYm90dG9tLXNoYWRvdykiLz4NCg0KICA8ZyBmaWx0ZXI9InVybCgjc3VwcGx5LXBpbi1zaGFkb3cpIj4NCiAgICA8cGF0aA0KICAgICAgZD0iTTY0IDEwQzM2LjQgMTAgMTggMjkuNSAxOCA1Ni44QzE4IDkyLjcgNTguNiAxMzAuNSA2Mi4zIDEzMy45QzYzLjMgMTM0LjggNjQuNyAxMzQuOCA2NS43IDEzMy45QzY5LjQgMTMwLjUgMTEwIDkyLjcgMTEwIDU2LjhDMTEwIDI5LjUgOTEuNiAxMCA2NCAxMFoiDQogICAgICBmaWxsPSJ1cmwoI3N1cHBseS1waW4tZ3JhZCkiDQogICAgLz4NCiAgICA8cGF0aA0KICAgICAgZD0iTTY0IDEwQzM2LjQgMTAgMTggMjkuNSAxOCA1Ni44QzE4IDkyLjcgNTguNiAxMzAuNSA2Mi4zIDEzMy45QzYzLjMgMTM0LjggNjQuNyAxMzQuOCA2NS43IDEzMy45QzY5LjQgMTMwLjUgMTEwIDkyLjcgMTEwIDU2LjhDMTEwIDI5LjUgOTEuNiAxMCA2NCAxMFoiDQogICAgICBmaWxsPSJ1cmwoI3N1cHBseS1waW4tZ2xvc3MpIg0KICAgIC8+DQogIDwvZz4NCg0KICA8ZyBmaWx0ZXI9InVybCgjc3VwcGx5LWdseXBoLXNoYWRvdykiPg0KICAgIDxyZWN0IHg9IjM1IiB5PSI1OCIgd2lkdGg9IjU4IiBoZWlnaHQ9IjQyIiByeD0iMTAiIGZpbGw9IndoaXRlIi8+DQoNCiAgICA8cGF0aA0KICAgICAgZD0iTTM2LjUgNTUuNUw0OSAzNkg3MUw2MCA1NS41SDM2LjVaIg0KICAgICAgZmlsbD0id2hpdGUiDQogICAgLz4NCiAgICA8cGF0aA0KICAgICAgZD0iTTkxLjUgNTUuNUw3OSAzNkg1N0w2OCA1NS41SDkxLjVaIg0KICAgICAgZmlsbD0id2hpdGUiDQogICAgLz4NCg0KICAgIDxyZWN0IHg9IjU4IiB5PSI1NS41IiB3aWR0aD0iMTIiIGhlaWdodD0iMjAiIHJ4PSIzIiBmaWxsPSJ2YXIoLS1pbmspIi8+DQogICAgPHJlY3QgeD0iNTAiIHk9Ijc4IiB3aWR0aD0iMjgiIGhlaWdodD0iNyIgcng9IjMuNSIgZmlsbD0idmFyKC0taW5rKSIvPg0KICA8L2c+DQo8L3N2Zz4=",
+          "taskMarker": "data:image/svg+xml;base64,PHN2Zw0KICB3aWR0aD0iMTI4Ig0KICBoZWlnaHQ9IjE0OCINCiAgdmlld0JveD0iMCAwIDEyOCAxNDgiDQogIGZpbGw9Im5vbmUiDQogIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyINCiAgc3R5bGU9Ii0tcGluOiMyZDhjZmY7IC0tcGluLWRhcms6IzBmNWZmMDsgLS1pbms6IzFiNjNmMzsiDQo+DQogIDxkZWZzPg0KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0idGFzay1waW4tZ3JhZCIgeDE9IjY0IiB5MT0iMTAiIHgyPSI2NCIgeTI9IjEzMiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluKSIgLz4NCiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluLWRhcmspIiAvPg0KICAgIDwvbGluZWFyR3JhZGllbnQ+DQoNCiAgICA8cmFkaWFsR3JhZGllbnQgaWQ9InRhc2stcGluLWdsb3NzIiBjeD0iMCIgY3k9IjAiIHI9IjEiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIg0KICAgICAgZ3JhZGllbnRUcmFuc2Zvcm09InRyYW5zbGF0ZSg2NCAyNikgcm90YXRlKDkwKSBzY2FsZSg1MiA2MikiPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0id2hpdGUiIHN0b3Atb3BhY2l0eT0iMC4zNCIvPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSJ3aGl0ZSIgc3RvcC1vcGFjaXR5PSIwIi8+DQogICAgPC9yYWRpYWxHcmFkaWVudD4NCg0KICAgIDxmaWx0ZXIgaWQ9InRhc2stcGluLXNoYWRvdyIgeD0iOCIgeT0iNCIgd2lkdGg9IjExMiIgaGVpZ2h0PSIxNDAiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+DQogICAgICA8ZmVEcm9wU2hhZG93IGR4PSIwIiBkeT0iOCIgc3RkRGV2aWF0aW9uPSI4IiBmbG9vZC1jb2xvcj0iIzE1MzY2ZiIgZmxvb2Qtb3BhY2l0eT0iMC4yMiIvPg0KICAgIDwvZmlsdGVyPg0KDQogICAgPGZpbHRlciBpZD0idGFzay1nbHlwaC1zaGFkb3ciIHg9IjIwIiB5PSIxNCIgd2lkdGg9Ijg4IiBoZWlnaHQ9IjkwIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiPg0KICAgICAgPGZlRHJvcFNoYWRvdyBkeD0iMCIgZHk9IjQiIHN0ZERldmlhdGlvbj0iNCIgZmxvb2QtY29sb3I9IiMxNTM2NmYiIGZsb29kLW9wYWNpdHk9IjAuMTgiLz4NCiAgICA8L2ZpbHRlcj4NCg0KICAgIDxyYWRpYWxHcmFkaWVudCBpZD0idGFzay1ib3R0b20tc2hhZG93IiBjeD0iMCIgY3k9IjAiIHI9IjEiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIg0KICAgICAgZ3JhZGllbnRUcmFuc2Zvcm09InRyYW5zbGF0ZSg2NCAxMzkpIHNjYWxlKDE4IDYpIj4NCiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMyMzMwNEEiIHN0b3Atb3BhY2l0eT0iMC4xOCIvPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMjMzMDRBIiBzdG9wLW9wYWNpdHk9IjAiLz4NCiAgICA8L3JhZGlhbEdyYWRpZW50Pg0KICA8L2RlZnM+DQoNCiAgPGVsbGlwc2UgY3g9IjY0IiBjeT0iMTM5IiByeD0iMTgiIHJ5PSI2IiBmaWxsPSJ1cmwoI3Rhc2stYm90dG9tLXNoYWRvdykiLz4NCg0KICA8ZyBmaWx0ZXI9InVybCgjdGFzay1waW4tc2hhZG93KSI+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik02NCAxMEMzNi40IDEwIDE4IDI5LjUgMTggNTYuOEMxOCA5Mi43IDU4LjYgMTMwLjUgNjIuMyAxMzMuOUM2My4zIDEzNC44IDY0LjcgMTM0LjggNjUuNyAxMzMuOUM2OS40IDEzMC41IDExMCA5Mi43IDExMCA1Ni44QzExMCAyOS41IDkxLjYgMTAgNjQgMTBaIg0KICAgICAgZmlsbD0idXJsKCN0YXNrLXBpbi1ncmFkKSINCiAgICAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNNjQgMTBDMzYuNCAxMCAxOCAyOS41IDE4IDU2LjhDMTggOTIuNyA1OC42IDEzMC41IDYyLjMgMTMzLjlDNjMuMyAxMzQuOCA2NC43IDEzNC44IDY1LjcgMTMzLjlDNjkuNCAxMzAuNSAxMTAgOTIuNyAxMTAgNTYuOEMxMTAgMjkuNSA5MS42IDEwIDY0IDEwWiINCiAgICAgIGZpbGw9InVybCgjdGFzay1waW4tZ2xvc3MpIg0KICAgIC8+DQogIDwvZz4NCg0KICA8ZyBmaWx0ZXI9InVybCgjdGFzay1nbHlwaC1zaGFkb3cpIj4NCiAgICA8cmVjdCB4PSIzNyIgeT0iMzkiIHdpZHRoPSI1NCIgaGVpZ2h0PSI2MiIgcng9IjExIiBmaWxsPSJ3aGl0ZSIvPg0KICAgIDxyZWN0IHg9IjQ3IiB5PSIyOCIgd2lkdGg9IjM0IiBoZWlnaHQ9IjE4IiByeD0iOCIgZmlsbD0id2hpdGUiLz4NCiAgICA8Y2lyY2xlIGN4PSI2NCIgY3k9IjM1LjUiIHI9IjQiIGZpbGw9InZhcigtLWluaykiLz4NCg0KICAgIDxjaXJjbGUgY3g9IjQ5LjUiIGN5PSI1OCIgcj0iNy41IiBmaWxsPSJ2YXIoLS1pbmspIi8+DQogICAgPHBhdGggZD0iTTQ2LjMgNThMNDguOCA2MC42TDUzLjYgNTUuOCIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIzLjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPg0KDQogICAgPGNpcmNsZSBjeD0iNDkuNSIgY3k9Ijc0IiByPSI3LjUiIGZpbGw9InZhcigtLWluaykiLz4NCiAgICA8cGF0aCBkPSJNNDYuMyA3NEw0OC44IDc2LjZMNTMuNiA3MS44IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjMuMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+DQoNCiAgICA8Y2lyY2xlIGN4PSI0OS41IiBjeT0iOTAiIHI9IjcuNSIgZmlsbD0idmFyKC0taW5rKSIvPg0KICAgIDxwYXRoIGQ9Ik00Ni4zIDkwTDQ4LjggOTIuNkw1My42IDg3LjgiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMy4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4NCg0KICAgIDxyZWN0IHg9IjYwIiB5PSI1NCIgd2lkdGg9IjIwIiBoZWlnaHQ9IjUiIHJ4PSIyLjUiIGZpbGw9InZhcigtLWluaykiLz4NCiAgICA8cmVjdCB4PSI2MCIgeT0iNzAiIHdpZHRoPSIyMCIgaGVpZ2h0PSI1IiByeD0iMi41IiBmaWxsPSJ2YXIoLS1pbmspIi8+DQogICAgPHJlY3QgeD0iNjAiIHk9Ijg2IiB3aWR0aD0iMjAiIGhlaWdodD0iNSIgcng9IjIuNSIgZmlsbD0idmFyKC0taW5rKSIvPg0KICA8L2c+DQo8L3N2Zz4=",
+          "emergencyMarker": "data:image/svg+xml;base64,PHN2Zw0KICB3aWR0aD0iMTI4Ig0KICBoZWlnaHQ9IjE0OCINCiAgdmlld0JveD0iMCAwIDEyOCAxNDgiDQogIGZpbGw9Im5vbmUiDQogIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyINCiAgc3R5bGU9Ii0tcGluOiNmZjYxNjY7IC0tcGluLWRhcms6I2U1MmYzOTsiDQo+DQogIDxkZWZzPg0KICAgIDwhLS0g5Zyw5Zu+6ZKJ5Li75L2T5riQ5Y+YIC0tPg0KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0icGluR3JhZEVtZXJnZW5jeSIgeDE9IjY0IiB5MT0iMTAiIHgyPSI2NCIgeTI9IjEzMiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluKSIgLz4NCiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluLWRhcmspIiAvPg0KICAgIDwvbGluZWFyR3JhZGllbnQ+DQoNCiAgICA8IS0tIOmrmOWFiSAtLT4NCiAgICA8cmFkaWFsR3JhZGllbnQNCiAgICAgIGlkPSJwaW5HbG9zc0VtZXJnZW5jeSINCiAgICAgIGN4PSIwIg0KICAgICAgY3k9IjAiDQogICAgICByPSIxIg0KICAgICAgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiDQogICAgICBncmFkaWVudFRyYW5zZm9ybT0idHJhbnNsYXRlKDY0IDI0KSByb3RhdGUoOTApIHNjYWxlKDU2IDY0KSINCiAgICA+DQogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSJ3aGl0ZSIgc3RvcC1vcGFjaXR5PSIwLjMwIi8+DQogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IndoaXRlIiBzdG9wLW9wYWNpdHk9IjAiLz4NCiAgICA8L3JhZGlhbEdyYWRpZW50Pg0KDQogICAgPCEtLSDlnLDlm77pkonpmLTlvbEgLS0+DQogICAgPGZpbHRlciBpZD0icGluU2hhZG93RW1lcmdlbmN5IiB4PSI2IiB5PSI0IiB3aWR0aD0iMTE2IiBoZWlnaHQ9IjE0MiIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIj4NCiAgICAgIDxmZURyb3BTaGFkb3cgZHg9IjAiIGR5PSI4IiBzdGREZXZpYXRpb249IjgiIGZsb29kLWNvbG9yPSIjN2YxZDI0IiBmbG9vZC1vcGFjaXR5PSIwLjIyIi8+DQogICAgPC9maWx0ZXI+DQoNCiAgICA8IS0tIOaEn+WPueWPt+mYtOW9sSAtLT4NCiAgICA8ZmlsdGVyIGlkPSJtYXJrU2hhZG93RW1lcmdlbmN5IiB4PSIzOCIgeT0iMjQiIHdpZHRoPSI1MiIgaGVpZ2h0PSI2OCIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIj4NCiAgICAgIDxmZURyb3BTaGFkb3cgZHg9IjAiIGR5PSIzIiBzdGREZXZpYXRpb249IjMiIGZsb29kLWNvbG9yPSIjN2YxZDI0IiBmbG9vZC1vcGFjaXR5PSIwLjE0Ii8+DQogICAgPC9maWx0ZXI+DQoNCiAgICA8IS0tIOW6lemDqOaCrOa1rumYtOW9sSAtLT4NCiAgICA8cmFkaWFsR3JhZGllbnQNCiAgICAgIGlkPSJib3R0b21TaGFkb3dFbWVyZ2VuY3kiDQogICAgICBjeD0iMCINCiAgICAgIGN5PSIwIg0KICAgICAgcj0iMSINCiAgICAgIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIg0KICAgICAgZ3JhZGllbnRUcmFuc2Zvcm09InRyYW5zbGF0ZSg2NCAxMzkpIHNjYWxlKDE4IDYpIg0KICAgID4NCiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMyNDMyNEEiIHN0b3Atb3BhY2l0eT0iMC4xOCIvPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMjQzMjRBIiBzdG9wLW9wYWNpdHk9IjAiLz4NCiAgICA8L3JhZGlhbEdyYWRpZW50Pg0KICA8L2RlZnM+DQoNCiAgPCEtLSDlupXpg6jmipXlvbEgLS0+DQogIDxlbGxpcHNlIGN4PSI2NCIgY3k9IjEzOSIgcng9IjE4IiByeT0iNiIgZmlsbD0idXJsKCNib3R0b21TaGFkb3dFbWVyZ2VuY3kpIiAvPg0KDQogIDwhLS0g5Zyw5Zu+6ZKJ5Li75L2TIC0tPg0KICA8ZyBmaWx0ZXI9InVybCgjcGluU2hhZG93RW1lcmdlbmN5KSI+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik02NCAxMEMzNi40IDEwIDE4IDI5LjUgMTggNTYuOEMxOCA5Mi43IDU4LjYgMTMwLjUgNjIuMyAxMzMuOUM2My4zIDEzNC44IDY0LjcgMTM0LjggNjUuNyAxMzMuOUM2OS40IDEzMC41IDExMCA5Mi43IDExMCA1Ni44QzExMCAyOS41IDkxLjYgMTAgNjQgMTBaIg0KICAgICAgZmlsbD0idXJsKCNwaW5HcmFkRW1lcmdlbmN5KSINCiAgICAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNNjQgMTBDMzYuNCAxMCAxOCAyOS41IDE4IDU2LjhDMTggOTIuNyA1OC42IDEzMC41IDYyLjMgMTMzLjlDNjMuMyAxMzQuOCA2NC43IDEzNC44IDY1LjcgMTMzLjlDNjkuNCAxMzAuNSAxMTAgOTIuNyAxMTAgNTYuOEMxMTAgMjkuNSA5MS42IDEwIDY0IDEwWiINCiAgICAgIGZpbGw9InVybCgjcGluR2xvc3NFbWVyZ2VuY3kpIg0KICAgIC8+DQogIDwvZz4NCg0KICA8IS0tIOaEn+WPueWPtyAtLT4NCiAgPGcgZmlsdGVyPSJ1cmwoI21hcmtTaGFkb3dFbWVyZ2VuY3kpIiBmaWxsPSJ3aGl0ZSI+DQogICAgPHJlY3QgeD0iNTguNSIgeT0iMzQiIHdpZHRoPSIxMSIgaGVpZ2h0PSIzOCIgcng9IjUuNSIgLz4NCiAgICA8Y2lyY2xlIGN4PSI2NCIgY3k9IjgyLjUiIHI9IjYuNSIgLz4NCiAgPC9nPg0KDQogIDwhLS0g5bqV6YOo5bCP57qi54K5IC0tPg0KICA8Y2lyY2xlIGN4PSI2NCIgY3k9IjEyMC41IiByPSI1LjUiIGZpbGw9InZhcigtLXBpbi1kYXJrKSIgLz4NCjwvc3ZnPg==",
+          "catIcon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkNhdCBpY29uIj4KICA8dGl0bGU+Q2F0IGljb248L3RpdGxlPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjUuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KICAgIDwhLS0gaGVhZCBvdXRsaW5lIC0tPgogICAgPHBhdGggZD0iTTMxIDQ4CiAgICAgICAgICAgICBDMjcgMzEsIDI4IDE2LCAzOCAxNgogICAgICAgICAgICAgQzQ1IDE2LCA1NCAyOCwgNTkgMzQKICAgICAgICAgICAgIEM2MiAzMiwgNjYgMzEsIDcwIDMxCiAgICAgICAgICAgICBDNzQgMzEsIDc4IDMyLCA4MSAzNAogICAgICAgICAgICAgQzg2IDI4LCA5NSAxNiwgMTAyIDE2CiAgICAgICAgICAgICBDMTEyIDE2LCAxMTMgMzEsIDEwOSA0OAogICAgICAgICAgICAgQzExNiA1OCwgMTE4IDcyLCAxMTUgODcKICAgICAgICAgICAgIEMxMTAgMTA2LCA5MyAxMTcsIDY0IDExNwogICAgICAgICAgICAgQzM1IDExNywgMTggMTA2LCAxMyA4NwogICAgICAgICAgICAgQzEwIDcyLCAxMiA1OCwgMzEgNDhaIi8+CiAgICA8IS0tIHRpbnkgd2hpc2tlcnMgLS0+CiAgICA8cGF0aCBkPSJNMjggNzkgSDE4Ii8+CiAgICA8cGF0aCBkPSJNMzAgODYgSDIxIi8+CiAgICA8cGF0aCBkPSJNMTAwIDc5IEgxMTAiLz4KICAgIDxwYXRoIGQ9Ik05OCA4NiBIMTA3Ii8+CiAgICA8IS0tIG1vdXRoIC0tPgogICAgPHBhdGggZD0iTTU1IDkyCiAgICAgICAgICAgICBDNTcuNSA5NywgNjIgMTAwLCA2NCAxMDAKICAgICAgICAgICAgIEM2NiAxMDAsIDcwLjUgOTcsIDczIDkyIi8+CiAgICA8cGF0aCBkPSJNNjQgODQgVjg5Ii8+CiAgPC9nPgoKICA8IS0tIGV5ZXMgLS0+CiAgPGNpcmNsZSBjeD0iNDgiIGN5PSI2NyIgcj0iNS4yIiBmaWxsPSJjdXJyZW50Q29sb3IiLz4KICA8Y2lyY2xlIGN4PSI4MCIgY3k9IjY3IiByPSI1LjIiIGZpbGw9ImN1cnJlbnRDb2xvciIvPgoKICA8IS0tIGV5ZSBoaWdobGlnaHRzIC0tPgogIDxjaXJjbGUgY3g9IjQ5LjgiIGN5PSI2NS4yIiByPSIxLjQiIGZpbGw9IndoaXRlIi8+CiAgPGNpcmNsZSBjeD0iODEuOCIgY3k9IjY1LjIiIHI9IjEuNCIgZmlsbD0id2hpdGUiLz4KCiAgPCEtLSBub3NlIC0tPgogIDxwYXRoIGQ9Ik02NCA3NwogICAgICAgICAgIEM2MC43IDc3LCA1OC42IDc5LjEsIDU4LjYgODEuMgogICAgICAgICAgIEM1OC42IDgzLjcsIDYxLjIgODYsIDY0IDg2CiAgICAgICAgICAgQzY2LjggODYsIDY5LjQgODMuNywgNjkuNCA4MS4yCiAgICAgICAgICAgQzY5LjQgNzkuMSwgNjcuMyA3NywgNjQgNzdaIgogICAgICAgIGZpbGw9ImN1cnJlbnRDb2xvciIvPgo8L3N2Zz4K",
+          "mapIcon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ik1hcCBsb2NhdGlvbiBpY29uIj4KICA8dGl0bGU+TWFwIGxvY2F0aW9uIGljb248L3RpdGxlPgoKICA8IS0tIG1hcCBib2R5IC0tPgogIDxwYXRoIGQ9Ik0xOCA0MgogICAgICAgICAgIEMxOCAzNiwgMjEgMzEsIDI2IDI4CiAgICAgICAgICAgTDQyIDE4CiAgICAgICAgICAgQzQ2IDE2LCA1MCAxNiwgNTQgMTgKICAgICAgICAgICBMNzQgMjkKICAgICAgICAgICBDNzcgMzEsIDgxIDMxLCA4NCAyOQogICAgICAgICAgIEwxMDEgMTkKICAgICAgICAgICBDMTA5IDE0LCAxMTggMjAsIDExOCAyOQogICAgICAgICAgIFY5NgogICAgICAgICAgIEMxMTggMTAzLCAxMTQgMTA5LCAxMDggMTEyCiAgICAgICAgICAgTDg3IDEyMgogICAgICAgICAgIEM4MSAxMjUsIDc0IDEyNSwgNjggMTIxCiAgICAgICAgICAgTDUyIDExMgogICAgICAgICAgIEM0OSAxMTAsIDQ1IDExMCwgNDIgMTExCiAgICAgICAgICAgTDI1IDExOQogICAgICAgICAgIEMxNyAxMjMsIDEwIDExNywgMTAgMTA4CiAgICAgICAgICAgVjQyCiAgICAgICAgICAgQzEwIDQyLCAxMCA0MiwgMTAgNDIKICAgICAgICAgICBDMTAgNDIsIDEwIDQyLCAxOCA0MloiCiAgICAgICAgZmlsbD0idmFyKC0taWNvbi1tYWluLCAjNjdDNjVCKSIvPgoKICA8IS0tIHNpZGUgcGFuZWxzIC0tPgogIDxwYXRoIGQ9Ik0xOCA0MiBMNDIgMzAgVjExMSBMMjUgMTE5IEMxNyAxMjMsMTAgMTE3LDEwIDEwOCBWNDIgQzEwIDM3LDEzIDM0LDE4IDQyWiIKICAgICAgICBmaWxsPSJ2YXIoLS1pY29uLWxlZnQsICM1OEI4NEYpIi8+CiAgPHBhdGggZD0iTTg0IDI5IEwxMDEgMTkgQzEwOSAxNCwxMTggMjAsMTE4IDI5IFY5NiBDMTE4IDEwMywxMTQgMTA5LDEwOCAxMTIgTDg3IDEyMiBaIgogICAgICAgIGZpbGw9InZhcigtLWljb24tcmlnaHQsICM1N0JDNEYpIi8+CgogIDwhLS0gY2VudGVyIGZvbGQgLyBub3RjaCAtLT4KICA8cGF0aCBkPSJNNDIgMzAKICAgICAgICAgICBMNzQgMjkKICAgICAgICAgICBMODcgNDAKICAgICAgICAgICBWMTIyCiAgICAgICAgICAgQzgxIDEyNSwgNzQgMTI1LCA2OCAxMjEKICAgICAgICAgICBMNTIgMTEyCiAgICAgICAgICAgQzQ5IDExMCwgNDUgMTEwLCA0MiAxMTEKICAgICAgICAgICBaIgogICAgICAgIGZpbGw9InZhcigtLWljb24tY2VudGVyLCAjNzlEMjZBKSIvPgoKICA8cGF0aCBkPSJNNDIgMTExCiAgICAgICAgICAgTDY0IDEwMAogICAgICAgICAgIEw4NyAxMTEKICAgICAgICAgICBMODcgMTIyCiAgICAgICAgICAgQzgxIDEyNSwgNzQgMTI1LCA2OCAxMjEKICAgICAgICAgICBMNTIgMTEyCiAgICAgICAgICAgQzQ5IDExMCwgNDUgMTEwLCA0MiAxMTFaIgogICAgICAgIGZpbGw9InZhcigtLWljb24tYm90dG9tLCAjNUFCRjUyKSIvPgoKICA8IS0tIHN1YnRsZSBmb2xkcyAtLT4KICA8cGF0aCBkPSJNNDEuNSAzMSBMNDcgMzQgVjEwOCBMNDEuNSAxMTAgWiIgZmlsbD0idmFyKC0taWNvbi1mb2xkLCAjNEJBMzQ3KSIgb3BhY2l0eT0iLjIyIi8+CiAgPHBhdGggZD0iTTgwLjUgMzQgTDg2IDMxIFYxMTEgTDgwLjUgMTA4IFoiIGZpbGw9InZhcigtLWljb24tZm9sZCwgIzRCQTM0NykiIG9wYWNpdHk9Ii4yMiIvPgoKICA8IS0tIGNlbnRlcmVkIGxvY2F0aW9uIHBpbiAtLT4KICA8cGF0aCBkPSJNNjQgMjgKICAgICAgICAgICBDNTEuNSAyOCwgNDEgMzguMiwgNDEgNTAuOAogICAgICAgICAgIEM0MSA1OS4zLCA0NiA2Ny42LCA1NS4yIDc4LjcKICAgICAgICAgICBDNTkuNSA4My44LCA2Mi41IDg3LjMsIDY0IDg5CiAgICAgICAgICAgQzY1LjUgODcuMywgNjguNSA4My44LCA3Mi44IDc4LjcKICAgICAgICAgICBDODIgNjcuNiwgODcgNTkuMywgODcgNTAuOAogICAgICAgICAgIEM4NyAzOC4yLCA3Ni41IDI4LCA2NCAyOFoiCiAgICAgICAgZmlsbD0idmFyKC0taWNvbi1waW4sICMzRTlENDYpIi8+CgogIDxjaXJjbGUgY3g9IjY0IiBjeT0iNTAiIHI9IjExIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K",
+          "profileIcon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJwcm9maWxlIGljb24iPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjMuMzUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CiAgICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjE3LjIiIHI9IjEwLjc1Ii8+CiAgICA8cGF0aCBkPSJNMTMuNyA1Ni4xYy40OC01LjUyIDIuNDUtMTAuMjIgNS44NS0xMy41NUMyMi43NSAzOS40MiAyNi45OCAzNy43IDMyIDM3LjdzOS4yNSAxLjcyIDEyLjQ1IDQuODVjMy40IDMuMzMgNS4zNyA4LjAzIDUuODUgMTMuNTVIMTMuN1oiLz4KICAgIDxwYXRoIGQ9Ik0yMi43IDQ1LjQ1YzIuMzMtMi4xIDUuNC0zLjIgOS4zLTMuMnM2Ljk3IDEuMSA5LjMgMy4yIi8+CiAgPC9nPgo8L3N2Zz4K",
+          "taskIcon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJ0YXNrIGljb24iPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjMuMzUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CiAgICA8cGF0aCBkPSJNMjMuMSAxMi4yNWgtNi42YTQuOSA0LjkgMCAwIDAtNC45IDQuOXYzNS4xYTQuOSA0LjkgMCAwIDAgNC45IDQuOWgzMWE0LjkgNC45IDAgMCAwIDQuOS00Ljl2LTM1LjFhNC45IDQuOSAwIDAgMC00LjktNC45aC02LjYiLz4KICAgIDxwYXRoIGQ9Ik0yNC42IDE2LjM1aDE0LjhhMy41OCAzLjU4IDAgMCAwIDMuNTgtMy41OHYtLjlhMy41OCAzLjU4IDAgMCAwLTMuNTgtMy41OGgtMy4yN0E0LjE4IDQuMTggMCAwIDAgMzIgNC44YTQuMTggNC4xOCAwIDAgMC00LjEzIDMuNDlIMjQuNmEzLjU4IDMuNTggMCAwIDAtMy41OCAzLjU4di45YTMuNTggMy41OCAwIDAgMCAzLjU4IDMuNThaIi8+CiAgICA8cGF0aCBkPSJNMzIgOC41NXYuMSIvPgogICAgPHBhdGggZD0iTTIzLjI1IDI4LjJoMTcuNSIvPgogICAgPHBhdGggZD0iTTIzLjI1IDM3LjM1aDE3LjUiLz4KICAgIDxwYXRoIGQ9Ik0yMy4yNSA0Ni41aDEzLjMiLz4KICAgIDxwYXRoIGQ9Ik0xOC44NSAyOC4yaC4xIi8+CiAgICA8cGF0aCBkPSJNMTguODUgMzcuMzVoLjEiLz4KICAgIDxwYXRoIGQ9Ik0xOC44NSA0Ni41aC4xIi8+CiAgPC9nPgo8L3N2Zz4K"
+    };
+
+    const CAMPUS_CENTER = [115.062202, 30.229910];
+    const DEFAULT_ZOOM = 17;
+
+    const CAMPUS_BOUNDS = {
+      southWest: [115.0568, 30.2255],
+      northEast: [115.0685, 30.2343]
+    };
+
+    const businessPoints = [
+      { id: 1, type: 'supply', title: '猫协物资点 #1', desc: '湖北师范大学北侧物资暂存点', lng: 115.06186, lat: 30.23088 },
+      { id: 2, type: 'cat', title: '小橘（常驻）', desc: '教学区草坪附近高频出现', lng: 115.06274, lat: 30.23018 },
+      { id: 3, type: 'emergency_task', title: '北门草丛紧急救助任务', desc: '疑似受伤，需要尽快观察', lng: 115.06228, lat: 30.23118, badge: 2 },
+      { id: 4, type: 'supply', title: '猫协物资点 #2', desc: '宿舍区附近物资暂存点', lng: 115.06088, lat: 30.22910 },
+      { id: 5, type: 'daily_task', title: '学生服务区巡查', desc: '学生服务区附近日常巡查', lng: 115.06356, lat: 30.22952 },
+      { id: 6, type: 'daily_task', title: '食堂后方投喂清洁', desc: '食堂后方投喂点清洁', lng: 115.06142, lat: 30.22842 }
+    ];
+
+    const typeConfig = {
+      cat: { label: '常驻猫咪', color: '#8754e8', markerIcon: 'catMarker', panelIcon: 'catIcon', legendIcon: 'catMarker' },
+      supply: { label: '物资点', color: '#ff8b22', markerIcon: 'supplyMarker', panelIcon: 'supplyMarker', legendIcon: 'supplyMarker' },
+      daily_task: { label: '日常任务', color: '#2276ff', markerIcon: 'taskMarker', panelIcon: 'taskIcon', legendIcon: 'taskMarker' },
+      emergency_task: { label: '紧急任务', color: '#ef3038', markerIcon: 'emergencyMarker', panelIcon: 'emergencyMarker', legendIcon: 'emergencyMarker' }
+    };
+
+    let map = null;
+    let markers = [];
+    let activeFilter = 'all';
+    let activePoint = null;
+    let currentPosition = null;
+    let userMarker = null;
+    let walking = null;
+    let toastTimer = null;
+
+    const root = document.documentElement;
+    const drawer = document.getElementById('drawer');
+    const grip = document.getElementById('drawerGrip');
+    const placeholder = document.getElementById('mapPlaceholder');
+    const pointFloat = document.getElementById('pointFloat');
+    const pointFloatTitle = document.getElementById('pointFloatTitle');
+    const pointFloatDesc = document.getElementById('pointFloatDesc');
+    const pointFloatIcon = document.getElementById('pointFloatIcon');
+    const filterLabel = document.getElementById('filterLabel');
+    const filterChip = document.getElementById('filterChip');
+    const filterMenu = document.getElementById('filterMenu');
+    const locateBtn = document.getElementById('locateBtn');
+    const navigateBtn = document.getElementById('navigateBtn');
+    const mapToast = document.getElementById('mapToast');
+
+    function svgIcon(name) {
+      const src = SVG_ASSETS[name] || SVG_ASSETS.taskIcon;
+      return `<img src="${src}" alt="" aria-hidden="true" />`;
+    }
+
+    function markerIcon(name) {
+      const src = SVG_ASSETS[name] || SVG_ASSETS.taskMarker;
+      return `<img src="${src}" alt="" aria-hidden="true" />`;
+    }
+
+    function escapeHtml(text) {
+      return String(text).replace(/[&<>'"]/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[s]));
+    }
+
+    function markerHTML(point) {
+      const cfg = typeConfig[point.type] || typeConfig.daily_task;
+      return `
+        <div class="real-marker" data-id="${point.id}">
+          <div class="marker-pin">
+            ${markerIcon(cfg.markerIcon)}
+            ${point.badge ? `<span class="badge-count">${point.badge}</span>` : ''}
+          </div>
+          <div class="marker-label">${escapeHtml(point.title)}</div>
+        </div>
+      `;
+    }
+
+    function showPoint(point) {
+      const cfg = typeConfig[point.type] || typeConfig.daily_task;
+      pointFloatTitle.textContent = point.title;
+      pointFloatDesc.textContent = `${cfg.label} · ${point.desc || '暂无说明'}`;
+      activePoint = point;
+      pointFloatIcon.style.background = cfg.color;
+      pointFloatIcon.innerHTML = svgIcon(cfg.panelIcon);
+      pointFloat.classList.add('is-visible');
+    }
+
+    function filteredPoints() {
+      return activeFilter === 'all' ? businessPoints : businessPoints.filter(p => p.type === activeFilter);
+    }
+
+    function renderMarkers() {
+      if (!map || !window.AMap) return;
+      if (markers.length) {
+        map.remove(markers);
+        markers = [];
+      }
+      markers = filteredPoints().map(point => {
+        const marker = new AMap.Marker({
+          position: new AMap.LngLat(point.lng, point.lat),
+          content: markerHTML(point),
+          offset: new AMap.Pixel(-22, -52),
+          zIndex: point.type === 'emergency_task' ? 120 : 100,
+          bubble: true,
+          extData: point
+        });
+        marker.on('click', () => showPoint(point));
+        return marker;
+      });
+      map.add(markers);
+    }
+
+    function setActiveFilter(type) {
+      activeFilter = type;
+      filterLabel.textContent = activeFilter === 'all' ? '全部标记' : typeConfig[activeFilter].label;
+      document.querySelectorAll('.filter-option').forEach(item => {
+        item.classList.toggle('is-active', item.dataset.filter === activeFilter);
+      });
+      pointFloat.classList.remove('is-visible');
+      if (walking && typeof walking.clear === 'function') walking.clear();
+      renderMarkers();
+    }
+
+    function initMapControls() {
+      document.querySelectorAll('.filter-option').forEach(btn => {
+        const type = btn.dataset.filter;
+        const icon = btn.querySelector('.filter-option-icon');
+        const iconName = type === 'all' ? icon.dataset.icon : typeConfig[type].legendIcon;
+        icon.innerHTML = svgIcon(iconName);
+        btn.addEventListener('click', () => {
+          setActiveFilter(type);
+          filterMenu.classList.remove('is-open');
+          filterChip.setAttribute('aria-expanded', 'false');
+        });
+      });
+
+      const taskIcons = document.querySelectorAll('.task-icon');
+      taskIcons[0].innerHTML = svgIcon('emergencyMarker');
+      taskIcons[1].innerHTML = svgIcon('taskIcon');
+
+      const tabIcons = document.querySelectorAll('.tab-icon');
+      tabIcons[0].innerHTML = svgIcon('mapIcon');
+      tabIcons[1].innerHTML = svgIcon('catIcon');
+      tabIcons[2].innerHTML = svgIcon('taskIcon');
+      tabIcons[3].innerHTML = svgIcon('profileIcon');
+
+      locateBtn.innerHTML = svgIcon('mapIcon');
+    }
+
+    function initAmap() {
+      if (!AMAP_KEY || AMAP_KEY.includes('YOUR_')) return;
+
+      window.__initCampusCatMap = function () {
+        placeholder.classList.add('is-hidden');
+        map = new AMap.Map('amap', {
+          center: CAMPUS_CENTER,
+          zoom: DEFAULT_ZOOM,
+          zooms: [15, 20],
+          viewMode: '2D',
+          resizeEnable: true,
+          dragEnable: true,
+          zoomEnable: true,
+          doubleClickZoom: true,
+          keyboardEnable: false,
+          showLabel: true,
+          mapStyle: 'amap://styles/fresh'
+        });
+
+        map.on('complete', () => {
+          const limitBounds = new AMap.Bounds(CAMPUS_BOUNDS.southWest, CAMPUS_BOUNDS.northEast);
+          map.setLimitBounds(limitBounds);
+          renderMarkers();
+        });
+      };
+
+      const script = document.createElement('script');
+      script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(AMAP_KEY)}&plugin=AMap.Geolocation,AMap.Walking&callback=__initCampusCatMap`;
+      script.onerror = () => placeholder.classList.remove('is-hidden');
+      document.head.appendChild(script);
+    }
+
+
+    function showToast(text) {
+      clearTimeout(toastTimer);
+      mapToast.textContent = text;
+      mapToast.classList.add('is-visible');
+      toastTimer = setTimeout(() => mapToast.classList.remove('is-visible'), 2600);
+    }
+
+    function setCurrentLocation(lngLat) {
+      currentPosition = lngLat;
+      if (userMarker) map.remove(userMarker);
+      userMarker = new AMap.Marker({
+        position: new AMap.LngLat(lngLat[0], lngLat[1]),
+        content: '<div class="current-location-marker"><span class="dot"></span><span class="text">我的位置</span></div>',
+        offset: new AMap.Pixel(-12, -12),
+        zIndex: 200
+      });
+      map.add(userMarker);
+      map.setCenter(lngLat);
+    }
+
+    function locateMe(afterLocated) {
+      if (!map || !window.AMap) return;
+      showToast('正在获取当前位置…');
+      AMap.plugin('AMap.Geolocation', function () {
+        const geolocation = new AMap.Geolocation({
+          enableHighAccuracy: true,
+          timeout: 10000,
+          zoomToAccuracy: true,
+          showCircle: true,
+          showMarker: false
+        });
+
+        geolocation.getCurrentPosition(function(status, result) {
+          if (status === 'complete' && result.position) {
+            const lngLat = [result.position.lng, result.position.lat];
+            setCurrentLocation(lngLat);
+            showToast('已定位到我的位置');
+            if (typeof afterLocated === 'function') afterLocated(lngLat);
+          } else {
+            console.warn('定位失败：', result);
+            showToast('定位失败：请检查浏览器定位权限、HTTPS、GPS 或 Key 配置');
+          }
+        });
+      });
+    }
+
+    function navigateToActivePoint() {
+      if (!activePoint) {
+        showToast('请先点击地图上的点位');
+        return;
+      }
+      const drawRoute = (start) => {
+        const end = [activePoint.lng, activePoint.lat];
+        AMap.plugin('AMap.Walking', function () {
+          if (walking && typeof walking.clear === 'function') walking.clear();
+          walking = new AMap.Walking({
+            map,
+            hideMarkers: true,
+            autoFitView: true
+          });
+          walking.search(start, end, function(status, result) {
+            if (status === 'complete') {
+              showToast('已生成步行路线');
+            } else {
+              console.warn('路线规划失败：', result);
+              showToast('路线规划失败，校园内部小路可配合文字路线说明');
+            }
+          });
+        });
+      };
+
+      if (currentPosition) drawRoute(currentPosition);
+      else locateMe(drawRoute);
+    }
+
+    function setupDrawerDrag() {
+      const MIN = 34;
+      const MAX = window.innerHeight < 720 ? 260 : 292;
+      let current = Math.min(MAX, parseFloat(getComputedStyle(root).getPropertyValue('--drawer-h')) || MAX);
+      let startY = 0;
+      let startH = current;
+      let dragging = false;
+
+      function apply(height) {
+        current = Math.max(MIN, Math.min(MAX, height));
+        const progress = (current - MIN) / (MAX - MIN);
+        const headerH = 8 + progress * 120;
+        const contentOpacity = Math.max(0, Math.min(1, (current - 76) / 120));
+
+        root.style.setProperty('--drawer-h', `${current}px`);
+        root.style.setProperty('--header-h', `${headerH}px`);
+        root.style.setProperty('--header-opacity', `${progress}`);
+        root.style.setProperty('--drawer-content-opacity', `${contentOpacity}`);
+
+        drawer.classList.toggle('is-collapsed', current < 58);
+
+        requestAnimationFrame(() => {
+          if (map && typeof map.resize === 'function') map.resize();
+        });
+      }
+
+      function snap() {
+        const targets = [MIN, Math.round((MIN + MAX) / 2), MAX];
+        let nearest = targets[0];
+        for (const target of targets) {
+          if (Math.abs(current - target) < Math.abs(current - nearest)) nearest = target;
+        }
+        apply(nearest);
+      }
+
+      grip.addEventListener('pointerdown', e => {
+        dragging = true;
+        startY = e.clientY;
+        startH = current;
+        grip.setPointerCapture(e.pointerId);
+      });
+
+      grip.addEventListener('pointermove', e => {
+        if (!dragging) return;
+        const deltaY = e.clientY - startY;
+        apply(startH - deltaY);
+      });
+
+      grip.addEventListener('pointerup', e => {
+        dragging = false;
+        grip.releasePointerCapture(e.pointerId);
+        snap();
+      });
+
+      grip.addEventListener('pointercancel', () => {
+        dragging = false;
+        snap();
+      });
+
+      grip.addEventListener('click', () => {
+        if (dragging) return;
+        const half = (MIN + MAX) / 2;
+        apply(current > half ? MIN : MAX);
+      });
+
+      window.addEventListener('resize', () => {
+        if (map && typeof map.resize === 'function') map.resize();
+      });
+
+      apply(current);
+    }
+
+    filterChip.setAttribute('aria-haspopup', 'menu');
+    filterChip.setAttribute('aria-expanded', 'false');
+    filterChip.addEventListener('click', e => {
+      e.stopPropagation();
+      const willOpen = !filterMenu.classList.contains('is-open');
+      filterMenu.classList.toggle('is-open', willOpen);
+      filterChip.setAttribute('aria-expanded', String(willOpen));
+    });
+
+    filterMenu.addEventListener('click', e => e.stopPropagation());
+    document.addEventListener('click', () => {
+      filterMenu.classList.remove('is-open');
+      filterChip.setAttribute('aria-expanded', 'false');
+    });
+
+    locateBtn.addEventListener('click', () => locateMe());
+    navigateBtn.addEventListener('click', navigateToActivePoint);
+
+    initMapControls();
+    setupDrawerDrag();
+    initAmap();
+  </script>
+</body>
+</html>

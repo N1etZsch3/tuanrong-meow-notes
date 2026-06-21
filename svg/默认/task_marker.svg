@@ -1,0 +1,67 @@
+<svg
+  width="128"
+  height="148"
+  viewBox="0 0 128 148"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+  style="--pin:#2d8cff; --pin-dark:#0f5ff0; --ink:#1b63f3;"
+>
+  <defs>
+    <linearGradient id="task-pin-grad" x1="64" y1="10" x2="64" y2="132" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" style="stop-color:var(--pin)" />
+      <stop offset="100%" style="stop-color:var(--pin-dark)" />
+    </linearGradient>
+
+    <radialGradient id="task-pin-gloss" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(64 26) rotate(90) scale(52 62)">
+      <stop offset="0%" stop-color="white" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="task-pin-shadow" x="8" y="4" width="112" height="140" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#15366f" flood-opacity="0.22"/>
+    </filter>
+
+    <filter id="task-glyph-shadow" x="20" y="14" width="88" height="90" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#15366f" flood-opacity="0.18"/>
+    </filter>
+
+    <radialGradient id="task-bottom-shadow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(64 139) scale(18 6)">
+      <stop offset="0%" stop-color="#23304A" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#23304A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="64" cy="139" rx="18" ry="6" fill="url(#task-bottom-shadow)"/>
+
+  <g filter="url(#task-pin-shadow)">
+    <path
+      d="M64 10C36.4 10 18 29.5 18 56.8C18 92.7 58.6 130.5 62.3 133.9C63.3 134.8 64.7 134.8 65.7 133.9C69.4 130.5 110 92.7 110 56.8C110 29.5 91.6 10 64 10Z"
+      fill="url(#task-pin-grad)"
+    />
+    <path
+      d="M64 10C36.4 10 18 29.5 18 56.8C18 92.7 58.6 130.5 62.3 133.9C63.3 134.8 64.7 134.8 65.7 133.9C69.4 130.5 110 92.7 110 56.8C110 29.5 91.6 10 64 10Z"
+      fill="url(#task-pin-gloss)"
+    />
+  </g>
+
+  <g filter="url(#task-glyph-shadow)">
+    <rect x="37" y="39" width="54" height="62" rx="11" fill="white"/>
+    <rect x="47" y="28" width="34" height="18" rx="8" fill="white"/>
+    <circle cx="64" cy="35.5" r="4" fill="var(--ink)"/>
+
+    <circle cx="49.5" cy="58" r="7.5" fill="var(--ink)"/>
+    <path d="M46.3 58L48.8 60.6L53.6 55.8" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <circle cx="49.5" cy="74" r="7.5" fill="var(--ink)"/>
+    <path d="M46.3 74L48.8 76.6L53.6 71.8" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <circle cx="49.5" cy="90" r="7.5" fill="var(--ink)"/>
+    <path d="M46.3 90L48.8 92.6L53.6 87.8" stroke="white" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <rect x="60" y="54" width="20" height="5" rx="2.5" fill="var(--ink)"/>
+    <rect x="60" y="70" width="20" height="5" rx="2.5" fill="var(--ink)"/>
+    <rect x="60" y="86" width="20" height="5" rx="2.5" fill="var(--ink)"/>
+  </g>
+</svg>

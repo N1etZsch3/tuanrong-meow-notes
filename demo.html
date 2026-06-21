@@ -1,0 +1,877 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>猫协地图｜首页交互原型</title>
+  <style>
+    :root {
+      --page-bg: #f7f8f5;
+      --card: rgba(255,255,255,.92);
+      --card-strong: rgba(255,255,255,.98);
+      --text: #171a20;
+      --muted: #6f7683;
+      --line: rgba(17,24,39,.08);
+      --green: #51ae57;
+      --blue: #2276ff;
+      --red: #ef3038;
+      --orange: #ff8b22;
+      --purple: #8754e8;
+      --shadow: 0 14px 40px rgba(30,39,60,.12);
+      --header-h: 128px;
+      --header-opacity: 1;
+      --drawer-h: 360px;
+      --drawer-content-opacity: 1;
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+      --tab-h: 74px;
+      --radius: 24px;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 50% -10%, #fff 0, var(--page-bg) 42%, #eef5ee 100%);
+    }
+    button, input, textarea { font: inherit; border: 0; background: transparent; color: inherit; }
+    button { cursor: pointer; }
+
+    .app {
+      width: 100%;
+      max-width: 430px;
+      height: 100dvh;
+      margin: 0 auto;
+      position: relative;
+      overflow: hidden;
+      background: linear-gradient(180deg, #fff 0%, #f7f8f5 64%, #fff 100%);
+      display: flex;
+      flex-direction: column;
+      padding: 0 14px;
+    }
+
+    .header {
+      height: var(--header-h);
+      flex: 0 0 var(--header-h);
+      display: flex;
+      align-items: center;
+      padding: 20px 12px 12px;
+      overflow: hidden;
+      transition: height .2s ease, flex-basis .2s ease, padding .2s ease;
+    }
+    .brand {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      opacity: var(--header-opacity);
+      transform: translateY(calc((1 - var(--header-opacity)) * -22px));
+      filter: blur(calc((1 - var(--header-opacity)) * 3px));
+      transition: opacity .16s ease, transform .2s ease, filter .2s ease;
+      pointer-events: none;
+    }
+    .brand-title { display: flex; align-items: center; gap: 12px; font-size: 31px; line-height: 1; font-weight: 850; letter-spacing: -1.1px; }
+    .brand-title svg { width: 36px; height: 36px; flex: 0 0 auto; }
+    .brand-subtitle { font-size: 15px; color: var(--muted); letter-spacing: .7px; }
+
+    .map-wrap {
+      position: relative;
+      flex: 1 1 auto;
+      min-height: 250px;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #dfeadc;
+      box-shadow: var(--shadow);
+      border: 1px solid rgba(255,255,255,.85);
+      transform: translateZ(0);
+    }
+    #amap { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .amap-logo, .amap-copyright { opacity: .45; transform: scale(.85); transform-origin: left bottom; }
+
+    .map-placeholder {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      padding: 28px;
+      background:
+        linear-gradient(29deg, rgba(255,255,255,0) 0 47%, rgba(255,255,255,.78) 48% 52%, rgba(255,255,255,0) 53% 100%) 0 0/190px 140px,
+        linear-gradient(-33deg, rgba(255,255,255,0) 0 45%, rgba(255,255,255,.72) 46% 52%, rgba(255,255,255,0) 53% 100%) 0 0/170px 150px,
+        radial-gradient(ellipse at 46% 66%, rgba(67,154,228,.34) 0 13%, transparent 14%),
+        linear-gradient(135deg, #e6f2de, #f7f8f6 49%, #e4f2dd);
+      z-index: 1;
+    }
+    .map-placeholder.is-hidden { display: none; }
+    .placeholder-card { width: min(315px, 100%); border-radius: 20px; background: rgba(255,255,255,.9); box-shadow: 0 14px 36px rgba(17,24,39,.14); padding: 18px; line-height: 1.65; color: #4b5563; font-size: 13px; backdrop-filter: blur(14px); }
+    .placeholder-card b { color: #111827; }
+    .placeholder-card code { background: #eef6ee; color: #237d36; padding: 2px 5px; border-radius: 6px; }
+
+    .map-chip {
+      position: absolute; left: 14px; top: 14px; z-index: 35;
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-radius: 18px;
+      background: rgba(255,255,255,.92);
+      box-shadow: 0 10px 26px rgba(17,24,39,.1);
+      backdrop-filter: blur(18px); font-size: 15px; font-weight: 760; user-select: none;
+    }
+    .map-chip svg { width: 20px; height: 20px; }
+    .map-chip .chevron { width: 16px; height: 16px; opacity: .75; }
+
+    .filter-menu {
+      position: absolute; left: 14px; top: 62px; z-index: 80; width: 184px; display: none; padding: 8px;
+      border-radius: 20px; background: rgba(255,255,255,.95); border: 1px solid rgba(255,255,255,.86);
+      box-shadow: 0 18px 38px rgba(17,24,39,.16); backdrop-filter: blur(20px) saturate(150%);
+    }
+    .filter-menu.is-open { display: grid; gap: 4px; }
+    .filter-option { width: 100%; min-width: 0; display: grid; grid-template-columns: 26px minmax(0, 1fr); align-items: center; gap: 9px; padding: 9px 10px; border-radius: 14px; font-size: 13px; font-weight: 760; color: #2a313d; text-align: left; transition: background .16s ease, color .16s ease, transform .16s ease; }
+    .filter-option:active { transform: scale(.98); }
+    .filter-option.is-active { color: #248437; background: rgba(81,174,87,.12); }
+    .filter-option-icon { width: 26px; height: 26px; border-radius: 12px; display: grid; place-items: center; color: #fff; box-shadow: 0 7px 16px rgba(17,24,39,.10); overflow: hidden; }
+    .filter-option-icon img { width: 20px; height: 20px; display: block; object-fit: contain; pointer-events: none; }
+    .filter-option[data-filter="all"] .filter-option-icon { color: #29313d; background: rgba(17,24,39,.06); box-shadow: inset 0 1px 0 rgba(255,255,255,.9); }
+    .filter-option-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+    .map-control-stack { position: absolute; right: 12px; bottom: 78px; z-index: 34; display: grid; gap: 12px; }
+    .map-control { width: 58px; min-height: 58px; padding: 8px 6px; border-radius: 18px; background: rgba(255,255,255,.92); box-shadow: 0 10px 26px rgba(17,24,39,.10); display: grid; place-items: center; gap: 3px; font-size: 12px; font-weight: 760; backdrop-filter: blur(18px); }
+    .map-control svg { width: 24px; height: 24px; }
+
+    .map-toast { position: absolute; left: 50%; top: 66px; z-index: 120; display: none; max-width: calc(100% - 40px); transform: translateX(-50%); padding: 8px 12px; border-radius: 999px; background: rgba(23,26,32,.82); color: #fff; font-size: 12px; line-height: 1.3; box-shadow: 0 10px 26px rgba(17,24,39,.18); backdrop-filter: blur(12px); white-space: nowrap; }
+    .map-toast.is-visible { display: block; }
+
+    .drawer {
+      height: var(--drawer-h);
+      flex: 0 0 var(--drawer-h);
+      min-height: 112px;
+      margin: 10px 0 0;
+      border-radius: 26px 26px 0 0;
+      background: rgba(255,255,255,.94);
+      border: 1px solid rgba(255,255,255,.88);
+      border-bottom: 0;
+      box-shadow: 0 -14px 40px rgba(30,39,60,.10);
+      overflow: hidden;
+      backdrop-filter: blur(20px) saturate(150%);
+      transition: height .2s ease, flex-basis .2s ease, margin .2s ease;
+      display: flex; flex-direction: column;
+      touch-action: none;
+      z-index: 50;
+    }
+    .drawer-grip-area { flex: 0 0 28px; display: grid; place-items: center; cursor: grab; user-select: none; }
+    .drawer-grip-area:active { cursor: grabbing; }
+    .grip { width: 45px; height: 5px; border-radius: 999px; background: #d6dae2; }
+    .search-shell { flex: 0 0 auto; padding: 0 14px 12px; }
+    .search-box { height: 58px; width: 100%; border: 1px solid rgba(17,24,39,.08); background: rgba(255,255,255,.98); border-radius: 22px; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 0 16px; color: #8b919b; box-shadow: inset 0 1px 0 rgba(255,255,255,.95); }
+    .search-box.is-focused { border-color: rgba(81,174,87,.58); box-shadow: 0 0 0 3px rgba(81,174,87,.12), inset 0 1px 0 rgba(255,255,255,.95); }
+    .search-box svg { width: 22px; height: 22px; }
+    .search-box input { width: 100%; min-width: 0; outline: 0; height: 100%; color: #202733; font-size: 15px; font-weight: 600; }
+    .search-box input::placeholder { color: #9aa1ad; font-weight: 600; }
+    .clear-search { display: none; width: 26px; height: 26px; border-radius: 999px; background: rgba(17,24,39,.10); color: #fff; font-weight: 900; line-height: 1; align-items: center; justify-content: center; }
+    .clear-search.is-visible { display: inline-flex; }
+
+    .drawer-content { flex: 1 1 auto; min-height: 0; overflow: auto; opacity: var(--drawer-content-opacity); transform: translateY(calc((1 - var(--drawer-content-opacity)) * 8px)); transition: opacity .16s ease, transform .18s ease; padding: 0 14px 14px; }
+    .drawer.is-compact .drawer-content { pointer-events: none; }
+
+    .section-head { display: flex; align-items: center; justify-content: space-between; margin: 8px 2px 14px; }
+    .section-head h2 { margin: 0; font-size: 18px; line-height: 1; letter-spacing: -.45px; font-weight: 850; }
+    .section-head a, .muted-action { display: inline-flex; align-items: center; gap: 4px; color: #7e8591; text-decoration: none; font-size: 12px; font-weight: 760; }
+    .task-list, .result-list { display: grid; gap: 10px; }
+    .task-card, .result-card {
+      display: grid; grid-template-columns: 42px minmax(0, 1fr) auto; align-items: center; gap: 12px;
+      padding: 14px; min-height: 78px; border-radius: 22px;
+      background: rgba(255,255,255,.98); border: 1px solid rgba(17,24,39,.06);
+      box-shadow: 0 12px 28px rgba(30,39,60,.05);
+    }
+    .task-card h3, .result-card h3 { margin: 0 0 7px; font-size: 15px; line-height: 1.2; font-weight: 820; letter-spacing: -.18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .task-meta, .result-meta { display: flex; align-items: center; gap: 6px; font-size: 11.5px; color: #8b919b; flex-wrap: wrap; }
+    .task-tag, .result-type { padding: 2px 6px; border-radius: 6px; font-weight: 780; font-size: 11px; line-height: 1.2; }
+    .tag-red { color: var(--red); background: rgba(239,48,56,.09); }
+    .tag-blue { color: var(--blue); background: rgba(34,118,255,.09); }
+    .tag-green { color: #248437; background: rgba(81,174,87,.11); }
+    .tag-orange { color: var(--orange); background: rgba(255,139,34,.10); }
+    .tag-purple { color: var(--purple); background: rgba(135,84,232,.10); }
+    .state-red { color: var(--red); font-size: 12px; font-weight: 840; }
+    .state-blue { color: var(--blue); font-size: 12px; font-weight: 840; }
+    .row-arrow { width: 15px; height: 15px; color: #a1a7b2; }
+    .icon-ball { color:#fff; width:38px; height:38px; border-radius:50%; display:grid; place-items:center; box-shadow: 0 8px 18px rgba(17,24,39,.12); overflow:hidden; }
+    .icon-ball img, .marker-pin img, .tab-icon img, .filter-option-icon img { width: 100%; height: 100%; display: block; object-fit: contain; pointer-events: none; }
+    .icon-ball img { width: 26px; height: 26px; }
+    .result-thumb { width: 54px; height: 54px; border-radius: 16px; object-fit: cover; box-shadow: 0 8px 18px rgba(17,24,39,.10); }
+    .chips { display: flex; gap: 8px; overflow: auto; padding: 2px 0 10px; scrollbar-width: none; }
+    .chips::-webkit-scrollbar { display: none; }
+    .quick-chip { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; padding: 10px 12px; border-radius: 16px; background: rgba(255,255,255,.98); border: 1px solid rgba(17,24,39,.06); box-shadow: 0 8px 18px rgba(30,39,60,.04); font-size: 13px; font-weight: 760; }
+    .quick-chip .dot { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; overflow: hidden; }
+    .quick-chip img { width: 18px; height: 18px; object-fit: contain; }
+    .hint-title { margin: 8px 2px 10px; color: #262b35; font-size: 15px; font-weight: 850; }
+    .empty-text { color: #9aa1ad; text-align: center; padding: 24px 0 12px; font-size: 13px; }
+
+    .summary-card { border-radius: 25px; background: rgba(255,255,255,.98); border: 1px solid rgba(17,24,39,.06); box-shadow: 0 12px 32px rgba(30,39,60,.06); padding: 14px; }
+    .summary-main { display: grid; grid-template-columns: 116px minmax(0,1fr); gap: 14px; align-items: start; }
+    .summary-cover { width: 116px; height: 126px; object-fit: cover; border-radius: 20px; box-shadow: 0 12px 24px rgba(30,39,60,.10); }
+    .summary-card h2 { margin: 2px 0 8px; font-size: 19px; line-height: 1.22; letter-spacing: -.55px; font-weight: 880; }
+    .summary-desc { margin: 10px 0; color: #67707e; font-size: 13px; line-height: 1.55; }
+    .summary-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; color: #747b87; font-size: 12px; font-weight: 700; }
+    .summary-route { display: flex; gap: 8px; align-items: flex-start; color: #747b87; font-size: 12px; margin-top: 9px; line-height: 1.45; }
+    .summary-actions { display: grid; grid-template-columns: 1fr 1.35fr; gap: 12px; margin-top: 16px; }
+    .btn-outline, .btn-primary, .btn-plain { height: 46px; border-radius: 18px; font-size: 15px; font-weight: 850; display:flex; align-items:center; justify-content:center; gap:8px; }
+    .btn-outline { border: 1px solid rgba(81,174,87,.8); color: #2b8e3d; background: rgba(255,255,255,.9); }
+    .btn-primary { background: linear-gradient(180deg, #63bf68, #43a84a); color: #fff; box-shadow: 0 12px 24px rgba(81,174,87,.24); }
+    .btn-plain { height: 38px; padding: 0 13px; border-radius: 14px; background: rgba(17,24,39,.06); color: #444b56; font-size: 13px; }
+
+    .admin-tools { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(17,24,39,.12); }
+    .admin-tools-title { display:flex; align-items:center; justify-content:space-between; margin-bottom: 10px; font-size: 13px; font-weight: 850; color: #4b5563; }
+    .admin-row { display:flex; gap: 8px; flex-wrap: wrap; }
+    .editor-form { display: grid; gap: 9px; margin-top: 12px; }
+    .editor-form label { display: grid; gap: 5px; color: #6b7280; font-size: 12px; font-weight: 800; }
+    .editor-form input, .editor-form textarea { width: 100%; border-radius: 14px; background: rgba(17,24,39,.04); padding: 10px 11px; outline: 0; font-size: 13px; color: #111827; }
+    .editor-form textarea { min-height: 66px; resize: none; }
+    .coord-line { color: #9aa1ad; font-size: 11px; line-height: 1.4; }
+
+    .admin-menu { position: absolute; z-index: 150; display: none; width: 178px; padding: 8px; border-radius: 20px; background: rgba(255,255,255,.96); border: 1px solid rgba(255,255,255,.86); box-shadow: 0 18px 38px rgba(17,24,39,.18); backdrop-filter: blur(20px) saturate(150%); }
+    .admin-menu.is-open { display: grid; gap: 4px; }
+    .admin-menu-title { color: #6b7280; font-size: 11px; font-weight: 850; padding: 4px 8px 6px; }
+    .admin-menu button { display:flex; align-items:center; gap:8px; text-align:left; padding: 10px; border-radius: 14px; font-size: 13px; font-weight: 800; }
+    .admin-menu button:hover { background: rgba(81,174,87,.10); }
+    .admin-menu .mini-icon { width:24px; height:24px; border-radius: 10px; display:grid; place-items:center; overflow:hidden; }
+    .admin-menu .mini-icon img { width:20px; height:20px; object-fit:contain; }
+
+    .real-marker { display: flex; align-items: center; gap: 8px; white-space: nowrap; user-select: none; transform: translateY(-2px); cursor: pointer; }
+    .marker-pin { position: relative; width: 44px; height: 52px; display: grid; place-items: center; color: #fff; filter: drop-shadow(0 8px 12px rgba(0,0,0,.18)); flex: 0 0 44px; transition: transform .16s ease, filter .16s ease; }
+    .marker-label { margin-left: -2px; padding: 8px 12px; border-radius: 12px; background: rgba(255,255,255,.92); box-shadow: 0 8px 24px rgba(20,28,40,.12); font-size: 13px; font-weight: 760; color: #29313d; backdrop-filter: blur(12px); }
+    .marker-preview { margin-left: -4px; height: 46px; display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 5px; border-radius: 15px; background: rgba(255,255,255,.94); box-shadow: 0 10px 26px rgba(20,28,40,.14); backdrop-filter: blur(14px); font-size: 13px; font-weight: 800; color: #29313d; }
+    .marker-preview img { width: 36px; height: 36px; border-radius: 11px; object-fit: cover; }
+    .marker-bare .marker-label, .marker-bare .marker-preview { display: none; }
+    .marker-title .marker-preview { display: none; }
+    .marker-card .marker-label { display: none; }
+    .real-marker.is-selected .marker-pin { transform: translateY(-3px) scale(1.1); filter: drop-shadow(0 0 0 rgba(0,0,0,0)) drop-shadow(0 8px 13px rgba(0,0,0,.18)); }
+    .real-marker.is-selected .marker-pin::before { content:""; position:absolute; inset:-9px -7px 0; border-radius: 50%; background: radial-gradient(circle, rgba(239,48,56,.26), rgba(239,48,56,0) 68%); z-index:-1; }
+    .real-marker.is-editing .marker-pin { animation: markerPulse 1.2s infinite; }
+    @keyframes markerPulse { 0%,100% { transform: translateY(-3px) scale(1.06); } 50% { transform: translateY(-6px) scale(1.12); } }
+    .badge-count { position: absolute; left: 29px; top: -8px; width: 22px; height: 22px; border-radius: 50%; background: var(--red); color: #fff; display: grid; place-items: center; border: 2px solid #fff; font-size: 12px; font-weight: 900; box-shadow: 0 5px 12px rgba(239,48,56,.34); }
+    .current-location-marker { display: flex; align-items: center; gap: 6px; transform: translateY(-2px); white-space: nowrap; user-select: none; }
+    .current-location-marker .dot { width: 24px; height: 24px; border-radius: 50%; background: #19a7ff; border: 4px solid #fff; box-shadow: 0 0 0 8px rgba(25,167,255,.18), 0 7px 18px rgba(25,167,255,.35); }
+    .current-location-marker .text { padding: 6px 10px; border-radius: 999px; background: rgba(255,255,255,.94); box-shadow: 0 7px 20px rgba(20,28,40,.12); font-size: 12px; font-weight: 800; color: #167fd8; }
+
+    .tabs { position: relative; flex: 0 0 calc(var(--tab-h) + var(--safe-bottom) + 18px); height: calc(var(--tab-h) + var(--safe-bottom) + 18px); margin: 10px 0 10px; padding: 8px 8px calc(var(--safe-bottom) + 8px); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); align-items: stretch; gap: 6px; border: 1px solid rgba(255,255,255,.82); border-radius: 32px; background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.76)), radial-gradient(circle at 18% 0%, rgba(81,174,87,.16), transparent 42%), radial-gradient(circle at 86% 20%, rgba(34,118,255,.10), transparent 38%); box-shadow: 0 -10px 34px rgba(35,48,72,.10), 0 18px 42px rgba(30,39,60,.14), inset 0 1px 0 rgba(255,255,255,.9), inset 0 -1px 0 rgba(17,24,39,.04); backdrop-filter: blur(22px) saturate(150%); overflow: hidden; z-index: 65; }
+    .tab { position: relative; height: auto; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border-radius: 24px; color: #7a818c; font-size: 12px; font-weight: 760; letter-spacing: -.1px; transition: color .18s ease, background .18s ease, box-shadow .18s ease, transform .18s ease; }
+    .tab::after { content: ""; position: absolute; inset: 7px 5px; border-radius: 22px; background: transparent; transition: background .18s ease, box-shadow .18s ease; z-index: -1; }
+    .tab.is-active { color: #248437; }
+    .tab.is-active::after { background: linear-gradient(180deg, rgba(255,255,255,.9), rgba(255,255,255,.58)), rgba(81,174,87,.13); box-shadow: 0 10px 22px rgba(81,174,87,.24), inset 0 1px 0 rgba(255,255,255,.85), inset 0 -1px 0 rgba(81,174,87,.08); }
+    .tab-icon { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 15px; padding: 4px; background: rgba(17,24,39,.035); box-shadow: inset 0 1px 0 rgba(255,255,255,.72); }
+    .tab-icon img { width: 24px; height: 24px; opacity: .68; }
+    .tab.is-active .tab-icon { background: linear-gradient(180deg, rgba(81,174,87,.18), rgba(81,174,87,.08)); box-shadow: 0 7px 16px rgba(81,174,87,.18), inset 0 1px 0 rgba(255,255,255,.95); transform: translateY(-1px); }
+    .tab.is-active .tab-icon img { opacity: 1; transform: scale(1.04); filter: drop-shadow(0 4px 7px rgba(81,174,87,.16)); }
+
+    @media (max-width: 380px) {
+      .app { padding-left: 10px; padding-right: 10px; }
+      .brand-title { font-size: 28px; }
+      .summary-main { grid-template-columns: 96px minmax(0,1fr); }
+      .summary-cover { width:96px; height:112px; }
+      .summary-card h2 { font-size: 17px; }
+      .map-control { width:54px; min-height:54px; font-size:11px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app" id="app">
+    <header class="header">
+      <section class="brand" aria-label="页面标题">
+        <div class="brand-title">
+          <span>猫协地图</span>
+          <svg viewBox="0 0 64 64" aria-hidden="true">
+            <path d="M23 31c4.9-.5 8.4 3.6 10.2 7.4 1.9-3.8 5.6-7.9 10.4-7.4 6.3.7 9 9.9 5.2 15-3.9 5.4-9.3 5-14.3 2.5a4 4 0 0 0-3.5 0c-5 2.5-10.4 2.9-14.3-2.5-3.8-5.1-1.1-14.3 6.3-15Z" fill="#51ae57"/>
+            <ellipse cx="17" cy="22" rx="6" ry="8" fill="#51ae57"/>
+            <ellipse cx="31.5" cy="16" rx="6" ry="8" fill="#51ae57"/>
+            <ellipse cx="46" cy="22" rx="6" ry="8" fill="#51ae57"/>
+          </svg>
+        </div>
+        <div class="brand-subtitle">探索校园 · 守护猫咪</div>
+      </section>
+    </header>
+
+    <section class="map-wrap" id="mapWrap">
+      <div id="amap"></div>
+      <div class="map-placeholder" id="mapPlaceholder">
+        <div class="placeholder-card">
+          <b>等待加载高德地图。</b><br />
+          保留原型代码里的 <code>AMAP_KEY</code>、SVG 图标和高德地图调用。当前页面数据暂时来自前端 <code>MOCK_API</code> JSON。
+        </div>
+      </div>
+
+      <button class="map-chip" type="button" id="filterChip" aria-label="打开地图点位筛选">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5.2h14a1.7 1.7 0 0 1 1.7 1.7v10.2a1.7 1.7 0 0 1-1.7 1.7H5a1.7 1.7 0 0 1-1.7-1.7V6.9A1.7 1.7 0 0 1 5 5.2Z" fill="none" stroke="currentColor" stroke-width="2"/><path d="m7.8 9.2 3.3 3.3 5.1-5.1" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M7.2 16.2h9.6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span id="filterLabel">全部标记</span>
+        <svg class="chevron" viewBox="0 0 20 20" aria-hidden="true"><path d="m5.5 7.5 4.5 4.5 4.5-4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+
+      <div class="filter-menu" id="filterMenu" role="menu" aria-label="地图点位筛选">
+        <button class="filter-option is-active" type="button" role="menuitem" data-filter="all"><span class="filter-option-icon" data-icon="mapIcon"></span><span class="filter-option-label">全部标记</span></button>
+        <button class="filter-option" type="button" role="menuitem" data-filter="cat"><span class="filter-option-icon" data-icon="catMarker" style="background: var(--purple)"></span><span class="filter-option-label">常驻猫咪</span></button>
+        <button class="filter-option" type="button" role="menuitem" data-filter="supply"><span class="filter-option-icon" data-icon="supplyMarker" style="background: var(--orange)"></span><span class="filter-option-label">物资点</span></button>
+        <button class="filter-option" type="button" role="menuitem" data-filter="daily_task"><span class="filter-option-icon" data-icon="taskMarker" style="background: var(--blue)"></span><span class="filter-option-label">日常任务</span></button>
+        <button class="filter-option" type="button" role="menuitem" data-filter="emergency_task"><span class="filter-option-icon" data-icon="emergencyMarker" style="background: var(--red)"></span><span class="filter-option-label">紧急任务</span></button>
+        <button class="filter-option" type="button" role="menuitem" data-filter="landmark"><span class="filter-option-icon" data-icon="mapIcon"></span><span class="filter-option-label">地标地址</span></button>
+      </div>
+
+      <div class="map-control-stack" aria-label="地图工具">
+        <button class="map-control" type="button" id="locateBtn" aria-label="定位"><svg viewBox="0 0 24 24" fill="none"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" stroke="currentColor" stroke-width="2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="2"/></svg><span>定位</span></button>
+        <button class="map-control" type="button" id="layerBtn" aria-label="图层"><svg viewBox="0 0 24 24" fill="none"><path d="m12 3 8 4-8 4-8-4 8-4Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m4 12 8 4 8-4M4 17l8 4 8-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>图层</span></button>
+        <button class="map-control" type="button" id="myLocationBtn" aria-label="我的位置"><svg viewBox="0 0 24 24" fill="none"><path d="M20.5 3.5 10.2 21l-1.7-7.7L3 10.2 20.5 3.5Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span>我的位置</span></button>
+      </div>
+
+      <div class="admin-menu" id="adminQuickMenu" aria-label="管理员快速插点菜单">
+        <div class="admin-menu-title">快速插点</div>
+        <button type="button" data-create="daily_task"><span class="mini-icon" style="background:var(--blue)"></span>添加日常任务点</button>
+        <button type="button" data-create="emergency_task"><span class="mini-icon" style="background:var(--red)"></span>添加紧急任务点</button>
+        <button type="button" data-create="cat"><span class="mini-icon" style="background:var(--purple)"></span>添加常驻猫咪点</button>
+        <button type="button" data-create="supply"><span class="mini-icon" style="background:var(--orange)"></span>添加物资点</button>
+        <button type="button" data-create="landmark"><span class="mini-icon" style="background:var(--green)"></span>添加地标点</button>
+      </div>
+      <div class="map-toast" id="mapToast" role="status" aria-live="polite"></div>
+    </section>
+
+    <section class="drawer" id="drawer">
+      <div class="drawer-grip-area" id="drawerGrip" title="向下拖动进入地图浏览，向上拖动进入搜索">
+        <div class="grip"></div>
+      </div>
+      <div class="search-shell">
+        <label class="search-box" id="searchBox" aria-label="搜索点位、地标、地址">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="m21 21-4.4-4.4" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/><circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="2.3"/></svg>
+          <input id="searchInput" autocomplete="off" placeholder="搜索点位、地标、地址" />
+          <button type="button" class="clear-search" id="clearSearch" aria-label="清空搜索">×</button>
+        </label>
+      </div>
+      <div class="drawer-content" id="drawerContent"></div>
+    </section>
+
+    <nav class="tabs" aria-label="底部导航">
+      <button class="tab is-active" type="button"><span class="tab-icon"></span><span>地图</span></button>
+      <button class="tab" type="button"><span class="tab-icon"></span><span>猫咪库</span></button>
+      <button class="tab" type="button"><span class="tab-icon"></span><span>任务</span></button>
+      <button class="tab" type="button"><span class="tab-icon"></span><span>我的</span></button>
+    </nav>
+  </main>
+
+  <script>
+    const AMAP_KEY = 'replace-with-amap-web-key';
+    const AMAP_SECURITY_JS_CODE = 'replace-with-amap-security-js-code';
+    if (AMAP_SECURITY_JS_CODE) window._AMapSecurityConfig = { securityJsCode: AMAP_SECURITY_JS_CODE };
+
+const SVG_ASSETS = {
+          "catMarker": "data:image/svg+xml;base64,PHN2Zw0KICB3aWR0aD0iMTI4Ig0KICBoZWlnaHQ9IjE0OCINCiAgdmlld0JveD0iMCAwIDEyOCAxNDgiDQogIGZpbGw9Im5vbmUiDQogIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyINCiAgc3R5bGU9Ii0tcGluOiNhNTZjZmY7IC0tcGluLWRhcms6IzZlMzFlYTsiDQo+DQogIDxkZWZzPg0KICAgIDwhLS0g5Zyw5Zu+6ZKJ5Li75L2T5riQ5Y+YIC0tPg0KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0icGluR3JhZCIgeDE9IjY0IiB5MT0iMTAiIHgyPSI2NCIgeTI9IjEzMiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluKSIgLz4NCiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluLWRhcmspIiAvPg0KICAgIDwvbGluZWFyR3JhZGllbnQ+DQoNCiAgICA8IS0tIOmrmOWFiSAtLT4NCiAgICA8cmFkaWFsR3JhZGllbnQNCiAgICAgIGlkPSJwaW5HbG9zcyINCiAgICAgIGN4PSIwIg0KICAgICAgY3k9IjAiDQogICAgICByPSIxIg0KICAgICAgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiDQogICAgICBncmFkaWVudFRyYW5zZm9ybT0idHJhbnNsYXRlKDY0IDI0KSByb3RhdGUoOTApIHNjYWxlKDU2IDY0KSINCiAgICA+DQogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSJ3aGl0ZSIgc3RvcC1vcGFjaXR5PSIwLjMwIi8+DQogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IndoaXRlIiBzdG9wLW9wYWNpdHk9IjAiLz4NCiAgICA8L3JhZGlhbEdyYWRpZW50Pg0KDQogICAgPCEtLSDkuLvkvZPpmLTlvbEgLS0+DQogICAgPGZpbHRlciBpZD0icGluU2hhZG93IiB4PSI2IiB5PSI0IiB3aWR0aD0iMTE2IiBoZWlnaHQ9IjE0MiIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIj4NCiAgICAgIDxmZURyb3BTaGFkb3cgZHg9IjAiIGR5PSI4IiBzdGREZXZpYXRpb249IjgiIGZsb29kLWNvbG9yPSIjM2ExZjgwIiBmbG9vZC1vcGFjaXR5PSIwLjIyIi8+DQogICAgPC9maWx0ZXI+DQoNCiAgICA8IS0tIOeIquWNsOmYtOW9sSAtLT4NCiAgICA8ZmlsdGVyIGlkPSJwYXdTaGFkb3ciIHg9IjE4IiB5PSIxOCIgd2lkdGg9IjkyIiBoZWlnaHQ9IjkyIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiPg0KICAgICAgPGZlRHJvcFNoYWRvdyBkeD0iMCIgZHk9IjQiIHN0ZERldmlhdGlvbj0iNCIgZmxvb2QtY29sb3I9IiMyYTE2NWMiIGZsb29kLW9wYWNpdHk9IjAuMTgiLz4NCiAgICA8L2ZpbHRlcj4NCg0KICAgIDwhLS0g5bqV6YOo5oKs5rWu6Zi05b2xIC0tPg0KICAgIDxyYWRpYWxHcmFkaWVudA0KICAgICAgaWQ9ImJvdHRvbVNoYWRvdyINCiAgICAgIGN4PSIwIg0KICAgICAgY3k9IjAiDQogICAgICByPSIxIg0KICAgICAgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiDQogICAgICBncmFkaWVudFRyYW5zZm9ybT0idHJhbnNsYXRlKDY0IDEzOSkgc2NhbGUoMTggNikiDQogICAgPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzI0MzI0QSIgc3RvcC1vcGFjaXR5PSIwLjE4Ii8+DQogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMyNDMyNEEiIHN0b3Atb3BhY2l0eT0iMCIvPg0KICAgIDwvcmFkaWFsR3JhZGllbnQ+DQogIDwvZGVmcz4NCg0KICA8IS0tIOW6lemDqOaKleW9sSAtLT4NCiAgPGVsbGlwc2UgY3g9IjY0IiBjeT0iMTM5IiByeD0iMTgiIHJ5PSI2IiBmaWxsPSJ1cmwoI2JvdHRvbVNoYWRvdykiIC8+DQoNCiAgPCEtLSDlnLDlm77pkonkuLvkvZMgLS0+DQogIDxnIGZpbHRlcj0idXJsKCNwaW5TaGFkb3cpIj4NCiAgICA8cGF0aA0KICAgICAgZD0iTTY0IDEwQzM2LjQgMTAgMTggMjkuNSAxOCA1Ni44QzE4IDkyLjcgNTguNiAxMzAuNSA2Mi4zIDEzMy45QzYzLjMgMTM0LjggNjQuNyAxMzQuOCA2NS43IDEzMy45QzY5LjQgMTMwLjUgMTEwIDkyLjcgMTEwIDU2LjhDMTEwIDI5LjUgOTEuNiAxMCA2NCAxMFoiDQogICAgICBmaWxsPSJ1cmwoI3BpbkdyYWQpIg0KICAgIC8+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik02NCAxMEMzNi40IDEwIDE4IDI5LjUgMTggNTYuOEMxOCA5Mi43IDU4LjYgMTMwLjUgNjIuMyAxMzMuOUM2My4zIDEzNC44IDY0LjcgMTM0LjggNjUuNyAxMzMuOUM2OS40IDEzMC41IDExMCA5Mi43IDExMCA1Ni44QzExMCAyOS41IDkxLjYgMTAgNjQgMTBaIg0KICAgICAgZmlsbD0idXJsKCNwaW5HbG9zcykiDQogICAgLz4NCiAgPC9nPg0KDQogIDwhLS0g54iq5Y2wIC0tPg0KICA8ZyBmaWx0ZXI9InVybCgjcGF3U2hhZG93KSIgZmlsbD0id2hpdGUiPg0KICAgIDwhLS0g5Zub5Liq6ISa6La+77ya5b285q2k5a6M5YWo5YiG5byA77yM6Ze06ZqU57qmIDVweCAtLT4NCiAgICA8ZWxsaXBzZSBjeD0iMzEuNSIgY3k9IjUzIiByeD0iOCIgcnk9IjEzIi8+DQogICAgPGVsbGlwc2UgY3g9IjUyLjUiIGN5PSI0Mi41IiByeD0iOCIgcnk9IjE0LjUiLz4NCiAgICA8ZWxsaXBzZSBjeD0iNzUuNSIgY3k9IjQyLjUiIHJ4PSI4IiByeT0iMTQuNSIvPg0KICAgIDxlbGxpcHNlIGN4PSI5Ni41IiBjeT0iNTMiIHJ4PSI4IiByeT0iMTMiLz4NCg0KICAgIDwhLS0g5LiL5pa55aSn6IKJ5Z6r77ya5pu06LS06L+R5Y+C6ICD5Zu+IC0tPg0KICAgIDxwYXRoDQogICAgICBkPSJNNjQgNjINCiAgICAgICAgIEM3MiA2MiA3OC4yIDY1LjQgODMuNSA3Mi44DQogICAgICAgICBDODguMSA3OS4zIDkxIDg1LjggOTEgOTIuOA0KICAgICAgICAgQzkxIDEwMS4yIDg1LjIgMTA0LjUgNzguNyAxMDQuNQ0KICAgICAgICAgQzc0LjcgMTA0LjUgNzEgMTAzLjUgNjcuNCAxMDIuNQ0KICAgICAgICAgQzY1LjIgMTAxLjkgNjIuOCAxMDEuOSA2MC42IDEwMi41DQogICAgICAgICBDNTcgMTAzLjUgNTMuMyAxMDQuNSA0OS4zIDEwNC41DQogICAgICAgICBDNDIuOCAxMDQuNSAzNyAxMDEuMiAzNyA5Mi44DQogICAgICAgICBDMzcgODUuOCAzOS45IDc5LjMgNDQuNSA3Mi44DQogICAgICAgICBDNDkuOCA2NS40IDU2IDYyIDY0IDYyWiINCiAgICAvPg0KICA8L2c+DQo8L3N2Zz4=",
+          "supplyMarker": "data:image/svg+xml;base64,PHN2Zw0KICB3aWR0aD0iMTI4Ig0KICBoZWlnaHQ9IjE0OCINCiAgdmlld0JveD0iMCAwIDEyOCAxNDgiDQogIGZpbGw9Im5vbmUiDQogIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyINCiAgc3R5bGU9Ii0tcGluOiNmZjlhMmY7IC0tcGluLWRhcms6I2ZmNmEwMDsgLS1pbms6I2ZmN2MxMjsiDQo+DQogIDxkZWZzPg0KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0ic3VwcGx5LXBpbi1ncmFkIiB4MT0iNjQiIHkxPSIxMCIgeDI9IjY0IiB5Mj0iMTMyIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+DQogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdHlsZT0ic3RvcC1jb2xvcjp2YXIoLS1waW4pIiAvPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdHlsZT0ic3RvcC1jb2xvcjp2YXIoLS1waW4tZGFyaykiIC8+DQogICAgPC9saW5lYXJHcmFkaWVudD4NCg0KICAgIDxyYWRpYWxHcmFkaWVudCBpZD0ic3VwcGx5LXBpbi1nbG9zcyIgY3g9IjAiIGN5PSIwIiByPSIxIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSINCiAgICAgIGdyYWRpZW50VHJhbnNmb3JtPSJ0cmFuc2xhdGUoNjQgMjYpIHJvdGF0ZSg5MCkgc2NhbGUoNTIgNjIpIj4NCiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IndoaXRlIiBzdG9wLW9wYWNpdHk9IjAuMzQiLz4NCiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0id2hpdGUiIHN0b3Atb3BhY2l0eT0iMCIvPg0KICAgIDwvcmFkaWFsR3JhZGllbnQ+DQoNCiAgICA8ZmlsdGVyIGlkPSJzdXBwbHktcGluLXNoYWRvdyIgeD0iOCIgeT0iNCIgd2lkdGg9IjExMiIgaGVpZ2h0PSIxNDAiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+DQogICAgICA8ZmVEcm9wU2hhZG93IGR4PSIwIiBkeT0iOCIgc3RkRGV2aWF0aW9uPSI4IiBmbG9vZC1jb2xvcj0iIzdhMzUwOSIgZmxvb2Qtb3BhY2l0eT0iMC4yMCIvPg0KICAgIDwvZmlsdGVyPg0KDQogICAgPGZpbHRlciBpZD0ic3VwcGx5LWdseXBoLXNoYWRvdyIgeD0iMTgiIHk9IjE0IiB3aWR0aD0iOTIiIGhlaWdodD0iOTIiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+DQogICAgICA8ZmVEcm9wU2hhZG93IGR4PSIwIiBkeT0iNCIgc3RkRGV2aWF0aW9uPSI0IiBmbG9vZC1jb2xvcj0iIzdhMzUwOSIgZmxvb2Qtb3BhY2l0eT0iMC4xNiIvPg0KICAgIDwvZmlsdGVyPg0KDQogICAgPHJhZGlhbEdyYWRpZW50IGlkPSJzdXBwbHktYm90dG9tLXNoYWRvdyIgY3g9IjAiIGN5PSIwIiByPSIxIiBncmFkaWVudFVuaXRzPSJ1c2VyU3BhY2VPblVzZSINCiAgICAgIGdyYWRpZW50VHJhbnNmb3JtPSJ0cmFuc2xhdGUoNjQgMTM5KSBzY2FsZSgxOCA2KSI+DQogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSIjMjMzMDRBIiBzdG9wLW9wYWNpdHk9IjAuMTgiLz4NCiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3RvcC1jb2xvcj0iIzIzMzA0QSIgc3RvcC1vcGFjaXR5PSIwIi8+DQogICAgPC9yYWRpYWxHcmFkaWVudD4NCiAgPC9kZWZzPg0KDQogIDxlbGxpcHNlIGN4PSI2NCIgY3k9IjEzOSIgcng9IjE4IiByeT0iNiIgZmlsbD0idXJsKCNzdXBwbHktYm90dG9tLXNoYWRvdykiLz4NCg0KICA8ZyBmaWx0ZXI9InVybCgjc3VwcGx5LXBpbi1zaGFkb3cpIj4NCiAgICA8cGF0aA0KICAgICAgZD0iTTY0IDEwQzM2LjQgMTAgMTggMjkuNSAxOCA1Ni44QzE4IDkyLjcgNTguNiAxMzAuNSA2Mi4zIDEzMy45QzYzLjMgMTM0LjggNjQuNyAxMzQuOCA2NS43IDEzMy45QzY5LjQgMTMwLjUgMTEwIDkyLjcgMTEwIDU2LjhDMTEwIDI5LjUgOTEuNiAxMCA2NCAxMFoiDQogICAgICBmaWxsPSJ1cmwoI3N1cHBseS1waW4tZ3JhZCkiDQogICAgLz4NCiAgICA8cGF0aA0KICAgICAgZD0iTTY0IDEwQzM2LjQgMTAgMTggMjkuNSAxOCA1Ni44QzE4IDkyLjcgNTguNiAxMzAuNSA2Mi4zIDEzMy45QzYzLjMgMTM0LjggNjQuNyAxMzQuOCA2NS43IDEzMy45QzY5LjQgMTMwLjUgMTEwIDkyLjcgMTEwIDU2LjhDMTEwIDI5LjUgOTEuNiAxMCA2NCAxMFoiDQogICAgICBmaWxsPSJ1cmwoI3N1cHBseS1waW4tZ2xvc3MpIg0KICAgIC8+DQogIDwvZz4NCg0KICA8ZyBmaWx0ZXI9InVybCgjc3VwcGx5LWdseXBoLXNoYWRvdykiPg0KICAgIDxyZWN0IHg9IjM1IiB5PSI1OCIgd2lkdGg9IjU4IiBoZWlnaHQ9IjQyIiByeD0iMTAiIGZpbGw9IndoaXRlIi8+DQoNCiAgICA8cGF0aA0KICAgICAgZD0iTTM2LjUgNTUuNUw0OSAzNkg3MUw2MCA1NS41SDM2LjVaIg0KICAgICAgZmlsbD0id2hpdGUiDQogICAgLz4NCiAgICA8cGF0aA0KICAgICAgZD0iTTkxLjUgNTUuNUw3OSAzNkg1N0w2OCA1NS41SDkxLjVaIg0KICAgICAgZmlsbD0id2hpdGUiDQogICAgLz4NCg0KICAgIDxyZWN0IHg9IjU4IiB5PSI1NS41IiB3aWR0aD0iMTIiIGhlaWdodD0iMjAiIHJ4PSIzIiBmaWxsPSJ2YXIoLS1pbmspIi8+DQogICAgPHJlY3QgeD0iNTAiIHk9Ijc4IiB3aWR0aD0iMjgiIGhlaWdodD0iNyIgcng9IjMuNSIgZmlsbD0idmFyKC0taW5rKSIvPg0KICA8L2c+DQo8L3N2Zz4=",
+          "taskMarker": "data:image/svg+xml;base64,PHN2Zw0KICB3aWR0aD0iMTI4Ig0KICBoZWlnaHQ9IjE0OCINCiAgdmlld0JveD0iMCAwIDEyOCAxNDgiDQogIGZpbGw9Im5vbmUiDQogIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyINCiAgc3R5bGU9Ii0tcGluOiMyZDhjZmY7IC0tcGluLWRhcms6IzBmNWZmMDsgLS1pbms6IzFiNjNmMzsiDQo+DQogIDxkZWZzPg0KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0idGFzay1waW4tZ3JhZCIgeDE9IjY0IiB5MT0iMTAiIHgyPSI2NCIgeTI9IjEzMiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluKSIgLz4NCiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluLWRhcmspIiAvPg0KICAgIDwvbGluZWFyR3JhZGllbnQ+DQoNCiAgICA8cmFkaWFsR3JhZGllbnQgaWQ9InRhc2stcGluLWdsb3NzIiBjeD0iMCIgY3k9IjAiIHI9IjEiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIg0KICAgICAgZ3JhZGllbnRUcmFuc2Zvcm09InRyYW5zbGF0ZSg2NCAyNikgcm90YXRlKDkwKSBzY2FsZSg1MiA2MikiPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0id2hpdGUiIHN0b3Atb3BhY2l0eT0iMC4zNCIvPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSJ3aGl0ZSIgc3RvcC1vcGFjaXR5PSIwIi8+DQogICAgPC9yYWRpYWxHcmFkaWVudD4NCg0KICAgIDxmaWx0ZXIgaWQ9InRhc2stcGluLXNoYWRvdyIgeD0iOCIgeT0iNCIgd2lkdGg9IjExMiIgaGVpZ2h0PSIxNDAiIGZpbHRlclVuaXRzPSJ1c2VyU3BhY2VPblVzZSI+DQogICAgICA8ZmVEcm9wU2hhZG93IGR4PSIwIiBkeT0iOCIgc3RkRGV2aWF0aW9uPSI4IiBmbG9vZC1jb2xvcj0iIzE1MzY2ZiIgZmxvb2Qtb3BhY2l0eT0iMC4yMiIvPg0KICAgIDwvZmlsdGVyPg0KDQogICAgPGZpbHRlciBpZD0idGFzay1nbHlwaC1zaGFkb3ciIHg9IjIwIiB5PSIxNCIgd2lkdGg9Ijg4IiBoZWlnaHQ9IjkwIiBmaWx0ZXJVbml0cz0idXNlclNwYWNlT25Vc2UiPg0KICAgICAgPGZlRHJvcFNoYWRvdyBkeD0iMCIgZHk9IjQiIHN0ZERldmlhdGlvbj0iNCIgZmxvb2QtY29sb3I9IiMxNTM2NmYiIGZsb29kLW9wYWNpdHk9IjAuMTgiLz4NCiAgICA8L2ZpbHRlcj4NCg0KICAgIDxyYWRpYWxHcmFkaWVudCBpZD0idGFzay1ib3R0b20tc2hhZG93IiBjeD0iMCIgY3k9IjAiIHI9IjEiIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIg0KICAgICAgZ3JhZGllbnRUcmFuc2Zvcm09InRyYW5zbGF0ZSg2NCAxMzkpIHNjYWxlKDE4IDYpIj4NCiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMyMzMwNEEiIHN0b3Atb3BhY2l0eT0iMC4xOCIvPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMjMzMDRBIiBzdG9wLW9wYWNpdHk9IjAiLz4NCiAgICA8L3JhZGlhbEdyYWRpZW50Pg0KICA8L2RlZnM+DQoNCiAgPGVsbGlwc2UgY3g9IjY0IiBjeT0iMTM5IiByeD0iMTgiIHJ5PSI2IiBmaWxsPSJ1cmwoI3Rhc2stYm90dG9tLXNoYWRvdykiLz4NCg0KICA8ZyBmaWx0ZXI9InVybCgjdGFzay1waW4tc2hhZG93KSI+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik02NCAxMEMzNi40IDEwIDE4IDI5LjUgMTggNTYuOEMxOCA5Mi43IDU4LjYgMTMwLjUgNjIuMyAxMzMuOUM2My4zIDEzNC44IDY0LjcgMTM0LjggNjUuNyAxMzMuOUM2OS40IDEzMC41IDExMCA5Mi43IDExMCA1Ni44QzExMCAyOS41IDkxLjYgMTAgNjQgMTBaIg0KICAgICAgZmlsbD0idXJsKCN0YXNrLXBpbi1ncmFkKSINCiAgICAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNNjQgMTBDMzYuNCAxMCAxOCAyOS41IDE4IDU2LjhDMTggOTIuNyA1OC42IDEzMC41IDYyLjMgMTMzLjlDNjMuMyAxMzQuOCA2NC43IDEzNC44IDY1LjcgMTMzLjlDNjkuNCAxMzAuNSAxMTAgOTIuNyAxMTAgNTYuOEMxMTAgMjkuNSA5MS42IDEwIDY0IDEwWiINCiAgICAgIGZpbGw9InVybCgjdGFzay1waW4tZ2xvc3MpIg0KICAgIC8+DQogIDwvZz4NCg0KICA8ZyBmaWx0ZXI9InVybCgjdGFzay1nbHlwaC1zaGFkb3cpIj4NCiAgICA8cmVjdCB4PSIzNyIgeT0iMzkiIHdpZHRoPSI1NCIgaGVpZ2h0PSI2MiIgcng9IjExIiBmaWxsPSJ3aGl0ZSIvPg0KICAgIDxyZWN0IHg9IjQ3IiB5PSIyOCIgd2lkdGg9IjM0IiBoZWlnaHQ9IjE4IiByeD0iOCIgZmlsbD0id2hpdGUiLz4NCiAgICA8Y2lyY2xlIGN4PSI2NCIgY3k9IjM1LjUiIHI9IjQiIGZpbGw9InZhcigtLWluaykiLz4NCg0KICAgIDxjaXJjbGUgY3g9IjQ5LjUiIGN5PSI1OCIgcj0iNy41IiBmaWxsPSJ2YXIoLS1pbmspIi8+DQogICAgPHBhdGggZD0iTTQ2LjMgNThMNDguOCA2MC42TDUzLjYgNTUuOCIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIzLjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPg0KDQogICAgPGNpcmNsZSBjeD0iNDkuNSIgY3k9Ijc0IiByPSI3LjUiIGZpbGw9InZhcigtLWluaykiLz4NCiAgICA8cGF0aCBkPSJNNDYuMyA3NEw0OC44IDc2LjZMNTMuNiA3MS44IiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjMuMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+DQoNCiAgICA8Y2lyY2xlIGN4PSI0OS41IiBjeT0iOTAiIHI9IjcuNSIgZmlsbD0idmFyKC0taW5rKSIvPg0KICAgIDxwYXRoIGQ9Ik00Ni4zIDkwTDQ4LjggOTIuNkw1My42IDg3LjgiIHN0cm9rZT0id2hpdGUiIHN0cm9rZS13aWR0aD0iMy4yIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4NCg0KICAgIDxyZWN0IHg9IjYwIiB5PSI1NCIgd2lkdGg9IjIwIiBoZWlnaHQ9IjUiIHJ4PSIyLjUiIGZpbGw9InZhcigtLWluaykiLz4NCiAgICA8cmVjdCB4PSI2MCIgeT0iNzAiIHdpZHRoPSIyMCIgaGVpZ2h0PSI1IiByeD0iMi41IiBmaWxsPSJ2YXIoLS1pbmspIi8+DQogICAgPHJlY3QgeD0iNjAiIHk9Ijg2IiB3aWR0aD0iMjAiIGhlaWdodD0iNSIgcng9IjIuNSIgZmlsbD0idmFyKC0taW5rKSIvPg0KICA8L2c+DQo8L3N2Zz4=",
+          "emergencyMarker": "data:image/svg+xml;base64,PHN2Zw0KICB3aWR0aD0iMTI4Ig0KICBoZWlnaHQ9IjE0OCINCiAgdmlld0JveD0iMCAwIDEyOCAxNDgiDQogIGZpbGw9Im5vbmUiDQogIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyINCiAgc3R5bGU9Ii0tcGluOiNmZjYxNjY7IC0tcGluLWRhcms6I2U1MmYzOTsiDQo+DQogIDxkZWZzPg0KICAgIDwhLS0g5Zyw5Zu+6ZKJ5Li75L2T5riQ5Y+YIC0tPg0KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0icGluR3JhZEVtZXJnZW5jeSIgeDE9IjY0IiB5MT0iMTAiIHgyPSI2NCIgeTI9IjEzMiIgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluKSIgLz4NCiAgICAgIDxzdG9wIG9mZnNldD0iMTAwJSIgc3R5bGU9InN0b3AtY29sb3I6dmFyKC0tcGluLWRhcmspIiAvPg0KICAgIDwvbGluZWFyR3JhZGllbnQ+DQoNCiAgICA8IS0tIOmrmOWFiSAtLT4NCiAgICA8cmFkaWFsR3JhZGllbnQNCiAgICAgIGlkPSJwaW5HbG9zc0VtZXJnZW5jeSINCiAgICAgIGN4PSIwIg0KICAgICAgY3k9IjAiDQogICAgICByPSIxIg0KICAgICAgZ3JhZGllbnRVbml0cz0idXNlclNwYWNlT25Vc2UiDQogICAgICBncmFkaWVudFRyYW5zZm9ybT0idHJhbnNsYXRlKDY0IDI0KSByb3RhdGUoOTApIHNjYWxlKDU2IDY0KSINCiAgICA+DQogICAgICA8c3RvcCBvZmZzZXQ9IjAlIiBzdG9wLWNvbG9yPSJ3aGl0ZSIgc3RvcC1vcGFjaXR5PSIwLjMwIi8+DQogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IndoaXRlIiBzdG9wLW9wYWNpdHk9IjAiLz4NCiAgICA8L3JhZGlhbEdyYWRpZW50Pg0KDQogICAgPCEtLSDlnLDlm77pkonpmLTlvbEgLS0+DQogICAgPGZpbHRlciBpZD0icGluU2hhZG93RW1lcmdlbmN5IiB4PSI2IiB5PSI0IiB3aWR0aD0iMTE2IiBoZWlnaHQ9IjE0MiIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIj4NCiAgICAgIDxmZURyb3BTaGFkb3cgZHg9IjAiIGR5PSI4IiBzdGREZXZpYXRpb249IjgiIGZsb29kLWNvbG9yPSIjN2YxZDI0IiBmbG9vZC1vcGFjaXR5PSIwLjIyIi8+DQogICAgPC9maWx0ZXI+DQoNCiAgICA8IS0tIOaEn+WPueWPt+mYtOW9sSAtLT4NCiAgICA8ZmlsdGVyIGlkPSJtYXJrU2hhZG93RW1lcmdlbmN5IiB4PSIzOCIgeT0iMjQiIHdpZHRoPSI1MiIgaGVpZ2h0PSI2OCIgZmlsdGVyVW5pdHM9InVzZXJTcGFjZU9uVXNlIj4NCiAgICAgIDxmZURyb3BTaGFkb3cgZHg9IjAiIGR5PSIzIiBzdGREZXZpYXRpb249IjMiIGZsb29kLWNvbG9yPSIjN2YxZDI0IiBmbG9vZC1vcGFjaXR5PSIwLjE0Ii8+DQogICAgPC9maWx0ZXI+DQoNCiAgICA8IS0tIOW6lemDqOaCrOa1rumYtOW9sSAtLT4NCiAgICA8cmFkaWFsR3JhZGllbnQNCiAgICAgIGlkPSJib3R0b21TaGFkb3dFbWVyZ2VuY3kiDQogICAgICBjeD0iMCINCiAgICAgIGN5PSIwIg0KICAgICAgcj0iMSINCiAgICAgIGdyYWRpZW50VW5pdHM9InVzZXJTcGFjZU9uVXNlIg0KICAgICAgZ3JhZGllbnRUcmFuc2Zvcm09InRyYW5zbGF0ZSg2NCAxMzkpIHNjYWxlKDE4IDYpIg0KICAgID4NCiAgICAgIDxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMyNDMyNEEiIHN0b3Atb3BhY2l0eT0iMC4xOCIvPg0KICAgICAgPHN0b3Agb2Zmc2V0PSIxMDAlIiBzdG9wLWNvbG9yPSIjMjQzMjRBIiBzdG9wLW9wYWNpdHk9IjAiLz4NCiAgICA8L3JhZGlhbEdyYWRpZW50Pg0KICA8L2RlZnM+DQoNCiAgPCEtLSDlupXpg6jmipXlvbEgLS0+DQogIDxlbGxpcHNlIGN4PSI2NCIgY3k9IjEzOSIgcng9IjE4IiByeT0iNiIgZmlsbD0idXJsKCNib3R0b21TaGFkb3dFbWVyZ2VuY3kpIiAvPg0KDQogIDwhLS0g5Zyw5Zu+6ZKJ5Li75L2TIC0tPg0KICA8ZyBmaWx0ZXI9InVybCgjcGluU2hhZG93RW1lcmdlbmN5KSI+DQogICAgPHBhdGgNCiAgICAgIGQ9Ik02NCAxMEMzNi40IDEwIDE4IDI5LjUgMTggNTYuOEMxOCA5Mi43IDU4LjYgMTMwLjUgNjIuMyAxMzMuOUM2My4zIDEzNC44IDY0LjcgMTM0LjggNjUuNyAxMzMuOUM2OS40IDEzMC41IDExMCA5Mi43IDExMCA1Ni44QzExMCAyOS41IDkxLjYgMTAgNjQgMTBaIg0KICAgICAgZmlsbD0idXJsKCNwaW5HcmFkRW1lcmdlbmN5KSINCiAgICAvPg0KICAgIDxwYXRoDQogICAgICBkPSJNNjQgMTBDMzYuNCAxMCAxOCAyOS41IDE4IDU2LjhDMTggOTIuNyA1OC42IDEzMC41IDYyLjMgMTMzLjlDNjMuMyAxMzQuOCA2NC43IDEzNC44IDY1LjcgMTMzLjlDNjkuNCAxMzAuNSAxMTAgOTIuNyAxMTAgNTYuOEMxMTAgMjkuNSA5MS42IDEwIDY0IDEwWiINCiAgICAgIGZpbGw9InVybCgjcGluR2xvc3NFbWVyZ2VuY3kpIg0KICAgIC8+DQogIDwvZz4NCg0KICA8IS0tIOaEn+WPueWPtyAtLT4NCiAgPGcgZmlsdGVyPSJ1cmwoI21hcmtTaGFkb3dFbWVyZ2VuY3kpIiBmaWxsPSJ3aGl0ZSI+DQogICAgPHJlY3QgeD0iNTguNSIgeT0iMzQiIHdpZHRoPSIxMSIgaGVpZ2h0PSIzOCIgcng9IjUuNSIgLz4NCiAgICA8Y2lyY2xlIGN4PSI2NCIgY3k9IjgyLjUiIHI9IjYuNSIgLz4NCiAgPC9nPg0KDQogIDwhLS0g5bqV6YOo5bCP57qi54K5IC0tPg0KICA8Y2lyY2xlIGN4PSI2NCIgY3k9IjEyMC41IiByPSI1LjUiIGZpbGw9InZhcigtLXBpbi1kYXJrKSIgLz4NCjwvc3ZnPg==",
+          "catIcon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkNhdCBpY29uIj4KICA8dGl0bGU+Q2F0IGljb248L3RpdGxlPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjUuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIiBzdHJva2UtbGluZWpvaW49InJvdW5kIj4KICAgIDwhLS0gaGVhZCBvdXRsaW5lIC0tPgogICAgPHBhdGggZD0iTTMxIDQ4CiAgICAgICAgICAgICBDMjcgMzEsIDI4IDE2LCAzOCAxNgogICAgICAgICAgICAgQzQ1IDE2LCA1NCAyOCwgNTkgMzQKICAgICAgICAgICAgIEM2MiAzMiwgNjYgMzEsIDcwIDMxCiAgICAgICAgICAgICBDNzQgMzEsIDc4IDMyLCA4MSAzNAogICAgICAgICAgICAgQzg2IDI4LCA5NSAxNiwgMTAyIDE2CiAgICAgICAgICAgICBDMTEyIDE2LCAxMTMgMzEsIDEwOSA0OAogICAgICAgICAgICAgQzExNiA1OCwgMTE4IDcyLCAxMTUgODcKICAgICAgICAgICAgIEMxMTAgMTA2LCA5MyAxMTcsIDY0IDExNwogICAgICAgICAgICAgQzM1IDExNywgMTggMTA2LCAxMyA4NwogICAgICAgICAgICAgQzEwIDcyLCAxMiA1OCwgMzEgNDhaIi8+CiAgICA8IS0tIHRpbnkgd2hpc2tlcnMgLS0+CiAgICA8cGF0aCBkPSJNMjggNzkgSDE4Ii8+CiAgICA8cGF0aCBkPSJNMzAgODYgSDIxIi8+CiAgICA8cGF0aCBkPSJNMTAwIDc5IEgxMTAiLz4KICAgIDxwYXRoIGQ9Ik05OCA4NiBIMTA3Ii8+CiAgICA8IS0tIG1vdXRoIC0tPgogICAgPHBhdGggZD0iTTU1IDkyCiAgICAgICAgICAgICBDNTcuNSA5NywgNjIgMTAwLCA2NCAxMDAKICAgICAgICAgICAgIEM2NiAxMDAsIDcwLjUgOTcsIDczIDkyIi8+CiAgICA8cGF0aCBkPSJNNjQgODQgVjg5Ii8+CiAgPC9nPgoKICA8IS0tIGV5ZXMgLS0+CiAgPGNpcmNsZSBjeD0iNDgiIGN5PSI2NyIgcj0iNS4yIiBmaWxsPSJjdXJyZW50Q29sb3IiLz4KICA8Y2lyY2xlIGN4PSI4MCIgY3k9IjY3IiByPSI1LjIiIGZpbGw9ImN1cnJlbnRDb2xvciIvPgoKICA8IS0tIGV5ZSBoaWdobGlnaHRzIC0tPgogIDxjaXJjbGUgY3g9IjQ5LjgiIGN5PSI2NS4yIiByPSIxLjQiIGZpbGw9IndoaXRlIi8+CiAgPGNpcmNsZSBjeD0iODEuOCIgY3k9IjY1LjIiIHI9IjEuNCIgZmlsbD0id2hpdGUiLz4KCiAgPCEtLSBub3NlIC0tPgogIDxwYXRoIGQ9Ik02NCA3NwogICAgICAgICAgIEM2MC43IDc3LCA1OC42IDc5LjEsIDU4LjYgODEuMgogICAgICAgICAgIEM1OC42IDgzLjcsIDYxLjIgODYsIDY0IDg2CiAgICAgICAgICAgQzY2LjggODYsIDY5LjQgODMuNywgNjkuNCA4MS4yCiAgICAgICAgICAgQzY5LjQgNzkuMSwgNjcuMyA3NywgNjQgNzdaIgogICAgICAgIGZpbGw9ImN1cnJlbnRDb2xvciIvPgo8L3N2Zz4K",
+          "mapIcon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAxMjggMTI4IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9Ik1hcCBsb2NhdGlvbiBpY29uIj4KICA8dGl0bGU+TWFwIGxvY2F0aW9uIGljb248L3RpdGxlPgoKICA8IS0tIG1hcCBib2R5IC0tPgogIDxwYXRoIGQ9Ik0xOCA0MgogICAgICAgICAgIEMxOCAzNiwgMjEgMzEsIDI2IDI4CiAgICAgICAgICAgTDQyIDE4CiAgICAgICAgICAgQzQ2IDE2LCA1MCAxNiwgNTQgMTgKICAgICAgICAgICBMNzQgMjkKICAgICAgICAgICBDNzcgMzEsIDgxIDMxLCA4NCAyOQogICAgICAgICAgIEwxMDEgMTkKICAgICAgICAgICBDMTA5IDE0LCAxMTggMjAsIDExOCAyOQogICAgICAgICAgIFY5NgogICAgICAgICAgIEMxMTggMTAzLCAxMTQgMTA5LCAxMDggMTEyCiAgICAgICAgICAgTDg3IDEyMgogICAgICAgICAgIEM4MSAxMjUsIDc0IDEyNSwgNjggMTIxCiAgICAgICAgICAgTDUyIDExMgogICAgICAgICAgIEM0OSAxMTAsIDQ1IDExMCwgNDIgMTExCiAgICAgICAgICAgTDI1IDExOQogICAgICAgICAgIEMxNyAxMjMsIDEwIDExNywgMTAgMTA4CiAgICAgICAgICAgVjQyCiAgICAgICAgICAgQzEwIDQyLCAxMCA0MiwgMTAgNDIKICAgICAgICAgICBDMTAgNDIsIDEwIDQyLCAxOCA0MloiCiAgICAgICAgZmlsbD0idmFyKC0taWNvbi1tYWluLCAjNjdDNjVCKSIvPgoKICA8IS0tIHNpZGUgcGFuZWxzIC0tPgogIDxwYXRoIGQ9Ik0xOCA0MiBMNDIgMzAgVjExMSBMMjUgMTE5IEMxNyAxMjMsMTAgMTE3LDEwIDEwOCBWNDIgQzEwIDM3LDEzIDM0LDE4IDQyWiIKICAgICAgICBmaWxsPSJ2YXIoLS1pY29uLWxlZnQsICM1OEI4NEYpIi8+CiAgPHBhdGggZD0iTTg0IDI5IEwxMDEgMTkgQzEwOSAxNCwxMTggMjAsMTE4IDI5IFY5NiBDMTE4IDEwMywxMTQgMTA5LDEwOCAxMTIgTDg3IDEyMiBaIgogICAgICAgIGZpbGw9InZhcigtLWljb24tcmlnaHQsICM1N0JDNEYpIi8+CgogIDwhLS0gY2VudGVyIGZvbGQgLyBub3RjaCAtLT4KICA8cGF0aCBkPSJNNDIgMzAKICAgICAgICAgICBMNzQgMjkKICAgICAgICAgICBMODcgNDAKICAgICAgICAgICBWMTIyCiAgICAgICAgICAgQzgxIDEyNSwgNzQgMTI1LCA2OCAxMjEKICAgICAgICAgICBMNTIgMTEyCiAgICAgICAgICAgQzQ5IDExMCwgNDUgMTEwLCA0MiAxMTEKICAgICAgICAgICBaIgogICAgICAgIGZpbGw9InZhcigtLWljb24tY2VudGVyLCAjNzlEMjZBKSIvPgoKICA8cGF0aCBkPSJNNDIgMTExCiAgICAgICAgICAgTDY0IDEwMAogICAgICAgICAgIEw4NyAxMTEKICAgICAgICAgICBMODcgMTIyCiAgICAgICAgICAgQzgxIDEyNSwgNzQgMTI1LCA2OCAxMjEKICAgICAgICAgICBMNTIgMTEyCiAgICAgICAgICAgQzQ5IDExMCwgNDUgMTEwLCA0MiAxMTFaIgogICAgICAgIGZpbGw9InZhcigtLWljb24tYm90dG9tLCAjNUFCRjUyKSIvPgoKICA8IS0tIHN1YnRsZSBmb2xkcyAtLT4KICA8cGF0aCBkPSJNNDEuNSAzMSBMNDcgMzQgVjEwOCBMNDEuNSAxMTAgWiIgZmlsbD0idmFyKC0taWNvbi1mb2xkLCAjNEJBMzQ3KSIgb3BhY2l0eT0iLjIyIi8+CiAgPHBhdGggZD0iTTgwLjUgMzQgTDg2IDMxIFYxMTEgTDgwLjUgMTA4IFoiIGZpbGw9InZhcigtLWljb24tZm9sZCwgIzRCQTM0NykiIG9wYWNpdHk9Ii4yMiIvPgoKICA8IS0tIGNlbnRlcmVkIGxvY2F0aW9uIHBpbiAtLT4KICA8cGF0aCBkPSJNNjQgMjgKICAgICAgICAgICBDNTEuNSAyOCwgNDEgMzguMiwgNDEgNTAuOAogICAgICAgICAgIEM0MSA1OS4zLCA0NiA2Ny42LCA1NS4yIDc4LjcKICAgICAgICAgICBDNTkuNSA4My44LCA2Mi41IDg3LjMsIDY0IDg5CiAgICAgICAgICAgQzY1LjUgODcuMywgNjguNSA4My44LCA3Mi44IDc4LjcKICAgICAgICAgICBDODIgNjcuNiwgODcgNTkuMywgODcgNTAuOAogICAgICAgICAgIEM4NyAzOC4yLCA3Ni41IDI4LCA2NCAyOFoiCiAgICAgICAgZmlsbD0idmFyKC0taWNvbi1waW4sICMzRTlENDYpIi8+CgogIDxjaXJjbGUgY3g9IjY0IiBjeT0iNTAiIHI9IjExIiBmaWxsPSJ3aGl0ZSIvPgo8L3N2Zz4K",
+          "profileIcon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJwcm9maWxlIGljb24iPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjMuMzUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CiAgICA8Y2lyY2xlIGN4PSIzMiIgY3k9IjE3LjIiIHI9IjEwLjc1Ii8+CiAgICA8cGF0aCBkPSJNMTMuNyA1Ni4xYy40OC01LjUyIDIuNDUtMTAuMjIgNS44NS0xMy41NUMyMi43NSAzOS40MiAyNi45OCAzNy43IDMyIDM3LjdzOS4yNSAxLjcyIDEyLjQ1IDQuODVjMy40IDMuMzMgNS4zNyA4LjAzIDUuODUgMTMuNTVIMTMuN1oiLz4KICAgIDxwYXRoIGQ9Ik0yMi43IDQ1LjQ1YzIuMzMtMi4xIDUuNC0zLjIgOS4zLTMuMnM2Ljk3IDEuMSA5LjMgMy4yIi8+CiAgPC9nPgo8L3N2Zz4K",
+          "taskIcon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgcm9sZT0iaW1nIiBhcmlhLWxhYmVsPSJ0YXNrIGljb24iPgogIDxnIGZpbGw9Im5vbmUiIHN0cm9rZT0iY3VycmVudENvbG9yIiBzdHJva2Utd2lkdGg9IjMuMzUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCI+CiAgICA8cGF0aCBkPSJNMjMuMSAxMi4yNWgtNi42YTQuOSA0LjkgMCAwIDAtNC45IDQuOXYzNS4xYTQuOSA0LjkgMCAwIDAgNC45IDQuOWgzMWE0LjkgNC45IDAgMCAwIDQuOS00Ljl2LTM1LjFhNC45IDQuOSAwIDAgMC00LjktNC45aC02LjYiLz4KICAgIDxwYXRoIGQ9Ik0yNC42IDE2LjM1aDE0LjhhMy41OCAzLjU4IDAgMCAwIDMuNTgtMy41OHYtLjlhMy41OCAzLjU4IDAgMCAwLTMuNTgtMy41OGgtMy4yN0E0LjE4IDQuMTggMCAwIDAgMzIgNC44YTQuMTggNC4xOCAwIDAgMC00LjEzIDMuNDlIMjQuNmEzLjU4IDMuNTggMCAwIDAtMy41OCAzLjU4di45YTMuNTggMy41OCAwIDAgMCAzLjU4IDMuNThaIi8+CiAgICA8cGF0aCBkPSJNMzIgOC41NXYuMSIvPgogICAgPHBhdGggZD0iTTIzLjI1IDI4LjJoMTcuNSIvPgogICAgPHBhdGggZD0iTTIzLjI1IDM3LjM1aDE3LjUiLz4KICAgIDxwYXRoIGQ9Ik0yMy4yNSA0Ni41aDEzLjMiLz4KICAgIDxwYXRoIGQ9Ik0xOC44NSAyOC4yaC4xIi8+CiAgICA8cGF0aCBkPSJNMTguODUgMzcuMzVoLjEiLz4KICAgIDxwYXRoIGQ9Ik0xOC44NSA0Ni41aC4xIi8+CiAgPC9nPgo8L3N2Zz4K"
+    };
+
+    const CAMPUS_CENTER = [115.062202, 30.229910];
+    const DEFAULT_ZOOM = 17.1;
+    const CAMPUS_BOUNDS = { southWest: [115.05580, 30.22480], northEast: [115.06930, 30.23420] };
+
+    function svgDataImage(markup) {
+      return 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent(markup.trim());
+    }
+
+    function cover(kind, title) {
+      const palette = {
+        cat: ['#efe7ff', '#8754e8', '🐱'],
+        supply: ['#fff0dc', '#ff8b22', '📦'],
+        daily_task: ['#e9f2ff', '#2276ff', '✓'],
+        emergency_task: ['#ffe6e7', '#ef3038', '!'],
+        landmark: ['#e9f8ea', '#51ae57', '⌖']
+      }[kind] || ['#f3f4f6', '#6b7280', '•'];
+      return svgDataImage(`<svg xmlns="http://www.w3.org/2000/svg" width="240" height="180" viewBox="0 0 240 180"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="${palette[0]}"/><stop offset="1" stop-color="#fff"/></linearGradient></defs><rect width="240" height="180" rx="24" fill="url(#g)"/><circle cx="60" cy="58" r="30" fill="${palette[1]}" opacity=".92"/><text x="60" y="72" text-anchor="middle" font-size="36" font-family="Arial" fill="#fff" font-weight="900">${palette[2]}</text><path d="M28 136c30-18 51-6 76-16 36-15 53-46 100-22" stroke="${palette[1]}" stroke-width="8" opacity=".18" fill="none" stroke-linecap="round"/><text x="30" y="154" font-size="22" font-family="PingFang SC,Microsoft YaHei,Arial" font-weight="800" fill="#2a313d">${escapeHtml(title).slice(0, 10)}</text></svg>`);
+    }
+
+    const MOCK_API = {
+      currentUser: { id: 'u_001', nickname: '金炜然', role: 'admin', acceptedTaskIds: [] },
+      campus: {
+        id: 'hbnu', name: '湖北师范大学', center: CAMPUS_CENTER, defaultZoom: DEFAULT_ZOOM,
+        bounds: CAMPUS_BOUNDS
+      },
+      points: [
+        { id: 'p_supply_1', type: 'supply', title: '猫协物资点 #1', subtitle: '体育馆旁物资补给', desc: '猫粮、航空箱、诱捕笼备用点。', lng: 115.06118, lat: 30.23136, distance: 90, statusText: '可用', routeHint: '位于体育馆东侧小路，靠近北门方向。' },
+        { id: 'p_cat_xiaoju', type: 'cat', title: '小橘（常驻）', subtitle: '教学楼B附近', desc: '常驻猫咪，性格亲人，常在教学楼B右侧草坪活动。', lng: 115.06340, lat: 30.23100, distance: 150, statusText: '健康', routeHint: '从教学楼B正门右转，沿小路到草坪边。' },
+        { id: 'p_supply_2', type: 'supply', title: '猫协物资点 #2', subtitle: '图书馆附近', desc: '临时猫粮与清洁用品补给点。', lng: 115.05965, lat: 30.22980, distance: 180, statusText: '可用', routeHint: '在图书馆东侧绿道附近。' },
+        { id: 't_emergency_1', type: 'emergency_task', title: '北门草丛紧急救助任务', subtitle: '发现受伤流浪猫', desc: '北门草丛中发现受伤流浪猫，右后腿受伤，需要紧急救助和医疗处理。', lng: 115.06408, lat: 30.22972, distance: 120, statusText: '进行中', badge: 2, participants: '2/3 人参与', routeHint: '位于北门左侧草丛，靠近自行车停车区。', taskStatus: 'in_progress' },
+        { id: 't_daily_1', type: 'daily_task', title: '食堂后方投喂清洁', subtitle: '日常投喂与清理', desc: '清理食堂后方投喂点，补充少量猫粮并检查水碗。', lng: 115.05875, lat: 30.22775, distance: 250, statusText: '可接取', participants: '0/3 人参与', routeHint: '食堂西南侧小路靠近树丛处。', taskStatus: 'pending' },
+        { id: 't_daily_2', type: 'daily_task', title: '宿舍区C夜间巡查', subtitle: '日常巡查', desc: '检查宿舍区C附近猫咪出现情况，记录是否有异常。', lng: 115.06475, lat: 30.22755, distance: 310, statusText: '可接取', participants: '1/3 人参与', routeHint: '宿舍区C入口右侧绿化带。', taskStatus: 'pending' },
+        { id: 'lm_north_gate', type: 'landmark', title: '北门', subtitle: '校园出入口', desc: '湖北师范大学北门，常作为校内导航参照点。', lng: 115.06225, lat: 30.23218, distance: 80, statusText: '地标', routeHint: '校内北侧主出入口。' },
+        { id: 'lm_library', type: 'landmark', title: '图书馆', subtitle: '校园地标', desc: '图书馆附近有常见投喂路线和临时观察点。', lng: 115.05785, lat: 30.22995, distance: 210, statusText: '地标', routeHint: '位于主干道西侧。' },
+        { id: 'lm_canteen', type: 'landmark', title: '食堂', subtitle: '校园地标', desc: '食堂周边经常出现投喂与清洁任务。', lng: 115.06495, lat: 30.22895, distance: 230, statusText: '地标', routeHint: '从行政楼向东北方向步行。' }
+      ]
+    };
+    MOCK_API.points.forEach(p => p.cover = cover(p.type, p.title));
+
+    const typeConfig = {
+      cat: { label: '常驻猫咪', color: '#8754e8', markerIcon: 'catMarker', panelIcon: 'catIcon', tagClass: 'tag-purple', resultType: '猫咪' },
+      supply: { label: '物资点', color: '#ff8b22', markerIcon: 'supplyMarker', panelIcon: 'supplyMarker', tagClass: 'tag-orange', resultType: '物资' },
+      daily_task: { label: '日常任务', color: '#2276ff', markerIcon: 'taskMarker', panelIcon: 'taskIcon', tagClass: 'tag-blue', resultType: '任务' },
+      emergency_task: { label: '紧急任务', color: '#ef3038', markerIcon: 'emergencyMarker', panelIcon: 'emergencyMarker', tagClass: 'tag-red', resultType: '任务' },
+      landmark: { label: '地标地址', color: '#51ae57', markerIcon: 'mapIcon', panelIcon: 'mapIcon', tagClass: 'tag-green', resultType: '地标' }
+    };
+
+    const root = document.documentElement;
+    const drawer = document.getElementById('drawer');
+    const grip = document.getElementById('drawerGrip');
+    const drawerContent = document.getElementById('drawerContent');
+    const searchBox = document.getElementById('searchBox');
+    const searchInput = document.getElementById('searchInput');
+    const clearSearch = document.getElementById('clearSearch');
+    const filterLabel = document.getElementById('filterLabel');
+    const filterChip = document.getElementById('filterChip');
+    const filterMenu = document.getElementById('filterMenu');
+    const mapWrap = document.getElementById('mapWrap');
+    const placeholder = document.getElementById('mapPlaceholder');
+    const mapToast = document.getElementById('mapToast');
+    const locateBtn = document.getElementById('locateBtn');
+    const myLocationBtn = document.getElementById('myLocationBtn');
+    const layerBtn = document.getElementById('layerBtn');
+    const adminQuickMenu = document.getElementById('adminQuickMenu');
+
+    let map = null;
+    let walking = null;
+    let markers = [];
+    let userMarker = null;
+    let currentPosition = null;
+    let activeFilter = 'all';
+    let activePoint = null;
+    let query = '';
+    let mode = 'default';
+    let currentZoom = DEFAULT_ZOOM;
+    let quickInsertLngLat = null;
+    let toastTimer = null;
+
+    function escapeHtml(text) {
+      return String(text ?? '').replace(/[&<>'"]/g, s => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[s]));
+    }
+    function assetImg(name) { return `<img src="${SVG_ASSETS[name]}" alt="" />`; }
+    function iconBall(type) {
+      const cfg = typeConfig[type] || typeConfig.daily_task;
+      return `<span class="icon-ball" style="background:${cfg.color}">${assetImg(cfg.panelIcon)}</span>`;
+    }
+    function markerIcon(name) { return `<img src="${SVG_ASSETS[name]}" alt="" />`; }
+    function pointTypeLabel(point) { return typeConfig[point.type]?.label || '点位'; }
+    function pointTag(point) { const cfg = typeConfig[point.type] || typeConfig.daily_task; return `<span class="task-tag ${cfg.tagClass}">${cfg.label}</span>`; }
+    function filteredPoints() {
+      const points = MOCK_API.points;
+      if (activeFilter === 'all') return points;
+      return points.filter(p => p.type === activeFilter);
+    }
+    function isTask(point) { return point.type === 'daily_task' || point.type === 'emergency_task'; }
+    function latestTasks() { return MOCK_API.points.filter(isTask).slice(0, 3); }
+    function myAcceptedTasks() { return MOCK_API.points.filter(p => MOCK_API.currentUser.acceptedTaskIds.includes(p.id)); }
+    function searchPoints(q) {
+      const kw = q.trim().toLowerCase();
+      if (!kw) return [];
+      return MOCK_API.points.filter(p => [p.title, p.subtitle, p.desc, p.routeHint, pointTypeLabel(p)].join(' ').toLowerCase().includes(kw));
+    }
+
+    function showToast(text) {
+      clearTimeout(toastTimer);
+      mapToast.textContent = text;
+      mapToast.classList.add('is-visible');
+      toastTimer = setTimeout(() => mapToast.classList.remove('is-visible'), 2600);
+    }
+
+    function markerClass() {
+      if (currentZoom < 16.65) return 'marker-bare';
+      if (currentZoom >= 18) return 'marker-card';
+      return 'marker-title';
+    }
+
+    function markerHTML(point) {
+      const cfg = typeConfig[point.type] || typeConfig.daily_task;
+      const selectedClass = activePoint?.id === point.id ? 'is-selected' : '';
+      const editingClass = point.editing ? 'is-editing' : '';
+      return `<div class="real-marker ${markerClass()} ${selectedClass} ${editingClass}" data-id="${point.id}">
+        <div class="marker-pin">${markerIcon(cfg.markerIcon)}${point.badge ? `<span class="badge-count">${point.badge}</span>` : ''}</div>
+        <div class="marker-label">${escapeHtml(point.title)}</div>
+        <div class="marker-preview"><img src="${point.cover}" alt="" /><span>${escapeHtml(point.title)}</span></div>
+      </div>`;
+    }
+
+    function renderMarkers() {
+      if (!map || !window.AMap) return;
+      if (markers.length) map.remove(markers);
+      markers = [];
+      markers = filteredPoints().map(point => {
+        const marker = new AMap.Marker({
+          position: new AMap.LngLat(point.lng, point.lat),
+          content: markerHTML(point),
+          offset: new AMap.Pixel(-22, -52),
+          zIndex: point.type === 'emergency_task' ? 130 : activePoint?.id === point.id ? 150 : 100,
+          bubble: true,
+          draggable: MOCK_API.currentUser.role === 'admin' && !!point.editing,
+          cursor: point.editing ? 'move' : 'pointer',
+          extData: point
+        });
+        marker.on('click', () => selectPoint(point.id, { center: false }));
+        marker.on('dragend', ev => {
+          point.lng = ev.lnglat.lng;
+          point.lat = ev.lnglat.lat;
+          showToast(`已更新坐标：${point.lng.toFixed(6)}, ${point.lat.toFixed(6)}`);
+          renderDrawerContent();
+        });
+        markers.push(marker);
+        return marker;
+      });
+      map.add(markers);
+    }
+
+    function renderTaskCard(point) {
+      const isEmergency = point.type === 'emergency_task';
+      return `<article class="task-card" data-point-id="${point.id}">
+        ${iconBall(point.type)}
+        <div><h3>${escapeHtml(point.title)}</h3><div class="task-meta">${pointTag(point)}<span>·</span><span>距离 ${point.distance}m</span></div></div>
+        <div style="display:flex;align-items:center;gap:8px;"><span class="${isEmergency ? 'state-red' : 'state-blue'}">${escapeHtml(point.statusText || '查看')}</span><svg class="row-arrow" viewBox="0 0 20 20" aria-hidden="true"><path d="m7 4.5 5.5 5.5L7 15.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+      </article>`;
+    }
+
+    function renderDefaultPanel() {
+      const mine = myAcceptedTasks();
+      if (mine.length) {
+        return `<div class="section-head"><h2>我的进行中任务</h2><a href="javascript:void(0)">查看全部 ›</a></div><div class="task-list">${mine.map(renderTaskCard).join('')}</div>`;
+      }
+      return `<div class="section-head"><h2>最新任务</h2><a href="javascript:void(0)">查看全部 ›</a></div><div class="task-list">${latestTasks().map(renderTaskCard).join('')}</div>`;
+    }
+
+    function renderSearchPanel() {
+      if (!query.trim()) {
+        const recent = ['北门', '小橘（常驻）', '图书馆', '体育馆', '猫协物资点 #1', '食堂后方投喂清洁'];
+        const guess = ['猫协物资点 #2', '食堂', '学生服务中心', '行政楼', '紧急任务', '日常任务'];
+        return `<div class="section-head"><h2>最近搜索</h2><button class="muted-action" type="button">清除</button></div>
+          <div class="chips">${recent.map(x => `<button class="quick-chip" data-search="${escapeHtml(x)}" type="button"><span class="dot" style="background:rgba(81,174,87,.12)">${assetImg('mapIcon')}</span>${escapeHtml(x)}</button>`).join('')}</div>
+          <div class="hint-title">猜你想搜</div>
+          <div class="chips" style="flex-wrap:wrap;overflow:visible;">${guess.map(x => `<button class="quick-chip" data-search="${escapeHtml(x)}" type="button"><span class="dot" style="background:rgba(17,24,39,.06)">${assetImg('mapIcon')}</span>${escapeHtml(x)}</button>`).join('')}</div>`;
+      }
+      const results = searchPoints(query);
+      return `<div class="section-head"><h2>搜索“${escapeHtml(query)}”</h2><span class="muted-action">${results.length} 个结果</span></div>
+        <div class="result-list">${results.map(point => {
+          const cfg = typeConfig[point.type] || typeConfig.daily_task;
+          return `<article class="result-card" data-point-id="${point.id}">
+            ${iconBall(point.type)}
+            <div><h3>${escapeHtml(point.title)}</h3><div class="result-meta"><span class="result-type ${cfg.tagClass}">${cfg.resultType}</span><span>${escapeHtml(point.subtitle || pointTypeLabel(point))}</span><span>·</span><span>${point.distance}m</span></div></div>
+            <img class="result-thumb" src="${point.cover}" alt="" />
+          </article>`;
+        }).join('') || `<div class="empty-text">没有匹配到相关点位、地标或地址</div>`}</div>`;
+    }
+
+    function renderSelectedPanel(point) {
+      const cfg = typeConfig[point.type] || typeConfig.daily_task;
+      const taskMeta = isTask(point) ? `<span>👥 ${escapeHtml(point.participants || '0/3 人参与')}</span>` : '';
+      const adminPart = MOCK_API.currentUser.role === 'admin' ? `<div class="admin-tools">
+        <div class="admin-tools-title"><span>管理员点位操作</span><span>${point.editing ? '编辑状态：可拖拽 Marker' : '预留入口'}</span></div>
+        <div class="admin-row">
+          <button class="btn-plain" data-action="edit-point" type="button">${point.editing ? '退出编辑' : '编辑点位'}</button>
+          <button class="btn-plain" data-action="save-point" type="button">保存位置</button>
+        </div>
+        ${point.editing ? `<div class="editor-form">
+          <label>点位标题 <input id="editTitle" value="${escapeHtml(point.title)}" /></label>
+          <label>简要说明 <textarea id="editDesc">${escapeHtml(point.desc || '')}</textarea></label>
+          <div class="coord-line">当前坐标：lng ${point.lng.toFixed(7)}，lat ${point.lat.toFixed(7)}。拖拽地图上的 Marker 后坐标会同步变化。</div>
+        </div>` : ''}
+      </div>` : '';
+      return `<article class="summary-card" data-summary-id="${point.id}">
+        <div class="summary-main">
+          <img class="summary-cover" src="${point.cover}" alt="" />
+          <div>
+            <h2>${escapeHtml(point.title)}</h2>
+            <div class="task-meta">${pointTag(point)}<span>·</span><span>${escapeHtml(point.statusText || '可查看')}</span></div>
+            <p class="summary-desc">${escapeHtml(point.desc || '暂无点位说明。')}</p>
+            <div class="summary-meta"><span>📍 距离 ${point.distance ?? '--'}m</span>${taskMeta}</div>
+            <div class="summary-route"><span>↝</span><span>${escapeHtml(point.routeHint || '暂无路线说明。')}</span></div>
+          </div>
+        </div>
+        <div class="summary-actions">
+          <button class="btn-outline" type="button" data-action="detail">查看详情</button>
+          <button class="btn-primary" type="button" data-action="navigate">➤ 导航到这里</button>
+        </div>
+        ${adminPart}
+      </article>`;
+    }
+
+    function renderDrawerContent() {
+      clearSearch.classList.toggle('is-visible', !!query);
+      if (mode === 'selected' && activePoint) drawerContent.innerHTML = renderSelectedPanel(activePoint);
+      else if (mode === 'search') drawerContent.innerHTML = renderSearchPanel();
+      else drawerContent.innerHTML = renderDefaultPanel();
+    }
+
+    function setDrawerHeight(height, nextMode = mode) {
+      const compact = 112;
+      const expanded = Math.max(560, Math.min(window.innerHeight - 118, 680));
+      const defaultH = window.innerHeight < 720 ? 318 : 360;
+      const clamped = Math.max(compact, Math.min(expanded, height));
+      const normalized = (clamped - compact) / (expanded - compact);
+      let headerH;
+      if (nextMode === 'search') headerH = Math.max(0, 40 - normalized * 80);
+      else headerH = 8 + Math.min(1, Math.max(0, (clamped - compact) / (defaultH - compact))) * 120;
+      const headerOpacity = Math.max(0, Math.min(1, headerH / 128));
+      const contentOpacity = Math.max(0, Math.min(1, (clamped - 128) / 100));
+      root.style.setProperty('--drawer-h', `${clamped}px`);
+      root.style.setProperty('--header-h', `${headerH}px`);
+      root.style.setProperty('--header-opacity', `${headerOpacity}`);
+      root.style.setProperty('--drawer-content-opacity', `${contentOpacity}`);
+      drawer.classList.toggle('is-compact', clamped < 138);
+      requestAnimationFrame(() => { if (map && typeof map.resize === 'function') map.resize(); });
+    }
+
+    function expandSearch() {
+      mode = 'search';
+      activePoint = null;
+      searchBox.classList.add('is-focused');
+      renderMarkers();
+      setDrawerHeight(Math.max(560, Math.min(window.innerHeight - 118, 680)), mode);
+      renderDrawerContent();
+      setTimeout(() => searchInput.focus(), 40);
+    }
+    function collapseToMap() {
+      mode = query ? 'search' : 'default';
+      searchBox.classList.toggle('is-focused', mode === 'search');
+      setDrawerHeight(112, mode);
+      renderDrawerContent();
+    }
+    function defaultHome() {
+      mode = activePoint ? 'selected' : (query ? 'search' : 'default');
+      setDrawerHeight(window.innerHeight < 720 ? 318 : 360, mode);
+      renderDrawerContent();
+    }
+
+    function selectPoint(id, options = {}) {
+      const point = MOCK_API.points.find(p => p.id === id);
+      if (!point) return;
+      activePoint = point;
+      mode = 'selected';
+      searchInput.blur();
+      searchBox.classList.remove('is-focused');
+      if (map && options.center !== false) {
+        map.setZoomAndCenter(Math.max(currentZoom, 17.5), [point.lng, point.lat]);
+      }
+      renderMarkers();
+      defaultHome();
+    }
+
+    function navigateToActivePoint() {
+      if (!activePoint) return showToast('请先选择一个点位');
+      const drawRoute = (start) => {
+        const end = [activePoint.lng, activePoint.lat];
+        AMap.plugin('AMap.Walking', function () {
+          if (walking && typeof walking.clear === 'function') walking.clear();
+          walking = new AMap.Walking({ map, hideMarkers: true, autoFitView: true });
+          walking.search(start, end, function(status, result) {
+            if (status === 'complete') showToast('已生成步行路线');
+            else showToast('路线规划失败，可按点位路线说明前往');
+          });
+        });
+      };
+      if (currentPosition) drawRoute(currentPosition);
+      else locateMe(drawRoute);
+    }
+
+    function setCurrentLocation(lngLat) {
+      currentPosition = lngLat;
+      if (userMarker) map.remove(userMarker);
+      userMarker = new AMap.Marker({
+        position: new AMap.LngLat(lngLat[0], lngLat[1]),
+        content: '<div class="current-location-marker"><span class="dot"></span><span class="text">我的位置</span></div>',
+        offset: new AMap.Pixel(-12, -12),
+        zIndex: 220
+      });
+      map.add(userMarker);
+      map.setCenter(lngLat);
+    }
+
+    function locateMe(afterLocated) {
+      if (!map || !window.AMap) return;
+      showToast('正在获取当前位置…');
+      AMap.plugin('AMap.Geolocation', function () {
+        const geolocation = new AMap.Geolocation({ enableHighAccuracy: true, timeout: 10000, zoomToAccuracy: true, showCircle: true, showMarker: false });
+        geolocation.getCurrentPosition(function(status, result) {
+          if (status === 'complete' && result.position) {
+            const lngLat = [result.position.lng, result.position.lat];
+            setCurrentLocation(lngLat);
+            showToast('已定位到我的位置');
+            if (typeof afterLocated === 'function') afterLocated(lngLat);
+          } else {
+            showToast('定位失败：请检查定位权限、HTTPS 或 Key 配置');
+          }
+        });
+      });
+    }
+
+    function setupDrawerDrag() {
+      let current = parseFloat(getComputedStyle(root).getPropertyValue('--drawer-h')) || 360;
+      let startY = 0, startH = current, dragging = false;
+      const compact = 112;
+      const defaultH = window.innerHeight < 720 ? 318 : 360;
+      const expanded = Math.max(560, Math.min(window.innerHeight - 118, 680));
+      grip.addEventListener('pointerdown', e => { dragging = true; startY = e.clientY; startH = current; grip.setPointerCapture(e.pointerId); });
+      grip.addEventListener('pointermove', e => { if (!dragging) return; const deltaY = e.clientY - startY; current = Math.max(compact, Math.min(expanded, startH - deltaY)); setDrawerHeight(current, current > defaultH + 70 ? 'search' : mode); });
+      function finish(e) {
+        if (!dragging) return;
+        dragging = false;
+        try { grip.releasePointerCapture(e.pointerId); } catch(_) {}
+        if (current < (compact + defaultH) / 2) { current = compact; collapseToMap(); }
+        else if (current > defaultH + 70) { current = expanded; expandSearch(); }
+        else { current = defaultH; defaultHome(); }
+      }
+      grip.addEventListener('pointerup', finish);
+      grip.addEventListener('pointercancel', finish);
+      grip.addEventListener('click', () => { if (dragging) return; if (mode === 'search') defaultHome(); else collapseToMap(); });
+      window.addEventListener('resize', () => { if (map && typeof map.resize === 'function') map.resize(); });
+      setDrawerHeight(current, mode);
+    }
+
+    function setActiveFilter(type) {
+      activeFilter = type;
+      filterLabel.textContent = activeFilter === 'all' ? '全部标记' : typeConfig[activeFilter].label;
+      document.querySelectorAll('.filter-option').forEach(item => item.classList.toggle('is-active', item.dataset.filter === activeFilter));
+      filterMenu.classList.remove('is-open');
+      filterChip.setAttribute('aria-expanded', 'false');
+      activePoint = null;
+      mode = query ? 'search' : 'default';
+      if (walking && typeof walking.clear === 'function') walking.clear();
+      renderMarkers();
+      renderDrawerContent();
+    }
+
+    function openAdminMenu(lngLat, pixel) {
+      if (MOCK_API.currentUser.role !== 'admin') return;
+      quickInsertLngLat = lngLat;
+      const rect = mapWrap.getBoundingClientRect();
+      let x = pixel?.x ?? rect.width / 2;
+      let y = pixel?.y ?? rect.height / 2;
+      x = Math.max(10, Math.min(rect.width - 188, x));
+      y = Math.max(10, Math.min(rect.height - 240, y));
+      adminQuickMenu.style.left = x + 'px';
+      adminQuickMenu.style.top = y + 'px';
+      adminQuickMenu.classList.add('is-open');
+      showToast('管理员快速插点：选择点位类型');
+    }
+
+    function createQuickPoint(type) {
+      if (!quickInsertLngLat) return;
+      const cfg = typeConfig[type] || typeConfig.daily_task;
+      const point = {
+        id: `draft_${Date.now()}`,
+        type,
+        title: `新建${cfg.label}`,
+        subtitle: '管理员快速插点草稿',
+        desc: '长按地图创建的点位草稿，可继续编辑标题、说明和坐标。',
+        lng: quickInsertLngLat.lng ?? quickInsertLngLat[0],
+        lat: quickInsertLngLat.lat ?? quickInsertLngLat[1],
+        distance: 0,
+        statusText: '草稿',
+        routeHint: '请补充路线说明、入口提示和现场照片。',
+        editing: true
+      };
+      point.cover = cover(type, point.title);
+      MOCK_API.points.push(point);
+      adminQuickMenu.classList.remove('is-open');
+      selectPoint(point.id);
+      showToast('已创建点位草稿，Marker 已进入可拖拽编辑状态');
+    }
+
+    function toggleEditActivePoint() {
+      if (!activePoint) return;
+      activePoint.editing = !activePoint.editing;
+      if (activePoint.editing) showToast('已进入编辑状态，可拖拽地图上的 Marker');
+      else showToast('已退出编辑状态');
+      renderMarkers();
+      renderDrawerContent();
+    }
+
+    function saveActivePointForm() {
+      if (!activePoint) return;
+      const title = document.getElementById('editTitle')?.value?.trim();
+      const desc = document.getElementById('editDesc')?.value?.trim();
+      if (title) activePoint.title = title;
+      if (desc !== undefined) activePoint.desc = desc;
+      activePoint.cover = cover(activePoint.type, activePoint.title);
+      activePoint.editing = false;
+      renderMarkers();
+      renderDrawerContent();
+      showToast('已保存点位信息和经纬度');
+    }
+
+    function initMapControls() {
+      document.querySelectorAll('.filter-option').forEach(btn => {
+        const type = btn.dataset.filter;
+        const icon = btn.querySelector('.filter-option-icon');
+        const iconName = type === 'all' ? icon.dataset.icon : typeConfig[type].markerIcon;
+        icon.innerHTML = assetImg(iconName);
+        btn.addEventListener('click', () => setActiveFilter(type));
+      });
+      document.querySelectorAll('.admin-menu [data-create]').forEach(btn => {
+        const type = btn.dataset.create;
+        btn.querySelector('.mini-icon').innerHTML = assetImg(typeConfig[type].markerIcon);
+        btn.addEventListener('click', () => createQuickPoint(type));
+      });
+      const tabIcons = document.querySelectorAll('.tab-icon');
+      tabIcons[0].innerHTML = assetImg('mapIcon');
+      tabIcons[1].innerHTML = assetImg('catIcon');
+      tabIcons[2].innerHTML = assetImg('taskIcon');
+      tabIcons[3].innerHTML = assetImg('profileIcon');
+    }
+
+    function initAmap() {
+      if (!AMAP_KEY || AMAP_KEY.includes('YOUR_')) return;
+      window.__initCampusCatMap = function () {
+        placeholder.classList.add('is-hidden');
+        map = new AMap.Map('amap', {
+          center: CAMPUS_CENTER, zoom: DEFAULT_ZOOM, zooms: [15, 20], viewMode: '2D', resizeEnable: true,
+          dragEnable: true, zoomEnable: true, doubleClickZoom: true, keyboardEnable: false, showLabel: true, mapStyle: 'amap://styles/fresh'
+        });
+        map.on('complete', () => {
+          const limitBounds = new AMap.Bounds(CAMPUS_BOUNDS.southWest, CAMPUS_BOUNDS.northEast);
+          map.setLimitBounds(limitBounds);
+          currentZoom = map.getZoom();
+          renderMarkers();
+        });
+        map.on('zoomend', () => { currentZoom = map.getZoom(); renderMarkers(); });
+        map.on('click', () => { adminQuickMenu.classList.remove('is-open'); });
+        map.on('rightclick', ev => openAdminMenu(ev.lnglat, ev.pixel));
+        map.on('longpress', ev => openAdminMenu(ev.lnglat, ev.pixel));
+      };
+      const script = document.createElement('script');
+      script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(AMAP_KEY)}&plugin=AMap.Geolocation,AMap.Walking&callback=__initCampusCatMap`;
+      script.onerror = () => placeholder.classList.remove('is-hidden');
+      document.head.appendChild(script);
+    }
+
+    filterChip.setAttribute('aria-haspopup', 'menu');
+    filterChip.setAttribute('aria-expanded', 'false');
+    filterChip.addEventListener('click', e => { e.stopPropagation(); const willOpen = !filterMenu.classList.contains('is-open'); filterMenu.classList.toggle('is-open', willOpen); filterChip.setAttribute('aria-expanded', String(willOpen)); });
+    filterMenu.addEventListener('click', e => e.stopPropagation());
+    document.addEventListener('click', () => { filterMenu.classList.remove('is-open'); filterChip.setAttribute('aria-expanded', 'false'); adminQuickMenu.classList.remove('is-open'); });
+    adminQuickMenu.addEventListener('click', e => e.stopPropagation());
+
+    searchBox.addEventListener('click', e => { e.stopPropagation(); expandSearch(); });
+    searchInput.addEventListener('input', e => { query = e.target.value; mode = 'search'; searchBox.classList.add('is-focused'); renderDrawerContent(); });
+    searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') { const first = searchPoints(query)[0]; if (first) selectPoint(first.id); } });
+    clearSearch.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); query = ''; searchInput.value = ''; mode = 'search'; renderDrawerContent(); searchInput.focus(); });
+    drawerContent.addEventListener('click', e => {
+      const quick = e.target.closest('[data-search]');
+      if (quick) { query = quick.dataset.search; searchInput.value = query; mode = 'search'; renderDrawerContent(); return; }
+      const row = e.target.closest('[data-point-id]');
+      if (row) { selectPoint(row.dataset.pointId); return; }
+      const action = e.target.closest('[data-action]')?.dataset.action;
+      if (action === 'navigate') navigateToActivePoint();
+      if (action === 'detail') showToast('详情页接口后续接入任务/猫咪/物资模块');
+      if (action === 'edit-point') toggleEditActivePoint();
+      if (action === 'save-point') saveActivePointForm();
+    });
+
+    locateBtn.addEventListener('click', () => locateMe());
+    myLocationBtn.addEventListener('click', () => locateMe());
+    layerBtn.addEventListener('click', () => showToast('图层切换入口：后续可接校园平面图/自定义图层'));
+
+    initMapControls();
+    renderDrawerContent();
+    setupDrawerDrag();
+    initAmap();
+  </script>
+</body>
+</html>

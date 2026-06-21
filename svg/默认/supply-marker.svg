@@ -1,0 +1,64 @@
+<svg
+  width="128"
+  height="148"
+  viewBox="0 0 128 148"
+  fill="none"
+  xmlns="http://www.w3.org/2000/svg"
+  style="--pin:#ff9a2f; --pin-dark:#ff6a00; --ink:#ff7c12;"
+>
+  <defs>
+    <linearGradient id="supply-pin-grad" x1="64" y1="10" x2="64" y2="132" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" style="stop-color:var(--pin)" />
+      <stop offset="100%" style="stop-color:var(--pin-dark)" />
+    </linearGradient>
+
+    <radialGradient id="supply-pin-gloss" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(64 26) rotate(90) scale(52 62)">
+      <stop offset="0%" stop-color="white" stop-opacity="0.34"/>
+      <stop offset="100%" stop-color="white" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="supply-pin-shadow" x="8" y="4" width="112" height="140" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#7a3509" flood-opacity="0.20"/>
+    </filter>
+
+    <filter id="supply-glyph-shadow" x="18" y="14" width="92" height="92" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="4" stdDeviation="4" flood-color="#7a3509" flood-opacity="0.16"/>
+    </filter>
+
+    <radialGradient id="supply-bottom-shadow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse"
+      gradientTransform="translate(64 139) scale(18 6)">
+      <stop offset="0%" stop-color="#23304A" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#23304A" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="64" cy="139" rx="18" ry="6" fill="url(#supply-bottom-shadow)"/>
+
+  <g filter="url(#supply-pin-shadow)">
+    <path
+      d="M64 10C36.4 10 18 29.5 18 56.8C18 92.7 58.6 130.5 62.3 133.9C63.3 134.8 64.7 134.8 65.7 133.9C69.4 130.5 110 92.7 110 56.8C110 29.5 91.6 10 64 10Z"
+      fill="url(#supply-pin-grad)"
+    />
+    <path
+      d="M64 10C36.4 10 18 29.5 18 56.8C18 92.7 58.6 130.5 62.3 133.9C63.3 134.8 64.7 134.8 65.7 133.9C69.4 130.5 110 92.7 110 56.8C110 29.5 91.6 10 64 10Z"
+      fill="url(#supply-pin-gloss)"
+    />
+  </g>
+
+  <g filter="url(#supply-glyph-shadow)">
+    <rect x="35" y="58" width="58" height="42" rx="10" fill="white"/>
+
+    <path
+      d="M36.5 55.5L49 36H71L60 55.5H36.5Z"
+      fill="white"
+    />
+    <path
+      d="M91.5 55.5L79 36H57L68 55.5H91.5Z"
+      fill="white"
+    />
+
+    <rect x="58" y="55.5" width="12" height="20" rx="3" fill="var(--ink)"/>
+    <rect x="50" y="78" width="28" height="7" rx="3.5" fill="var(--ink)"/>
+  </g>
+</svg>

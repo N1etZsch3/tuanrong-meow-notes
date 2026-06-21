@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Cat icon">
+  <title>Cat icon</title>
+  <g fill="none" stroke="currentColor" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round">
+    <!-- head outline -->
+    <path d="M31 48
+             C27 31, 28 16, 38 16
+             C45 16, 54 28, 59 34
+             C62 32, 66 31, 70 31
+             C74 31, 78 32, 81 34
+             C86 28, 95 16, 102 16
+             C112 16, 113 31, 109 48
+             C116 58, 118 72, 115 87
+             C110 106, 93 117, 64 117
+             C35 117, 18 106, 13 87
+             C10 72, 12 58, 31 48Z"/>
+    <!-- tiny whiskers -->
+    <path d="M28 79 H18"/>
+    <path d="M30 86 H21"/>
+    <path d="M100 79 H110"/>
+    <path d="M98 86 H107"/>
+    <!-- mouth -->
+    <path d="M55 92
+             C57.5 97, 62 100, 64 100
+             C66 100, 70.5 97, 73 92"/>
+    <path d="M64 84 V89"/>
+  </g>
+
+  <!-- eyes -->
+  <circle cx="48" cy="67" r="5.2" fill="currentColor"/>
+  <circle cx="80" cy="67" r="5.2" fill="currentColor"/>
+
+  <!-- eye highlights -->
+  <circle cx="49.8" cy="65.2" r="1.4" fill="white"/>
+  <circle cx="81.8" cy="65.2" r="1.4" fill="white"/>
+
+  <!-- nose -->
+  <path d="M64 77
+           C60.7 77, 58.6 79.1, 58.6 81.2
+           C58.6 83.7, 61.2 86, 64 86
+           C66.8 86, 69.4 83.7, 69.4 81.2
+           C69.4 79.1, 67.3 77, 64 77Z"
+        fill="currentColor"/>
+</svg>

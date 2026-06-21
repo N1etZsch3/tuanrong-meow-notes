@@ -1,5 +1,13 @@
 import { defineStore } from "pinia";
 
+import {
+  getCurrentUser,
+  login,
+  logout,
+  normalizeCurrentUser,
+  normalizeLoginUser,
+  type LoginPayload,
+} from "@/api/auth";
 import { STORAGE_KEYS } from "@/constants/storage";
 import type { CurrentUser } from "@/types/user";
 
@@ -41,6 +49,28 @@ export const useUserStore = defineStore("user", {
     setCurrentUser(currentUser: CurrentUser) {
       this.currentUser = currentUser;
       uni.setStorageSync(STORAGE_KEYS.currentUser, currentUser);
+    },
+    async loginWithPassword(payload: LoginPayload) {
+      const response = await login(payload);
+      this.setSession(response.access_token, normalizeLoginUser(response));
+      return response;
+    },
+    async refreshCurrentUser() {
+      if (!this.accessToken) {
+        return null;
+      }
+
+      const response = await getCurrentUser(this.accessToken);
+      const currentUser = normalizeCurrentUser(response);
+      this.setCurrentUser(currentUser);
+      return currentUser;
+    },
+    async logoutFromServer() {
+      if (this.accessToken) {
+        await logout(this.accessToken);
+      }
+
+      this.clearSession();
     },
     clearSession() {
       this.accessToken = "";

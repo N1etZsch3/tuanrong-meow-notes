@@ -8,6 +8,6 @@ export interface CurrentUser {
   role: UserRole;
   status: UserStatus;
   nickname: string;
-  avatar_url: string;
+  avatar_url: string | null;
   must_change_password: boolean;
 }

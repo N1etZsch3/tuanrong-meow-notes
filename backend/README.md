@@ -57,6 +57,7 @@ CATMAP_CAPTCHA_EXPIRE_SECONDS=
 CATMAP_AUTH_LOCK_FAILED_ATTEMPTS=
 CATMAP_AUTH_LOCK_MINUTES=
 CATMAP_CORS_ALLOW_ORIGINS=
+CATMAP_CORS_ALLOW_ORIGIN_REGEX=
 ```
 
 ## Run The API
@@ -72,6 +73,18 @@ The initial V1 health endpoint is:
 ```text
 GET http://127.0.0.1:8000/api/v1/health
 ```
+
+## Local CORS
+
+Local development allows loopback origins on any port through:
+
+```text
+CATMAP_CORS_ALLOW_ORIGIN_REGEX=^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?$
+```
+
+This is intentionally permissive for local H5 testing without nginx. Before deployment, clear the
+development regex, use exact allowed origins only if cross-origin access is still needed, and prefer
+serving frontend and backend under the same origin through nginx proxying.
 
 ## Auth Endpoints
 

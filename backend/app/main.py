@@ -17,7 +17,10 @@ def create_app() -> FastAPI:
     application.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
-        allow_credentials=False,
+        # Local development allows loopback origins on any port. For deployment,
+        # serve frontend/API through nginx and restrict the CORS settings again.
+        allow_origin_regex=settings.cors_origin_regex,
+        allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )

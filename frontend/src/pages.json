@@ -17,7 +17,29 @@
 		{
 			"path": "pages/index/index",
 			"style": {
+				"navigationStyle": "custom",
 				"navigationBarTitleText": "猫协地图"
+			}
+		},
+		{
+			"path": "pages/cats/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "猫咪库"
+			}
+		},
+		{
+			"path": "pages/tasks/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "任务"
+			}
+		},
+		{
+			"path": "pages/profile/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "我的"
 			}
 		}
 	],

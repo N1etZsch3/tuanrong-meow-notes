@@ -1,19 +1,32 @@
 <template>
   <view class="page">
-    <view class="hero">
-      <text class="title">猫协地图</text>
-      <text class="subtitle">探索校园 · 守护猫咪</text>
-    </view>
-    <view class="placeholder-card">
-      <text class="placeholder-title">地图首页待开发</text>
-      <text class="placeholder-text">后续接入高德地图、任务点、猫咪点和物资点。</text>
-    </view>
+    <DefaultState
+      state="under_development"
+      title="地图建设中"
+      description="校园地图、任务点、猫咪点和物资点正在接入。"
+      primary-label="刷新地图"
+      primary-icon="refresh"
+      secondary-label="先去任务看看"
+      secondary-icon="paw"
+      with-tab-bar
+      @primary="refreshPage"
+      @secondary="goTasks"
+    />
     <AppTabBar active-key="map" />
   </view>
 </template>
 
 <script setup lang="ts">
 import AppTabBar from "@/components/AppTabBar.vue";
+import DefaultState from "@/components/DefaultState.vue";
+
+function refreshPage() {
+  uni.showToast({ title: "地图数据暂未接入", icon: "none" });
+}
+
+function goTasks() {
+  uni.reLaunch({ url: "/pages/tasks/index" });
+}
 </script>
 
 <style scoped>
@@ -21,50 +34,5 @@ import AppTabBar from "@/components/AppTabBar.vue";
   height: 100vh;
   box-sizing: border-box;
   overflow: hidden;
-  background: #f6faf0;
-  padding: 78rpx 36rpx 150rpx;
-}
-
-.hero {
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
-}
-
-.title {
-  color: #1f7228;
-  font-size: 52rpx;
-  font-weight: 900;
-  letter-spacing: 3rpx;
-  line-height: 1.15;
-}
-
-.subtitle {
-  color: #26742b;
-  font-size: 28rpx;
-  font-weight: 700;
-}
-
-.placeholder-card {
-  margin-top: 42rpx;
-  border-radius: 32rpx;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18rpx 42rpx rgba(43, 92, 36, 0.1);
-  padding: 44rpx 36rpx;
-}
-
-.placeholder-title {
-  display: block;
-  color: #1f2521;
-  font-size: 33rpx;
-  font-weight: 800;
-}
-
-.placeholder-text {
-  display: block;
-  margin-top: 16rpx;
-  color: #6a716c;
-  font-size: 25rpx;
-  line-height: 1.55;
 }
 </style>

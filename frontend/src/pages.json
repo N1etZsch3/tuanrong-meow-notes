@@ -1,0 +1,30 @@
+{
+	"pages": [ //pages数组中第一项表示应用启动页，参考：https://uniapp.dcloud.io/collocation/pages
+		{
+			"path": "pages/loading/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "加载中"
+			}
+		},
+		{
+			"path": "pages/login/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "成员登录"
+			}
+		},
+		{
+			"path": "pages/index/index",
+			"style": {
+				"navigationBarTitleText": "猫协地图"
+			}
+		}
+	],
+	"globalStyle": {
+		"navigationBarTextStyle": "black",
+		"navigationBarTitleText": "猫协地图",
+		"navigationBarBackgroundColor": "#F6FAF0",
+		"backgroundColor": "#F6FAF0"
+	}
+}

@@ -446,7 +446,7 @@ When changing schema:
 
 ## Frontend Rules
 
-Mobile is the primary experience.
+The frontend is a uni-app WeChat Mini Program. Mobile is the primary experience, and WeChat Mini Program behavior is the primary target. H5 can be used for local debugging, but it must not drive platform-specific decisions when it conflicts with the Mini Program target.
 
 Bottom tab pages:
 
@@ -459,20 +459,40 @@ Bottom tab pages:
 
 Admin entry belongs under `我的`.
 
+Frontend development workflow:
+
+1. Work from a feature branch such as `feature/frontend-login`, `feature/frontend-map`, or `feature/frontend-tasks`.
+2. Before developing any page, find and open the matching page image under `frontend/页面原型`.
+3. Reproduce the target page's layout, spacing, colors, typography, icons, empty states, and interaction states as closely as possible.
+4. Check `frontend/页面原型代码` when it exists, but treat the page image under `frontend/页面原型` as the visual source of truth.
+5. Check `frontend/素材` before adding any icon, image, illustration, marker, empty-state image, or decorative asset.
+6. If the needed visual asset is not in `frontend/素材`, use a clear placeholder component or placeholder block with a meaningful label. Do not use a random replacement icon, third-party image, or near-match asset.
+7. Keep page implementation scoped to the current page or module. Do not redesign other pages while matching one prototype.
+8. Run `npm run type-check` and the relevant uni-app build command before handoff.
+
 Frontend data rules:
 
 - Keep TypeScript types aligned with backend `snake_case` fields.
 - Use Pinia for user identity, task state, map filters, and other shared state.
 - Handle loading, empty, error, permission-denied, and image-failed states using existing prototype/assets where available.
-- Do not invent unrelated visual systems when page prototypes already exist.
+- Do not invent unrelated visual systems when page prototypes exist.
+- Do not substitute missing icons or components with arbitrary online assets or unrelated local assets.
+- Prefer existing assets and prototype styles over new visual abstractions.
 - Map pages should prioritize usable map area and task/cat/supply point interaction.
 
 Prototype and asset folders:
 
-- `页面原型`
-- `svg`
-- `icon`
-- `素材`
+- `frontend/页面原型`
+- `frontend/页面原型代码`
+- `frontend/素材`
+
+Asset rules:
+
+- `frontend/素材/icon` contains the original icon assets.
+- `frontend/素材/svg` contains the original SVG assets.
+- Keep new frontend-used assets under `frontend/素材`.
+- Do not store frontend page assets in the repository root.
+- When an asset is missing, create an obvious placeholder in the UI and record the missing asset in the handoff or progress notes.
 
 ## Backend Rules
 

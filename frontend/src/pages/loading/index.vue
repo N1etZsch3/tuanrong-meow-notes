@@ -8,9 +8,9 @@
         <text class="app-title">猫协地图</text>
         <text class="app-subtitle">探索校园 · 守护猫咪</text>
         <view class="system-name">
-          <text class="leaf">⌒</text>
+          <image class="wheat-icon wheat-icon-left" :src="wheatRightIcon" mode="aspectFit" />
           <text>校园猫咪任务协作系统</text>
-          <text class="leaf leaf-right">⌒</text>
+          <image class="wheat-icon wheat-icon-right" :src="wheatLeftIcon" mode="aspectFit" />
         </view>
       </view>
 
@@ -42,6 +42,8 @@ import { useUserStore } from "@/stores/user";
 
 import loadingBackground from "../../../素材/加载页素材/加载页背景.png";
 import loadingLogo from "../../../素材/加载页素材/加载页会徽.png";
+import wheatLeftIcon from "../../../素材/加载页素材/麦穗1.svg";
+import wheatRightIcon from "../../../素材/加载页素材/麦穗2.svg";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 
 const LOADING_MESSAGES = [
@@ -176,15 +178,19 @@ onUnmounted(() => {
   letter-spacing: 2rpx;
 }
 
-.leaf {
-  color: #9bc782;
-  font-size: 34rpx;
-  font-weight: 900;
-  transform: rotate(34deg);
+.wheat-icon {
+  width: 32rpx;
+  height: 32rpx;
+  opacity: 0.68;
+  flex: 0 0 auto;
 }
 
-.leaf-right {
-  transform: rotate(-34deg) scaleX(-1);
+.wheat-icon-left {
+  transform: rotate(-24deg);
+}
+
+.wheat-icon-right {
+  transform: rotate(24deg);
 }
 
 .loader-block {

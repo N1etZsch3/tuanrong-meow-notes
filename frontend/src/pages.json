@@ -19,6 +19,24 @@
 			"style": {
 				"navigationBarTitleText": "猫协地图"
 			}
+		},
+		{
+			"path": "pages/cats/index",
+			"style": {
+				"navigationBarTitleText": "猫咪库"
+			}
+		},
+		{
+			"path": "pages/tasks/index",
+			"style": {
+				"navigationBarTitleText": "任务"
+			}
+		},
+		{
+			"path": "pages/profile/index",
+			"style": {
+				"navigationBarTitleText": "我的"
+			}
 		}
 	],
 	"globalStyle": {

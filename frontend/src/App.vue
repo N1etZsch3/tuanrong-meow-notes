@@ -10,4 +10,19 @@ onHide(() => {
   console.log("App Hide");
 });
 </script>
-<style></style>
+
+<style>
+html,
+body,
+#app,
+uni-page-body {
+  height: 100%;
+  overflow: hidden;
+}
+
+page {
+  height: 100%;
+  overflow: hidden;
+  background: #f6faf0;
+}
+</style>

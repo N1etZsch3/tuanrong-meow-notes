@@ -1,14 +1,14 @@
 <template>
   <view class="page">
     <view class="hero">
-      <text class="title">猫协地图</text>
-      <text class="subtitle">探索校园 · 守护猫咪</text>
+      <text class="title">我的</text>
+      <text class="subtitle">个人信息与任务记录</text>
     </view>
     <view class="placeholder-card">
-      <text class="placeholder-title">地图首页待开发</text>
-      <text class="placeholder-text">后续接入高德地图、任务点、猫咪点和物资点。</text>
+      <text class="placeholder-title">个人中心待开发</text>
+      <text class="placeholder-text">后续接入个人资料、任务记录、通知入口和管理员入口。</text>
     </view>
-    <AppTabBar active-key="map" />
+    <AppTabBar active-key="profile" />
   </view>
 </template>
 
@@ -40,9 +40,9 @@ import AppTabBar from "@/components/AppTabBar.vue";
 }
 
 .subtitle {
-  color: #26742b;
+  color: #5f666e;
   font-size: 28rpx;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .placeholder-card {

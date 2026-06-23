@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="Map location icon">
+  <title>Map location icon</title>
+
+  <!-- map body -->
+  <path d="M18 42
+           C18 36, 21 31, 26 28
+           L42 18
+           C46 16, 50 16, 54 18
+           L74 29
+           C77 31, 81 31, 84 29
+           L101 19
+           C109 14, 118 20, 118 29
+           V96
+           C118 103, 114 109, 108 112
+           L87 122
+           C81 125, 74 125, 68 121
+           L52 112
+           C49 110, 45 110, 42 111
+           L25 119
+           C17 123, 10 117, 10 108
+           V42
+           C10 42, 10 42, 10 42
+           C10 42, 10 42, 18 42Z"
+        fill="var(--icon-main, #67C65B)"/>
+
+  <!-- side panels -->
+  <path d="M18 42 L42 30 V111 L25 119 C17 123,10 117,10 108 V42 C10 37,13 34,18 42Z"
+        fill="var(--icon-left, #58B84F)"/>
+  <path d="M84 29 L101 19 C109 14,118 20,118 29 V96 C118 103,114 109,108 112 L87 122 Z"
+        fill="var(--icon-right, #57BC4F)"/>
+
+  <!-- center fold / notch -->
+  <path d="M42 30
+           L74 29
+           L87 40
+           V122
+           C81 125, 74 125, 68 121
+           L52 112
+           C49 110, 45 110, 42 111
+           Z"
+        fill="var(--icon-center, #79D26A)"/>
+
+  <path d="M42 111
+           L64 100
+           L87 111
+           L87 122
+           C81 125, 74 125, 68 121
+           L52 112
+           C49 110, 45 110, 42 111Z"
+        fill="var(--icon-bottom, #5ABF52)"/>
+
+  <!-- subtle folds -->
+  <path d="M41.5 31 L47 34 V108 L41.5 110 Z" fill="var(--icon-fold, #4BA347)" opacity=".22"/>
+  <path d="M80.5 34 L86 31 V111 L80.5 108 Z" fill="var(--icon-fold, #4BA347)" opacity=".22"/>
+
+  <!-- centered location pin -->
+  <path d="M64 28
+           C51.5 28, 41 38.2, 41 50.8
+           C41 59.3, 46 67.6, 55.2 78.7
+           C59.5 83.8, 62.5 87.3, 64 89
+           C65.5 87.3, 68.5 83.8, 72.8 78.7
+           C82 67.6, 87 59.3, 87 50.8
+           C87 38.2, 76.5 28, 64 28Z"
+        fill="var(--icon-pin, #3E9D46)"/>
+
+  <circle cx="64" cy="50" r="11" fill="white"/>
+</svg>

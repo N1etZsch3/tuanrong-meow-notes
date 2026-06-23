@@ -18,6 +18,12 @@ class Settings(BaseSettings):
     database_password: str | None = None
     database_url: str | None = None
 
+    @property
+    def required_database_url(self) -> str:
+        if not self.database_url:
+            raise RuntimeError("CATMAP_DATABASE_URL is required for database operations")
+        return self.database_url
+
     model_config = SettingsConfigDict(
         env_prefix="CATMAP_",
         env_file=BACKEND_DIR / ".env",

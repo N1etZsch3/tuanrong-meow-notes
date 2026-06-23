@@ -72,12 +72,37 @@ Development database settings are loaded from `backend/.env` with the `CATMAP_` 
 Use `backend/.env.example` as the template when recreating local settings. The current
 development database is expected to be PostgreSQL with PostGIS enabled.
 
+## Database And Migrations
+
+Database sessions are provided by `app.db.session.get_db`. Alembic reads
+`CATMAP_DATABASE_URL` from `backend/.env`.
+
+From the `backend` directory:
+
+```powershell
+py -3.11 -m alembic current
+py -3.11 -m alembic upgrade head
+```
+
+The initial migration enables required PostgreSQL extensions:
+
+- `postgis`
+- `pgcrypto`
+
 ## Test
 
 From the `backend` directory:
 
 ```powershell
 py -3.11 -m pytest
+```
+
+## Code Quality
+
+From the `backend` directory:
+
+```powershell
+py -3.11 -m ruff check .
 ```
 
 ## Current Scope
@@ -87,7 +112,10 @@ The current skeleton includes:
 - FastAPI app factory in `app/main.py`
 - `/api/v1` router mounting
 - Unified success response envelope
+- Unified error response handlers
 - Request trace ID middleware using `X-Trace-Id`
 - Health check endpoint
+- SQLAlchemy engine/session utilities
+- Alembic migration wiring
 
-Database settings, SQLAlchemy models, Alembic migrations, and authentication endpoints are intentionally left for the next backend slices.
+Business models, authentication endpoints, and module-specific APIs are intentionally left for the next backend slices.

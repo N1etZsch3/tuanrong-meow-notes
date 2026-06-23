@@ -2,12 +2,17 @@ from typing import Any
 
 from fastapi.responses import JSONResponse
 
+_UNSET = object()
 
-def api_success(data: Any = None, trace_id: str | None = None) -> dict[str, Any]:
+def api_success(
+    data: Any = _UNSET,
+    trace_id: str | None = None,
+    message: str = "success",
+) -> dict[str, Any]:
     return {
         "code": 0,
-        "message": "success",
-        "data": {} if data is None else data,
+        "message": message,
+        "data": {} if data is _UNSET else data,
         "trace_id": trace_id or "",
     }
 

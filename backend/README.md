@@ -49,6 +49,14 @@ CATMAP_DATABASE_NAME=
 CATMAP_DATABASE_USER=
 CATMAP_DATABASE_PASSWORD=
 CATMAP_DATABASE_URL=
+CATMAP_JWT_SECRET_KEY=
+CATMAP_JWT_ALGORITHM=
+CATMAP_ACCESS_TOKEN_EXPIRE_SECONDS=
+CATMAP_CAPTCHA_SECRET_KEY=
+CATMAP_CAPTCHA_EXPIRE_SECONDS=
+CATMAP_AUTH_LOCK_FAILED_ATTEMPTS=
+CATMAP_AUTH_LOCK_MINUTES=
+CATMAP_CORS_ALLOW_ORIGINS=
 ```
 
 ## Run The API
@@ -63,6 +71,30 @@ The initial V1 health endpoint is:
 
 ```text
 GET http://127.0.0.1:8000/api/v1/health
+```
+
+## Auth Endpoints
+
+Implemented V1 auth endpoints:
+
+```text
+GET    /api/v1/auth/captcha
+POST   /api/v1/auth/login
+GET    /api/v1/auth/me
+PATCH  /api/v1/auth/password
+POST   /api/v1/auth/logout
+GET    /api/v1/admin/users
+POST   /api/v1/admin/users
+PATCH  /api/v1/admin/users/{user_id}/password
+PATCH  /api/v1/admin/users/{user_id}/status
+PATCH  /api/v1/admin/users/{user_id}/role
+```
+
+Frontend contract checked against `feature/frontend-login:frontend/src/api/auth.ts`.
+The frontend default base URL is:
+
+```text
+http://localhost:8000/api/v1
 ```
 
 ## Database Environment
@@ -117,5 +149,8 @@ The current skeleton includes:
 - Health check endpoint
 - SQLAlchemy engine/session utilities
 - Alembic migration wiring
+- Auth tables and migrations
+- Student number login with captcha and JWT
+- Current-user, password-change, logout, and admin member account endpoints
 
-Business models, authentication endpoints, and module-specific APIs are intentionally left for the next backend slices.
+Batch member import, refresh tokens, public registration, password recovery, and third-party login are intentionally out of scope for V1 auth core.

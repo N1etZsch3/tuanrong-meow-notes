@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     captcha_expire_seconds: int = 300
     auth_lock_failed_attempts: int = 5
     auth_lock_minutes: int = 15
+    amap_web_key: str = "replace-with-amap-web-key"
+    amap_security_js_code: str = "replace-with-amap-security-js-code"
 
     @property
     def required_database_url(self) -> str:

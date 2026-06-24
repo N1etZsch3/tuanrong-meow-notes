@@ -56,6 +56,8 @@ CATMAP_CAPTCHA_SECRET_KEY=
 CATMAP_CAPTCHA_EXPIRE_SECONDS=
 CATMAP_AUTH_LOCK_FAILED_ATTEMPTS=
 CATMAP_AUTH_LOCK_MINUTES=
+CATMAP_AMAP_WEB_KEY=
+CATMAP_AMAP_SECURITY_JS_CODE=
 CATMAP_CORS_ALLOW_ORIGINS=
 CATMAP_CORS_ALLOW_ORIGIN_REGEX=
 ```
@@ -109,6 +111,23 @@ The frontend default base URL is:
 ```text
 http://localhost:8000/api/v1
 ```
+
+## Map Endpoints
+
+Implemented first-batch member map endpoints:
+
+```text
+GET /api/v1/map/init
+GET /api/v1/map/points
+GET /api/v1/map/search
+GET /api/v1/map/points/{point_id}/summary
+GET /api/v1/map/points/{point_id}/navigation
+GET /api/v1/map/bottom-content
+```
+
+`/api/v1/map/init` returns the Amap web key and security JS code in `amap_config`.
+Local defaults match the prototype HTML files; use `CATMAP_AMAP_WEB_KEY` and
+`CATMAP_AMAP_SECURITY_JS_CODE` to override them without changing source code.
 
 ## Database Environment
 
@@ -165,5 +184,6 @@ The current skeleton includes:
 - Auth tables and migrations
 - Student number login with captcha and JWT
 - Current-user, password-change, logout, and admin member account endpoints
+- Map base tables, seed campus/marker data, and first-batch member map endpoints
 
 Batch member import, refresh tokens, public registration, password recovery, and third-party login are intentionally out of scope for V1 auth core.

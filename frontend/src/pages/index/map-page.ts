@@ -1,3 +1,10 @@
+import type {
+  MapBottomContentItemDto,
+  MapPointMarkerDto,
+  MapPointQuery,
+  MapSearchResultDto,
+} from "@/api/map";
+
 export type MapDrawerState = "expanded" | "collapsed";
 
 export type MapShellItemType =
@@ -32,13 +39,18 @@ export interface CampusMapConfig {
 
 export interface MapShellItem {
   id: string;
+  map_point_id?: string;
   type: MapShellItemType;
   title: string;
-  subtitle: string;
-  description: string;
-  distance_meters: number;
+  subtitle: string | null;
+  description: string | null;
+  distance_meters: number | null;
   status_label?: string;
   tag_label?: string;
+  lng?: number;
+  lat?: number;
+  cover_photo_url?: string | null;
+  icon_key?: string | null;
 }
 
 export interface MapFilterOption {
@@ -225,10 +237,119 @@ export function searchMapShellItems(
   });
 }
 
-export function formatDistance(distanceMeters: number): string {
+export function formatDistance(distanceMeters: number | null): string {
+  if (distanceMeters === null || Number.isNaN(distanceMeters)) {
+    return "未知";
+  }
+
   if (distanceMeters < 1000) {
     return `${Math.round(distanceMeters)}m`;
   }
 
   return `${(distanceMeters / 1000).toFixed(1)}km`;
+}
+
+export function resolveMapShellItemType(
+  pointType: string,
+  businessType?: string | null,
+): MapShellItemType {
+  if (pointType === "task") {
+    return businessType === "emergency" ? "emergency_task" : "daily_task";
+  }
+
+  if (pointType === "cat" || pointType === "supply" || pointType === "landmark") {
+    return pointType;
+  }
+
+  return "landmark";
+}
+
+export function getDefaultStatusLabel(type: MapShellItemType): string {
+  const labels: Record<MapShellItemType, string> = {
+    emergency_task: "进行中",
+    daily_task: "可接取",
+    cat: "查看",
+    supply: "查看",
+    landmark: "查看",
+  };
+
+  return labels[type];
+}
+
+export function mapMarkerToShellItem(marker: MapPointMarkerDto): MapShellItem {
+  const type = resolveMapShellItemType(marker.point_type, marker.business_type);
+
+  return {
+    id: marker.point_id,
+    map_point_id: marker.point_id,
+    type,
+    title: marker.name,
+    subtitle: marker.subtitle,
+    description: marker.subtitle,
+    distance_meters: marker.distance_meters,
+    status_label: getDefaultStatusLabel(type),
+    tag_label: getMapFilterLabel(type),
+    lng: marker.lng,
+    lat: marker.lat,
+    cover_photo_url: marker.cover_photo_url,
+    icon_key: marker.icon_key,
+  };
+}
+
+export function mapSearchResultToShellItem(
+  result: MapSearchResultDto,
+): MapShellItem {
+  const type = resolveMapShellItemType(result.point_type, result.business_type);
+
+  return {
+    id: result.map_point_id,
+    map_point_id: result.map_point_id,
+    type,
+    title: result.title,
+    subtitle: result.subtitle,
+    description: result.description,
+    distance_meters: result.distance_meters,
+    status_label: result.status_label || getDefaultStatusLabel(type),
+    tag_label: getMapFilterLabel(type),
+    lng: result.lng,
+    lat: result.lat,
+    cover_photo_url: result.cover_photo_url,
+    icon_key: result.icon_key,
+  };
+}
+
+export function mapBottomContentItemToShellItem(
+  item: MapBottomContentItemDto,
+): MapShellItem {
+  const type = item.type as MapShellItemType;
+
+  return {
+    id: item.map_point_id || item.id,
+    map_point_id: item.map_point_id || item.id,
+    type,
+    title: item.title,
+    subtitle: item.subtitle,
+    description: item.description,
+    distance_meters: item.distance_meters,
+    status_label: item.status_label || getDefaultStatusLabel(type),
+    tag_label: item.tag_label || getMapFilterLabel(type),
+  };
+}
+
+export function getMapPointQueryByFilter(
+  filterKey: MapFilterKey,
+): Pick<MapPointQuery, "point_types" | "business_types"> {
+  if (filterKey === "emergency_task") {
+    return { point_types: "task", business_types: "emergency" };
+  }
+
+  if (filterKey === "daily_task") {
+    return { point_types: "task", business_types: "daily" };
+  }
+
+  if (filterKey === "cat" || filterKey === "supply" || filterKey === "landmark") {
+    return { point_types: filterKey };
+  }
+
+  return {};
 }

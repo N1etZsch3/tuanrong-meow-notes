@@ -10,7 +10,8 @@ class Settings(BaseSettings):
     app_name: str = "Campus Cat Association Map API"
     app_version: str = "0.1.0"
     api_v1_prefix: str = "/api/v1"
-    cors_allow_origins: str = "*"
+    cors_allow_origins: str = ""
+    cors_allow_origin_regex: str = r"^https?://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]+)?$"
 
     database_host: str | None = None
     database_port: int = 5432
@@ -26,6 +27,8 @@ class Settings(BaseSettings):
     captcha_expire_seconds: int = 300
     auth_lock_failed_attempts: int = 5
     auth_lock_minutes: int = 15
+    amap_web_key: str = "replace-with-amap-web-key"
+    amap_security_js_code: str = "replace-with-amap-security-js-code"
 
     @property
     def required_database_url(self) -> str:
@@ -36,6 +39,11 @@ class Settings(BaseSettings):
     @property
     def cors_origins(self) -> list[str]:
         return [origin.strip() for origin in self.cors_allow_origins.split(",") if origin.strip()]
+
+    @property
+    def cors_origin_regex(self) -> str | None:
+        regex = self.cors_allow_origin_regex.strip()
+        return regex or None
 
     model_config = SettingsConfigDict(
         env_prefix="CATMAP_",

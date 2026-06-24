@@ -101,7 +101,7 @@
         </button>
       </view>
 
-      <view class="drawer-body">
+      <scroll-view class="drawer-body" scroll-y :show-scrollbar="false">
         <view class="section-head">
           <text class="section-title">{{ contentSectionTitle }}</text>
           <text class="section-action">{{ contentSectionAction }}</text>
@@ -188,7 +188,7 @@
           <text class="empty-title">{{ emptyTitle }}</text>
           <text class="empty-desc">{{ emptyDescription }}</text>
         </view>
-      </view>
+      </scroll-view>
     </view>
 
     <AppTabBar active-key="map" />
@@ -1228,6 +1228,8 @@ onBeforeUnmount(() => {
   padding: 0 24rpx 24rpx;
   overflow: hidden;
   transition: height 0.26s ease, border-radius 0.26s ease;
+  display: flex;
+  flex-direction: column;
 }
 
 .drawer-collapsed .content-drawer {
@@ -1236,6 +1238,7 @@ onBeforeUnmount(() => {
 
 .drawer-grip-area {
   height: 36rpx;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1250,6 +1253,7 @@ onBeforeUnmount(() => {
 
 .search-box {
   height: 78rpx;
+  flex-shrink: 0;
   box-sizing: border-box;
   border: 2rpx solid rgba(17, 24, 39, 0.08);
   border-radius: 24rpx;
@@ -1302,7 +1306,17 @@ onBeforeUnmount(() => {
 }
 
 .drawer-body {
+  flex: 1;
+  min-height: 0;
   padding-top: 26rpx;
+  box-sizing: border-box;
+}
+
+.drawer-body ::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+  color: transparent;
 }
 
 .drawer-collapsed .drawer-body {

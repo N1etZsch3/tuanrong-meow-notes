@@ -1027,6 +1027,12 @@ onBeforeUnmount(() => {
   height: 100%;
 }
 
+:deep(.amap-logo),
+:deep(.amap-copyright) {
+  display: none !important;
+  opacity: 0 !important;
+}
+
 .map-placeholder {
   position: absolute;
   inset: 0;

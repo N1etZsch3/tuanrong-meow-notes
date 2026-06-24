@@ -54,7 +54,7 @@ function handleTabTap(tabKey: AppTabKey) {
     return;
   }
 
-  uni.reLaunch({
+  uni.switchTab({
     url: getTabTarget(tabKey),
   });
 }

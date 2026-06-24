@@ -459,6 +459,13 @@ Bottom tab pages:
 
 Admin entry belongs under `我的`.
 
+Frontend typography and 中文字体 rules:
+
+- All Chinese UI text must use Songti-style fonts.
+- Use this font stack for app pages and components: `"Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif`.
+- Do not override Chinese UI text with unrelated sans-serif fonts unless the user explicitly asks for a page-specific exception.
+- If an SVG or generated asset contains visible Chinese text, set the text font to the same Songti stack where the asset format supports it.
+
 Frontend development workflow:
 
 1. Work from a feature branch such as `feature/frontend-login`, `feature/frontend-map`, or `feature/frontend-tasks`.

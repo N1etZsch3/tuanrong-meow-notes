@@ -18,11 +18,23 @@ body,
 uni-page-body {
   height: 100%;
   overflow: hidden;
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
 }
 
 page {
   height: 100%;
   overflow: hidden;
   background: #f6faf0;
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+}
+
+view,
+text,
+input,
+textarea,
+button,
+picker,
+navigator {
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
 }
 </style>

@@ -26,7 +26,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onMounted } from "vue";
 
 import {
   APP_TAB_ITEMS,
@@ -44,6 +44,14 @@ const props = defineProps<{
 const currentActiveKey = computed(
   () => props.activeKey ?? getActiveTabKey(props.currentRoute ?? ""),
 );
+
+onMounted(() => {
+  uni.hideTabBar({
+    fail: () => {
+      // Ignore error if the current context isn't considered a tab bar page yet
+    },
+  });
+});
 
 function handleTabTap(tabKey: AppTabKey) {
   if (tabKey === currentActiveKey.value) {

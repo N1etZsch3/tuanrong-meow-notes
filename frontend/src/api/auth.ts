@@ -32,6 +32,12 @@ export interface LoginResponse {
   user: LoginUser;
 }
 
+export interface RenewAccessTokenResponse {
+  access_token: string;
+  token_type: "Bearer";
+  expires_in: number;
+}
+
 export interface CurrentUserResponse {
   id: string;
   student_no: string;
@@ -65,6 +71,16 @@ export function login(payload: LoginPayload): Promise<LoginResponse> {
     url: "/auth/login",
     method: "POST",
     data: { ...payload },
+  });
+}
+
+export function renewAccessToken(
+  accessToken: string,
+): Promise<RenewAccessTokenResponse> {
+  return request<RenewAccessTokenResponse>({
+    url: "/auth/renew",
+    method: "POST",
+    token: accessToken,
   });
 }
 

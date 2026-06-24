@@ -5,7 +5,6 @@ import type {
   MapSearchResultDto,
 } from "@/api/map";
 
-export type MapDrawerState = "expanded" | "collapsed";
 
 export type MapShellItemType =
   | "cat"
@@ -59,10 +58,7 @@ export interface MapFilterOption {
   description: string;
 }
 
-export const DEFAULT_MAP_DRAWER_STATE: MapDrawerState = "expanded";
 export const ALL_MAP_FILTER_KEY: MapFilterKey = "all";
-
-const DRAWER_DRAG_THRESHOLD_PX = 64;
 
 export const HBNU_CAMPUS_CORE_BOUNDS: LngLatBounds = {
   south_west: { lng: 115.0558, lat: 30.2248 },
@@ -132,74 +128,6 @@ export const MAP_FILTER_OPTIONS: MapFilterOption[] = [
     description: "校门、图书馆、食堂等位置",
   },
 ];
-
-export const MAP_SHELL_ITEMS: MapShellItem[] = [
-  {
-    id: "task-emergency-north-gate",
-    type: "emergency_task",
-    title: "北门草丛紧急救助任务",
-    subtitle: "发现受伤流浪猫",
-    description: "北门草丛中发现受伤流浪猫，需要紧急救助和医疗处理。",
-    distance_meters: 120,
-    status_label: "进行中",
-    tag_label: "紧急任务",
-  },
-  {
-    id: "task-daily-canteen",
-    type: "daily_task",
-    title: "食堂后方投喂清洁",
-    subtitle: "日常投喂与清理",
-    description: "清理食堂后方投喂点，补充少量猫粮并检查水碗。",
-    distance_meters: 250,
-    status_label: "可接取",
-    tag_label: "日常任务",
-  },
-  {
-    id: "cat-xiaoju",
-    type: "cat",
-    title: "小橘常驻点",
-    subtitle: "教学楼B附近",
-    description: "常驻猫咪，性格亲人，常在教学楼B右侧草坪活动。",
-    distance_meters: 150,
-    status_label: "健康",
-    tag_label: "猫咪点",
-  },
-  {
-    id: "supply-gym",
-    type: "supply",
-    title: "猫协物资点 #1",
-    subtitle: "体育馆旁物资补给",
-    description: "猫粮、航空箱、诱捕笼备用点。",
-    distance_meters: 90,
-    status_label: "可用",
-    tag_label: "物资点",
-  },
-  {
-    id: "landmark-library",
-    type: "landmark",
-    title: "图书馆",
-    subtitle: "校园地标",
-    description: "图书馆附近有常见投喂路线和临时观察点。",
-    distance_meters: 210,
-    status_label: "地标",
-    tag_label: "地标",
-  },
-];
-
-export function getMapDrawerStateAfterDrag(
-  currentState: MapDrawerState,
-  deltaY: number,
-): MapDrawerState {
-  if (deltaY >= DRAWER_DRAG_THRESHOLD_PX) {
-    return "collapsed";
-  }
-
-  if (deltaY <= -DRAWER_DRAG_THRESHOLD_PX) {
-    return "expanded";
-  }
-
-  return currentState;
-}
 
 export function getMapFilterLabel(filterKey: string): string {
   return (

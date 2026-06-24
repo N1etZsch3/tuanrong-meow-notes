@@ -196,6 +196,20 @@ def login(db: Session, payload: LoginRequest) -> dict:
     }
 
 
+def renew_access_token(user: User) -> dict:
+    settings = get_settings()
+    return {
+        "access_token": create_access_token(
+            user_id=user.id,
+            student_no=user.student_no,
+            role=user.role,
+            token_version=user.token_version,
+        ),
+        "token_type": "Bearer",
+        "expires_in": settings.access_token_expire_seconds,
+    }
+
+
 def change_password(db: Session, user: User, payload: ChangePasswordRequest) -> None:
     if payload.new_password != payload.confirm_password:
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)

@@ -1,18 +1,17 @@
 import { describe, expect, it } from "vitest";
 
+import indexPageSource from "../../src/pages/index/index.vue?raw";
+import mapPageSource from "../../src/pages/index/map-page.ts?raw";
 import {
   ALL_MAP_FILTER_KEY,
-  DEFAULT_MAP_DRAWER_STATE,
   HBNU_CAMPUS,
   expandLngLatBounds,
   getMapPointQueryByFilter,
-  getMapDrawerStateAfterDrag,
   getMapFilterLabel,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
   mapSearchResultToShellItem,
   searchMapShellItems,
-  type MapDrawerState,
   type MapShellItem,
 } from "@/pages/index/map-page";
 
@@ -44,17 +43,14 @@ const shellItems: MapShellItem[] = [
 ];
 
 describe("map page shell behavior", () => {
-  it("starts with the dynamic content drawer expanded", () => {
-    expect(DEFAULT_MAP_DRAWER_STATE).toBe("expanded");
+  it("does not keep static frontend task point fixtures", () => {
+    expect(mapPageSource).not.toContain("MAP_SHELL_ITEMS");
+    expect(mapPageSource).not.toContain("task-emergency-north-gate");
+    expect(mapPageSource).not.toContain("task-daily-canteen");
   });
 
-  it("collapses and expands the drawer by vertical drag distance", () => {
-    const expanded: MapDrawerState = "expanded";
-    const collapsed: MapDrawerState = "collapsed";
-
-    expect(getMapDrawerStateAfterDrag(expanded, 86)).toBe("collapsed");
-    expect(getMapDrawerStateAfterDrag(collapsed, -86)).toBe("expanded");
-    expect(getMapDrawerStateAfterDrag(expanded, 18)).toBe("expanded");
+  it("uses the renewable access token provider before map api calls", () => {
+    expect(indexPageSource).toContain("userStore.ensureFreshAccessToken()");
   });
 
   it("keeps a readable label for each map filter", () => {

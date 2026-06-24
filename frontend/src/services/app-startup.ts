@@ -1,6 +1,7 @@
 import type { CurrentUser } from "@/types/user";
+import { LOGIN_ROUTE } from "@/services/auth-session";
 
-export const LOGIN_ROUTE = "/pages/login/index";
+export { LOGIN_ROUTE };
 export const HOME_ROUTE = "/pages/index/index";
 
 export type StartupRoute = typeof LOGIN_ROUTE | typeof HOME_ROUTE;

@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import bcrypt
 import jwt
@@ -37,6 +37,7 @@ def create_access_token(
         "token_version": token_version,
         "iat": int(now.timestamp()),
         "exp": int(expires_at.timestamp()),
+        "jti": uuid4().hex,
     }
     return jwt.encode(payload, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 

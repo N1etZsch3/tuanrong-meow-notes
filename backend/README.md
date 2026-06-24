@@ -96,6 +96,7 @@ Implemented V1 auth endpoints:
 GET    /api/v1/auth/captcha
 POST   /api/v1/auth/login
 GET    /api/v1/auth/me
+POST   /api/v1/auth/renew
 PATCH  /api/v1/auth/password
 POST   /api/v1/auth/logout
 GET    /api/v1/admin/users

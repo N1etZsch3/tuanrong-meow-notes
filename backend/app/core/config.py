@@ -22,7 +22,7 @@ class Settings(BaseSettings):
 
     jwt_secret_key: str = "dev-only-change-me-with-at-least-32-bytes"
     jwt_algorithm: str = "HS256"
-    access_token_expire_seconds: int = 7200
+    access_token_expire_seconds: int = 604800
     captcha_secret_key: str = "dev-captcha-secret-change-me"
     captcha_expire_seconds: int = 300
     auth_lock_failed_attempts: int = 5

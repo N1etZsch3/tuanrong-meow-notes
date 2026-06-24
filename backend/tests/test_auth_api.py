@@ -59,6 +59,10 @@ def create_token(user: User) -> str:
     )
 
 
+def auth_headers(token: str) -> dict[str, str]:
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_get_captcha_returns_frontend_contract(api_client):
     response = api_client.get("/api/v1/auth/captcha")
 
@@ -88,7 +92,7 @@ def test_login_with_student_number_password_and_captcha(api_client, db_session):
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["token_type"] == "Bearer"
-    assert data["expires_in"] == 7200
+    assert data["expires_in"] == 604800
     assert data["must_change_password"] is True
     assert data["user"]["student_no"] == "20252160A1010"
     assert data["user"]["nickname"] == "小林"
@@ -140,13 +144,41 @@ def test_get_current_user_returns_profile(api_client, db_session):
     user = create_user(db_session)
     token = create_token(user)
 
-    response = api_client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    response = api_client.get("/api/v1/auth/me", headers=auth_headers(token))
 
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["student_no"] == "20252160A1010"
     assert data["must_change_password"] is True
     assert data["profile"]["nickname"] == "小林"
+
+
+def test_renew_access_token_extends_valid_session(api_client, db_session):
+    user = create_user(db_session, must_change_password=False)
+    token = create_token(user)
+
+    response = api_client.post("/api/v1/auth/renew", headers=auth_headers(token))
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["access_token"]
+    assert data["access_token"] != token
+    assert data["token_type"] == "Bearer"
+    assert data["expires_in"] == 604800
+
+    renewed_response = api_client.get("/api/v1/auth/me", headers=auth_headers(data["access_token"]))
+    assert renewed_response.status_code == 200
+    assert renewed_response.json()["data"]["student_no"] == "20252160A1010"
+
+
+def test_renew_access_token_requires_password_changed(api_client, db_session):
+    user = create_user(db_session, must_change_password=True)
+    token = create_token(user)
+
+    response = api_client.post("/api/v1/auth/renew", headers=auth_headers(token))
+
+    assert response.status_code == 403
+    assert response.json()["code"] == 40301
 
 
 def test_change_password_clears_must_change_and_increments_token_version(api_client, db_session):

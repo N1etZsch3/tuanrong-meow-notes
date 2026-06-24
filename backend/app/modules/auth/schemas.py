@@ -35,6 +35,12 @@ class LoginResponse(BaseModel):
     user: LoginUser
 
 
+class RenewAccessTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "Bearer"
+    expires_in: int
+
+
 class CurrentUserProfile(BaseModel):
     nickname: str
     avatar_url: str | None = None

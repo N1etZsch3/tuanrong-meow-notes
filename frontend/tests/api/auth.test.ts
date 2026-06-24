@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getCaptcha, login } from "@/api/auth";
+import { getCaptcha, login, renewAccessToken } from "@/api/auth";
 
 describe("auth api", () => {
   it("requests captcha from /auth/captcha", async () => {
@@ -46,7 +46,7 @@ describe("auth api", () => {
           data: {
             access_token: "token-1",
             token_type: "Bearer",
-            expires_in: 7200,
+            expires_in: 604800,
             must_change_password: true,
             user: {
               id: "u1",
@@ -82,6 +82,42 @@ describe("auth api", () => {
         data: expect.objectContaining({
           student_no: "20252160A1010",
           agree_terms: true,
+        }),
+      }),
+    );
+  });
+
+  it("renews access token through /auth/renew", async () => {
+    const requestMock = vi.fn((options: UniNamespace.RequestOptions) => {
+      options.success?.({
+        statusCode: 200,
+        data: {
+          code: 0,
+          message: "success",
+          data: {
+            access_token: "token-2",
+            token_type: "Bearer",
+            expires_in: 604800,
+          },
+          trace_id: "trace-3",
+        },
+        header: {},
+        cookies: [],
+      } as UniNamespace.RequestSuccessCallbackResult);
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await expect(renewAccessToken("token-1")).resolves.toEqual({
+      access_token: "token-2",
+      token_type: "Bearer",
+      expires_in: 604800,
+    });
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        url: expect.stringContaining("/auth/renew"),
+        header: expect.objectContaining({
+          Authorization: "Bearer token-1",
         }),
       }),
     );

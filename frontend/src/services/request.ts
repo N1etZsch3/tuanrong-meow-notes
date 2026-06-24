@@ -1,4 +1,5 @@
 import { appEnv } from "@/config/app-env";
+import { handleAuthExpired, isAuthExpiredCode } from "@/services/auth-session";
 import type { ApiResponse, HttpMethod, RequestData } from "@/types/api";
 
 type UniRequestMethod = NonNullable<UniNamespace.RequestOptions["method"]>;
@@ -54,6 +55,35 @@ export function createAuthorizationHeader(
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function createBusinessErrorFromResponseData(data: unknown): ApiBusinessError | null {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const response = data as Partial<ApiResponse<unknown>>;
+  if (typeof response.code !== "number" || typeof response.message !== "string") {
+    return null;
+  }
+
+  return new ApiBusinessError(
+    response.code,
+    response.message,
+    typeof response.trace_id === "string" ? response.trace_id : "",
+    response.data,
+  );
+}
+
+function rejectBusinessError(
+  error: ApiBusinessError,
+  reject: (reason?: unknown) => void,
+) {
+  if (isAuthExpiredCode(error.code)) {
+    handleAuthExpired();
+  }
+
+  reject(error);
+}
+
 export function request<TResponse, TData extends RequestData = RequestData>(
   options: RequestOptions<TData>,
 ): Promise<TResponse> {
@@ -72,19 +102,30 @@ export function request<TResponse, TData extends RequestData = RequestData>(
       },
       success: (result) => {
         if (result.statusCode < 200 || result.statusCode >= 300) {
+          const businessError = createBusinessErrorFromResponseData(result.data);
+          if (businessError) {
+            rejectBusinessError(businessError, reject);
+            return;
+          }
+
+          if (result.statusCode === 401 && options.token) {
+            handleAuthExpired();
+          }
+
           reject(new ApiHttpError(result.statusCode));
           return;
         }
 
         const response = result.data as ApiResponse<TResponse>;
         if (response.code !== 0) {
-          reject(
+          rejectBusinessError(
             new ApiBusinessError(
               response.code,
               response.message,
               response.trace_id,
               response.data,
             ),
+            reject,
           );
           return;
         }

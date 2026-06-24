@@ -1,0 +1,165 @@
+var config = {
+  rpxRatio: 0.5,
+  windowHeight: 800
+};
+var currentProgress = 1; // 1 = Normal
+var startProgress = 1;
+var startY = 0;
+var isDragging = false;
+
+function init(newValue, oldValue, ownerInstance, instance) {
+  if (newValue) {
+    config = newValue;
+    applyFinalProgress(currentProgress, ownerInstance);
+  }
+}
+
+function px(rpx) {
+  return rpx * config.rpxRatio;
+}
+
+function clamp(val, min, max) {
+  return Math.max(min, Math.min(max, val));
+}
+
+function interpolate(p, p0, p1, v0, v1) {
+  if (p <= p0) return v0;
+  if (p >= p1) return v1;
+  return v0 + (v1 - v0) * (p - p0) / (p1 - p0);
+}
+
+function applyProgress(progress, ownerInstance, transition) {
+  var drawerH, mapB, mapT, titleOp, titleTrans, mapOp;
+  var mapL, mapRad, drawerL, drawerRad;
+  var maxDrawerH = config.windowHeight / config.rpxRatio - 150;
+  
+  if (progress < 1) {
+    drawerH = interpolate(progress, 0, 1, 132, 500);
+    mapB = interpolate(progress, 0, 1, 288, 646);
+    mapT = interpolate(progress, 0, 1, 0, 194);
+    mapL = interpolate(progress, 0, 1, 0, 24);
+    mapRad = interpolate(progress, 0, 1, 0, 28);
+    drawerL = 24;
+    drawerRad = 34;
+    titleOp = interpolate(progress, 0, 1, 0, 1);
+    titleTrans = interpolate(progress, 0, 1, -28, 0);
+    mapOp = 1;
+  } else if (progress < 2) {
+    drawerH = interpolate(progress, 1, 2, 500, 654);
+    mapB = interpolate(progress, 1, 2, 646, 800);
+    mapT = interpolate(progress, 1, 2, 194, 40);
+    mapL = 24;
+    mapRad = 28;
+    drawerL = interpolate(progress, 1, 2, 24, 0);
+    drawerRad = interpolate(progress, 1, 2, 34, 0);
+    titleOp = interpolate(progress, 1, 2, 1, 0);
+    titleTrans = interpolate(progress, 1, 2, 0, -28);
+    mapOp = 1;
+  } else {
+    drawerH = interpolate(progress, 2, 3, 654, maxDrawerH);
+    mapB = interpolate(progress, 2, 3, 800, maxDrawerH + 150);
+    mapT = interpolate(progress, 2, 3, 40, 0);
+    mapL = 24;
+    mapRad = 28;
+    drawerL = 0;
+    drawerRad = 0;
+    mapOp = interpolate(progress, 2.5, 3, 1, 0);
+    titleOp = 0;
+    titleTrans = -28;
+  }
+
+  var trans = transition || 'none';
+
+  var drawerInstance = ownerInstance.selectComponent('.content-drawer');
+  if (drawerInstance) {
+    drawerInstance.setStyle({ 
+      height: px(drawerH) + 'px', 
+      left: px(drawerL) + 'px',
+      right: px(drawerL) + 'px',
+      borderRadius: px(drawerRad) + 'px',
+      transition: trans 
+    });
+  }
+
+  var mapInstance = ownerInstance.selectComponent('.map-viewport');
+  if (mapInstance) {
+    mapInstance.setStyle({ 
+      bottom: px(mapB) + 'px', 
+      top: px(mapT) + 'px', 
+      left: px(mapL) + 'px',
+      right: px(mapL) + 'px',
+      borderRadius: px(mapRad) + 'px',
+      opacity: mapOp, 
+      transition: trans 
+    });
+  }
+
+  var titleInstance = ownerInstance.selectComponent('.map-title');
+  if (titleInstance) {
+    titleInstance.setStyle({ opacity: titleOp, transform: 'translateY(' + px(titleTrans) + 'px)', transition: trans });
+  }
+}
+
+function applyFinalProgress(progress, ownerInstance) {
+  applyProgress(progress, ownerInstance, 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)');
+}
+
+function touchstart(e, ownerInstance) {
+  var touch = e.touches[0] || e.changedTouches[0];
+  startY = touch.clientY;
+  startProgress = currentProgress;
+  isDragging = true;
+}
+
+function touchmove(e, ownerInstance) {
+  if (!isDragging) return;
+  var touch = e.touches[0] || e.changedTouches[0];
+  var deltaY = touch.clientY - startY; 
+  
+  // Convert px to progress.
+  // Move 184px (approx 368rpx) = 1.0 progress.
+  var deltaProgress = -deltaY / px(368);
+  
+  currentProgress = clamp(startProgress + deltaProgress, 0, 3);
+  applyProgress(currentProgress, ownerInstance, 'none');
+}
+
+function touchend(e, ownerInstance) {
+  if (!isDragging) return;
+  isDragging = false;
+  var touch = e.changedTouches[0] || e.touches[0];
+  var deltaY = touch.clientY - startY;
+  
+  var targetProgress = Math.round(currentProgress);
+  // Add velocity based snapping
+  if (Math.abs(deltaY) > 20) {
+    if (deltaY < 0) { // dragging up
+      targetProgress = Math.ceil(currentProgress);
+    } else { // dragging down
+      targetProgress = Math.floor(currentProgress);
+    }
+  }
+
+  currentProgress = targetProgress;
+  applyFinalProgress(targetProgress, ownerInstance);
+  ownerInstance.callMethod('onDrawerProgressChange', targetProgress);
+}
+
+function tap(e, ownerInstance) {
+  // Toggle between 0 and 1, or reset from 2/3
+  if (currentProgress >= 1) {
+    currentProgress = 0;
+  } else {
+    currentProgress = 1;
+  }
+  applyFinalProgress(currentProgress, ownerInstance);
+  ownerInstance.callMethod('onDrawerProgressChange', currentProgress);
+}
+
+module.exports = {
+  init: init,
+  touchstart: touchstart,
+  touchmove: touchmove,
+  touchend: touchend,
+  tap: tap
+};

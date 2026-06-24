@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from app.core.responses import api_success
 from app.db.session import get_db
 from app.modules.auth import service
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, require_password_changed
 from app.modules.auth.models import User
 from app.modules.auth.schemas import ChangePasswordRequest, LoginRequest
 
@@ -32,6 +32,17 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 def me(request: Request, current_user: User = Depends(get_current_user)):
     return api_success(
         data=service.current_user_payload(current_user),
+        trace_id=request.state.trace_id,
+    )
+
+
+@router.post("/renew", summary="Renew current access token")
+def renew_access_token(
+    request: Request,
+    current_user: User = Depends(require_password_changed),
+):
+    return api_success(
+        data=service.renew_access_token(current_user),
         trace_id=request.state.trace_id,
     )
 

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   ApiBusinessError,
@@ -6,8 +6,13 @@ import {
   createAuthorizationHeader,
   request,
 } from "@/services/request";
+import { LOGIN_ROUTE, setAuthExpiredHandler } from "@/services/auth-session";
 
 describe("request service", () => {
+  beforeEach(() => {
+    setAuthExpiredHandler(null);
+  });
+
   it("builds urls from base url and resource path", () => {
     expect(buildRequestUrl("http://localhost:8000/api/v1", "/auth/me")).toBe(
       "http://localhost:8000/api/v1/auth/me",
@@ -60,6 +65,42 @@ describe("request service", () => {
 
     await expect(request({ url: "/tasks" })).rejects.toBeInstanceOf(
       ApiBusinessError,
+    );
+  });
+
+  it("clears session and routes to login when token is expired", async () => {
+    const removeStorageSync = vi.fn();
+    const reLaunch = vi.fn((options: UniNamespace.ReLaunchOptions) => {
+      options.complete?.({ errMsg: "reLaunch:ok" });
+    });
+    vi.stubGlobal("uni", {
+      removeStorageSync,
+      reLaunch,
+      request: (options: UniNamespace.RequestOptions) => {
+        options.success?.({
+          statusCode: 401,
+          data: {
+            code: 40102,
+            message: "Token 无效或已过期",
+            data: null,
+            trace_id: "trace-expired",
+          },
+          header: {},
+          cookies: [],
+        } as UniNamespace.RequestSuccessCallbackResult);
+      },
+    });
+
+    await expect(
+      request({ url: "/map/init", token: "expired-token" }),
+    ).rejects.toMatchObject({
+      code: 40102,
+      message: "Token 无效或已过期",
+    });
+    expect(removeStorageSync).toHaveBeenCalledWith("cat_map_access_token");
+    expect(removeStorageSync).toHaveBeenCalledWith("cat_map_current_user");
+    expect(reLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({ url: LOGIN_ROUTE }),
     );
   });
 });

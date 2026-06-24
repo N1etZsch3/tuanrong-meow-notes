@@ -2,9 +2,10 @@
   <view
     class="map-page"
     :class="{
-      'drawer-collapsed': drawerState === 'collapsed',
       'is-searching': isSearchMode,
     }"
+    :drawerConfig="drawerConfig"
+    :change:drawerConfig="drawer.init"
   >
     <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
 
@@ -73,9 +74,10 @@
     <view class="content-drawer">
       <view
         class="drawer-grip-area"
-        @tap="toggleDrawer"
-        @touchstart="handleGripTouchStart"
-        @touchend="handleGripTouchEnd"
+        @tap="drawer.tap"
+        @touchstart="drawer.touchstart"
+        @touchmove="drawer.touchmove"
+        @touchend="drawer.touchend"
       >
         <view class="drawer-grip" />
       </view>
@@ -195,6 +197,8 @@
   </view>
 </template>
 
+<script module="drawer" lang="wxs" src="./drawer.wxs"></script>
+
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
@@ -229,14 +233,12 @@ import {
   MAP_FILTER_OPTIONS,
   expandLngLatBounds,
   formatDistance,
-  getMapDrawerStateAfterDrag,
   getMapFilterLabel,
   getMapPointQueryByFilter,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
   mapSearchResultToShellItem,
   resolveMapShellItemType,
-  type MapDrawerState,
   type MapFilterKey,
   type CampusMapConfig,
   type LngLat,
@@ -248,12 +250,21 @@ type MapLoadState = "idle" | "loading" | "ready" | "error";
 type ContentLoadState = "idle" | "loading" | "ready" | "error";
 
 const userStore = useUserStore();
-const drawerState = ref<MapDrawerState>("expanded");
+const sysInfo = uni.getSystemInfoSync();
+const drawerConfig = ref({
+  rpxRatio: sysInfo.windowWidth / 750,
+  windowHeight: sysInfo.windowHeight,
+});
 const filterMenuOpen = ref(false);
 const activeFilter = ref<MapFilterKey>(ALL_MAP_FILTER_KEY);
 const searchKeyword = ref("");
-const dragStartY = ref<number | null>(null);
 const mapLoadState = ref<MapLoadState>("idle");
+const currentDrawerProgress = ref(1);
+
+function onDrawerProgressChange(progress: number) {
+  currentDrawerProgress.value = progress;
+  // If progress is 0, we could unfocus search if needed, etc.
+}
 const contentLoadState = ref<ContentLoadState>("idle");
 const contentErrorMessage = ref("");
 const campusMapConfig = ref<CampusMapConfig>(HBNU_CAMPUS);
@@ -368,32 +379,11 @@ function selectFilter(filterKey: MapFilterKey) {
   filterMenuOpen.value = false;
 }
 
-function toggleDrawer() {
-  drawerState.value = drawerState.value === "collapsed" ? "expanded" : "collapsed";
-}
 
-function handleGripTouchStart(event: Event) {
-  const touch = (event as TouchEvent).touches?.[0];
-  dragStartY.value = touch?.clientY ?? null;
-}
-
-function handleGripTouchEnd(event: Event) {
-  const startY = dragStartY.value;
-  const touch = (event as TouchEvent).changedTouches?.[0];
-  dragStartY.value = null;
-
-  if (startY === null || !touch) {
-    return;
-  }
-
-  drawerState.value = getMapDrawerStateAfterDrag(
-    drawerState.value,
-    touch.clientY - startY,
-  );
-}
 
 function focusSearch() {
-  drawerState.value = "expanded";
+  // WXS handles drawer expansion now, we can leave this empty or
+  // trigger WXS if needed in the future.
 }
 
 function clearSearch() {
@@ -458,9 +448,10 @@ function getMarkerColor(type: MapShellItemType): string {
   return colors[type];
 }
 
-function getAccessToken(): string | null {
-  if (userStore.accessToken) {
-    return userStore.accessToken;
+async function getAccessToken(): Promise<string | null> {
+  const accessToken = await userStore.ensureFreshAccessToken();
+  if (accessToken) {
+    return accessToken;
   }
 
   contentLoadState.value = "error";
@@ -616,7 +607,7 @@ function getViewportQuery() {
 }
 
 async function refreshMapPoints() {
-  const token = getAccessToken();
+  const token = await getAccessToken();
   if (!token) {
     return;
   }
@@ -645,7 +636,7 @@ function scheduleRefreshMapPoints() {
 }
 
 async function loadBottomContent() {
-  const token = getAccessToken();
+  const token = await getAccessToken();
   if (!token) {
     return;
   }
@@ -666,7 +657,7 @@ async function runSearch(keyword: string) {
     return;
   }
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   if (!token) {
     return;
   }
@@ -696,7 +687,7 @@ async function runSearch(keyword: string) {
 }
 
 async function loadPointSummary(pointId: string) {
-  const token = getAccessToken();
+  const token = await getAccessToken();
   if (!token) {
     return;
   }
@@ -708,7 +699,6 @@ async function loadPointSummary(pointId: string) {
       lng: selectedSummary.value.lng,
       lat: selectedSummary.value.lat,
     });
-    drawerState.value = "expanded";
     contentLoadState.value = "ready";
   } catch (error) {
     selectedSummary.value = null;
@@ -727,7 +717,7 @@ async function handleSummaryAction(action: CardActionDto) {
     return;
   }
 
-  const token = getAccessToken();
+  const token = await getAccessToken();
   if (!token) {
     return;
   }
@@ -754,7 +744,7 @@ async function handleSummaryAction(action: CardActionDto) {
 }
 
 async function loadInitialMapData() {
-  const token = getAccessToken();
+  const token = await getAccessToken();
   if (!token) {
     mapLoadState.value = "error";
     return;
@@ -929,7 +919,6 @@ watch(searchKeyword, (keyword) => {
     return;
   }
 
-  drawerState.value = "expanded";
   searchTimer = setTimeout(() => {
     void runSearch(keyword);
   }, 300);
@@ -988,13 +977,6 @@ onBeforeUnmount(() => {
   top: 46rpx;
   left: 42rpx;
   right: 42rpx;
-  transition: opacity 0.24s ease, transform 0.24s ease;
-}
-
-.drawer-collapsed .map-title {
-  opacity: 0;
-  transform: translateY(-28rpx);
-  pointer-events: none;
 }
 
 .title-row {
@@ -1036,15 +1018,7 @@ onBeforeUnmount(() => {
   border-radius: 28rpx;
   background: rgba(228, 244, 218, 0.9);
   box-shadow: 0 14rpx 40rpx rgba(36, 75, 35, 0.12);
-  transition: top 0.26s ease, bottom 0.26s ease, border-radius 0.26s ease;
-}
 
-.drawer-collapsed .map-viewport {
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 288rpx;
-  border-radius: 0 0 28rpx 28rpx;
 }
 
 .amap-host,
@@ -1227,13 +1201,8 @@ onBeforeUnmount(() => {
   box-shadow: 0 -8rpx 36rpx rgba(26, 52, 30, 0.12);
   padding: 0 24rpx 24rpx;
   overflow: hidden;
-  transition: height 0.26s ease, border-radius 0.26s ease;
   display: flex;
   flex-direction: column;
-}
-
-.drawer-collapsed .content-drawer {
-  height: 132rpx;
 }
 
 .drawer-grip-area {
@@ -1317,10 +1286,6 @@ onBeforeUnmount(() => {
   width: 0;
   height: 0;
   color: transparent;
-}
-
-.drawer-collapsed .drawer-body {
-  display: none;
 }
 
 .section-head {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getMapInit, getMapPoints, searchMap } from "@/api/map";
+import { getMapInit, getMapPointNavigation, getMapPoints, searchMap } from "@/api/map";
 
 function mockSuccess(data: unknown) {
   return vi.fn((options: UniNamespace.RequestOptions) => {
@@ -93,6 +93,48 @@ describe("map api", () => {
           keyword: "北门",
           page: 1,
           page_size: 20,
+        },
+      }),
+    );
+  });
+
+  it("requests point navigation with current location and in-app mode", async () => {
+    const requestMock = mockSuccess({
+      point_id: "point-1",
+      title: "北门草丛",
+      destination: {
+        lng: 115.0609,
+        lat: 30.233,
+        location_name: "北门草丛",
+        amap_poi_id: null,
+        amap_address: null,
+      },
+      route_instruction: null,
+      landmark_hint: null,
+      entrance_hint: null,
+      photos: [],
+      amap_navigation: {
+        mode: "walking",
+        open_url: "",
+        web_url: "",
+      },
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await getMapPointNavigation("token-1", "point-1", {
+      from_lng: 115.0622,
+      from_lat: 30.2299,
+      mode: "walking",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        url: expect.stringContaining("/map/points/point-1/navigation"),
+        data: {
+          from_lng: 115.0622,
+          from_lat: 30.2299,
+          mode: "walking",
         },
       }),
     );

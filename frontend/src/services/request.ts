@@ -42,6 +42,30 @@ export class ApiNetworkError extends Error {
   }
 }
 
+export class ApiRequestCanceledError extends Error {
+  constructor(message = "request canceled") {
+    super(message);
+    this.name = "ApiRequestCanceledError";
+  }
+}
+
+export function isRequestCanceledError(error: unknown): boolean {
+  return error instanceof ApiRequestCanceledError;
+}
+
+function isCanceledRequestMessage(message?: string): boolean {
+  if (!message) {
+    return false;
+  }
+
+  const normalizedMessage = message.toLowerCase();
+
+  return (
+    normalizedMessage.includes("abort") ||
+    normalizedMessage.includes("cancel")
+  );
+}
+
 export function buildRequestUrl(baseUrl: string, path: string): string {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
   const normalizedPath = path.replace(/^\/+/, "");
@@ -133,6 +157,11 @@ export function request<TResponse, TData extends RequestData = RequestData>(
         resolve(response.data);
       },
       fail: (error) => {
+        if (isCanceledRequestMessage(error.errMsg)) {
+          reject(new ApiRequestCanceledError(error.errMsg));
+          return;
+        }
+
         reject(new ApiNetworkError(error.errMsg));
       },
     });

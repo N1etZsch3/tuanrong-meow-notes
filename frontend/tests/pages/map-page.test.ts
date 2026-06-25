@@ -6,7 +6,9 @@ import {
   ALL_MAP_FILTER_KEY,
   HBNU_CAMPUS,
   expandLngLatBounds,
+  filterCampusExternalPoiResults,
   getMapPointQueryByFilter,
+  getMarkerDisplayMode,
   getMapFilterLabel,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
@@ -51,6 +53,107 @@ describe("map page shell behavior", () => {
 
   it("uses the renewable access token provider before map api calls", () => {
     expect(indexPageSource).toContain("userStore.ensureFreshAccessToken()");
+  });
+
+  it("ignores canceled map requests instead of treating them as page errors", () => {
+    expect(indexPageSource).toContain("isRequestCanceledError");
+  });
+
+  it("does not load map point markers before the user selects a marker layer", () => {
+    expect(indexPageSource).not.toContain(
+      "const activeFilter = ref<MapFilterKey>(ALL_MAP_FILTER_KEY)",
+    );
+    expect(indexPageSource).not.toContain(
+      "Promise.all([refreshMapPoints(), loadBottomContent()])",
+    );
+  });
+
+  it("selects marker display modes by zoom and visible marker density", () => {
+    expect(
+      getMarkerDisplayMode({
+        zoom: 18.8,
+        visibleMarkerCount: 16,
+        previewEnabled: true,
+        labelMinZoom: 16,
+        previewMinZoom: 15,
+      }),
+    ).toBe("icon");
+    expect(
+      getMarkerDisplayMode({
+        zoom: 16.2,
+        visibleMarkerCount: 5,
+        previewEnabled: true,
+        labelMinZoom: 16,
+        previewMinZoom: 15,
+      }),
+    ).toBe("label");
+    expect(
+      getMarkerDisplayMode({
+        zoom: 14.8,
+        visibleMarkerCount: 1,
+        previewEnabled: true,
+        labelMinZoom: 16,
+        previewMinZoom: 15,
+      }),
+    ).toBe("preview");
+  });
+
+  it("resizes the amap instance after WXS drawer layout changes", () => {
+    expect(indexPageSource).toContain("scheduleMapResizeAfterDrawerChange");
+    expect(indexPageSource).toContain("amapInstance.resize");
+  });
+
+  it("keeps navigation inside the app instead of opening external amap urls", () => {
+    expect(indexPageSource).not.toContain("window.open");
+    expect(indexPageSource).toContain("renderAmapWalkingRoute");
+    expect(indexPageSource).toContain("renderNativeRoute");
+    expect(indexPageSource).toContain("renderInAppRoute");
+    expect(indexPageSource).toContain(':polyline="nativeMapPolylines"');
+  });
+
+  it("renders marker svg icons and a redesigned arrow in the filter menu", () => {
+    expect(indexPageSource).toContain("MAP_FILTER_ICON_SRC");
+    expect(indexPageSource).toContain("filter-option-icon");
+    expect(indexPageSource).toContain("filter-chevron-mark");
+    expect(indexPageSource).not.toContain("⌄");
+  });
+
+  it("filters external poi search results to the campus bounds", () => {
+    const results = filterCampusExternalPoiResults(
+      [
+        {
+          id: "inside",
+          title: "问山居",
+          address: "湖北师范大学校内",
+          lng: 115.0612,
+          lat: 30.2301,
+        },
+        {
+          id: "outside",
+          title: "校外商圈",
+          address: "校园外",
+          lng: 115.09,
+          lat: 30.25,
+        },
+      ],
+      HBNU_CAMPUS.limit_bounds,
+    );
+
+    expect(results).toHaveLength(1);
+    expect(results[0].id).toBe("inside");
+  });
+
+  it("keeps a non-web amap rest fallback for mini program poi search", () => {
+    expect(indexPageSource).toContain("searchCampusExternalPoisByRest");
+    expect(indexPageSource).toContain("https://restapi.amap.com/v3/place/text");
+    expect(indexPageSource).toContain("parseAmapRestLocation");
+  });
+
+  it("renders searched internal and external results as temporary map markers", () => {
+    expect(indexPageSource).toContain("mapSearchShellItemToMarker");
+    expect(indexPageSource).toContain("createSearchPointSummary");
+    expect(indexPageSource).toContain("selectedExternalTarget");
+    expect(indexPageSource).toContain("search_external");
   });
 
   it("keeps a readable label for each map filter", () => {

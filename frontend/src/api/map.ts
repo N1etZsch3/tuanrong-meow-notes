@@ -236,6 +236,12 @@ export interface MapBottomContentQuery {
   limit?: number;
 }
 
+export interface MapNavigationQuery {
+  from_lng?: number;
+  from_lat?: number;
+  mode?: "walking";
+}
+
 function compactQuery<T extends object>(query: T): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(query as Record<string, unknown>).filter(
@@ -304,10 +310,12 @@ export function getMapPointSummary(
 export function getMapPointNavigation(
   accessToken: string,
   pointId: string,
+  query: MapNavigationQuery = {},
 ): Promise<MapNavigationResponse> {
   return request<MapNavigationResponse>({
     url: `/map/points/${pointId}/navigation`,
     method: "GET",
+    data: compactQuery(query),
     token: accessToken,
   });
 }

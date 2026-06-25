@@ -15,6 +15,7 @@ def create_user(
     role: str = "member",
     status: str = "active",
     must_change_password: bool = True,
+    profile_completed: bool = False,
 ) -> User:
     user = User(
         student_no=student_no,
@@ -32,6 +33,7 @@ def create_user(
             real_name="林同学",
             department="计算机学院",
             grade="2025",
+            profile_completed=profile_completed,
         )
     )
     db.commit()
@@ -94,9 +96,39 @@ def test_login_with_student_number_password_and_captcha(api_client, db_session):
     assert data["token_type"] == "Bearer"
     assert data["expires_in"] == 604800
     assert data["must_change_password"] is True
+    assert data["next_action"] == "change_password"
+    assert data["user"]["meow_no"] == "20252160A1010"
     assert data["user"]["student_no"] == "20252160A1010"
     assert data["user"]["nickname"] == "小林"
     assert data["access_token"]
+
+
+def test_login_accepts_meow_no_alias_and_routes_to_profile_completion(api_client, db_session):
+    create_user(
+        db_session,
+        student_no="trmx0001",
+        password="trmx0001",
+        must_change_password=False,
+        profile_completed=False,
+    )
+    captcha = create_captcha(db_session)
+
+    response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "meow_no": "trmx0001",
+            "password": "trmx0001",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": True,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["next_action"] == "complete_profile"
+    assert data["user"]["meow_no"] == "trmx0001"
+    assert data["user"]["profile_completed"] is False
 
 
 def test_login_password_failure_does_not_consume_captcha(api_client, db_session):
@@ -148,8 +180,10 @@ def test_get_current_user_returns_profile(api_client, db_session):
 
     assert response.status_code == 200
     data = response.json()["data"]
+    assert data["meow_no"] == "20252160A1010"
     assert data["student_no"] == "20252160A1010"
     assert data["must_change_password"] is True
+    assert data["profile_completed"] is False
     assert data["profile"]["nickname"] == "小林"
 
 
@@ -181,7 +215,7 @@ def test_renew_access_token_requires_password_changed(api_client, db_session):
     assert response.json()["code"] == 40301
 
 
-def test_change_password_clears_must_change_and_increments_token_version(api_client, db_session):
+def test_change_password_returns_new_token_for_profile_initialization(api_client, db_session):
     user = create_user(db_session)
     token = create_token(user)
 
@@ -196,10 +230,43 @@ def test_change_password_clears_must_change_and_increments_token_version(api_cli
     )
 
     assert response.status_code == 200
-    assert response.json()["data"] is None
+    data = response.json()["data"]
+    assert data["access_token"]
+    assert data["token_type"] == "Bearer"
+    assert data["must_change_password"] is False
+    assert data["profile_completed"] is False
+    assert data["next_action"] == "complete_profile"
     db_session.refresh(user)
     assert user.must_change_password is False
     assert user.token_version == 2
+
+    old_token_response = api_client.get("/api/v1/auth/me", headers=auth_headers(token))
+    assert old_token_response.status_code == 401
+
+    current_response = api_client.get(
+        "/api/v1/auth/me",
+        headers=auth_headers(data["access_token"]),
+    )
+    assert current_response.status_code == 200
+    assert current_response.json()["data"]["must_change_password"] is False
+
+
+def test_change_password_rejects_disallowed_characters(api_client, db_session):
+    user = create_user(db_session)
+    token = create_token(user)
+
+    response = api_client.patch(
+        "/api/v1/auth/password",
+        headers=auth_headers(token),
+        json={
+            "old_password": "Password123",
+            "new_password": "NewPassword123#",
+            "confirm_password": "NewPassword123#",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == 40001
 
 
 def test_logout_requires_valid_token(api_client, db_session):

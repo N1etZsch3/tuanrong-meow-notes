@@ -14,4 +14,9 @@ describe("global Chinese font rules", () => {
     expect(agents).toContain("中文字体");
     expect(agents).toContain(fontStack);
   });
+
+  test("records mobile WeChat viewport as the frontend layout baseline", () => {
+    expect(agents).toContain("微信小程序视口");
+    expect(agents).toContain("手机");
+  });
 });

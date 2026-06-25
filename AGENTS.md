@@ -448,6 +448,8 @@ When changing schema:
 
 The frontend is a uni-app WeChat Mini Program. Mobile is the primary experience, and WeChat Mini Program behavior is the primary target. H5 can be used for local debugging, but it must not drive platform-specific decisions when it conflicts with the Mini Program target.
 
+- Every frontend page must be designed and checked against phone-sized 微信小程序视口 first. Keep onboarding and form pages within the visible 手机 viewport when the flow is intended to fit one screen; use responsive `rpx`, bounded heights, and remove non-essential decorative blocks before allowing layout overflow.
+
 Bottom tab pages:
 
 ```text

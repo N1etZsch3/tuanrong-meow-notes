@@ -1,5 +1,5 @@
 from app.modules.auth.models import User
-from tests.test_auth_api import create_token, create_user
+from tests.test_auth_api import create_captcha, create_token, create_user
 
 
 def test_admin_can_create_member_account(api_client, db_session):
@@ -32,8 +32,81 @@ def test_admin_can_create_member_account(api_client, db_session):
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["student_no"] == "20252160A1011"
+    assert data["meow_no"] == "20252160A1011"
     assert data["must_change_password"] is True
     assert db_session.query(User).filter_by(student_no="20252160A1011").one()
+
+
+def test_admin_create_member_generates_meow_no_and_uses_it_as_initial_password(
+    api_client,
+    db_session,
+):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    token = create_token(admin)
+
+    response = api_client.post(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "role": "member",
+            "profile": {
+                "nickname": "新成员",
+                "department": "生存保障部",
+            },
+            "must_change_password": True,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["meow_no"] == "trmx0001"
+    assert data["student_no"] == "trmx0001"
+    assert data["must_change_password"] is True
+
+    captcha = create_captcha(db_session)
+    login_response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "meow_no": "trmx0001",
+            "password": "trmx0001",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": True,
+        },
+    )
+
+    assert login_response.status_code == 200
+    assert login_response.json()["data"]["next_action"] == "change_password"
+
+
+def test_admin_create_member_without_initial_profile_leaves_fields_empty(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    token = create_token(admin)
+
+    response = api_client.post(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"role": "member", "must_change_password": True},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    user = db_session.query(User).filter_by(student_no=data["meow_no"]).one()
+    assert user.profile.nickname == ""
+    assert user.profile.real_name is None
+    assert user.profile.department is None
 
 
 def test_member_cannot_create_member_account(api_client, db_session):

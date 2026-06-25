@@ -24,6 +24,7 @@ class ErrorCode(IntEnum):
     MAP_SEARCH_KEYWORD_TOO_LONG = 60008
     MAP_CAMPUS_NOT_FOUND = 60011
     MAP_POINT_NOT_FOUND = 60012
+    PROFILE_INCOMPLETE = 63006
 
 
 class APIError(Exception):

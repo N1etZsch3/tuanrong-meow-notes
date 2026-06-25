@@ -1,0 +1,173 @@
+<template>
+  <view class="admin-page">
+    <view class="admin-inner">
+      <view class="nav-row">
+        <button class="back-button" @tap="goBack">‹</button>
+        <view>
+          <text class="nav-title">管理员入口</text>
+          <text class="nav-subtitle">成员账号管理</text>
+        </view>
+      </view>
+
+      <view v-if="!userStore.isAdmin" class="permission-card">
+        <text class="permission-title">暂无管理员权限</text>
+        <text class="permission-copy">该入口仅管理员可见。</text>
+      </view>
+
+      <button v-else class="admin-action" @tap="goCreateUser">
+        <view class="action-icon">＋</view>
+        <view class="action-copy">
+          <text class="action-title">添加账户</text>
+          <text class="action-subtitle">创建成员喵喵号并要求首次登录改密</text>
+        </view>
+        <text class="action-chevron">›</text>
+      </button>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { useUserStore } from "@/stores/user";
+
+const userStore = useUserStore();
+
+function goCreateUser() {
+  uni.navigateTo({ url: "/pages/admin/create-user" });
+}
+
+function goBack() {
+  uni.navigateBack();
+}
+</script>
+
+<style scoped>
+.admin-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #fbfcfb 0%, #f5faef 100%);
+  color: #20242a;
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+}
+
+.admin-inner {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 74rpx 38rpx calc(env(safe-area-inset-bottom) + 48rpx);
+}
+
+.nav-row {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+}
+
+.back-button {
+  width: 64rpx;
+  height: 64rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #2f8037;
+  font-size: 58rpx;
+  line-height: 54rpx;
+  box-shadow: 0 10rpx 28rpx rgba(42, 63, 43, 0.1);
+}
+
+.back-button::after,
+.admin-action::after {
+  border: 0;
+}
+
+.nav-title,
+.nav-subtitle {
+  display: block;
+}
+
+.nav-title {
+  color: #171b22;
+  font-size: 42rpx;
+  font-weight: 900;
+}
+
+.nav-subtitle {
+  margin-top: 8rpx;
+  color: #68717a;
+  font-size: 25rpx;
+}
+
+.admin-action,
+.permission-card {
+  box-sizing: border-box;
+  width: 100%;
+  margin-top: 44rpx;
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 16rpx 42rpx rgba(42, 63, 43, 0.1);
+}
+
+.admin-action {
+  min-height: 156rpx;
+  padding: 30rpx;
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  text-align: left;
+}
+
+.action-icon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 22rpx;
+  background: #2f8037;
+  color: #ffffff;
+  font-size: 48rpx;
+  line-height: 66rpx;
+  text-align: center;
+}
+
+.action-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.action-title,
+.action-subtitle,
+.permission-title,
+.permission-copy {
+  display: block;
+}
+
+.action-title {
+  color: #20242a;
+  font-size: 31rpx;
+  font-weight: 900;
+}
+
+.action-subtitle {
+  margin-top: 12rpx;
+  color: #69727b;
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
+.action-chevron {
+  color: #68717a;
+  font-size: 52rpx;
+}
+
+.permission-card {
+  padding: 42rpx 34rpx;
+}
+
+.permission-title {
+  color: #20242a;
+  font-size: 31rpx;
+  font-weight: 900;
+}
+
+.permission-copy {
+  margin-top: 14rpx;
+  color: #69727b;
+  font-size: 25rpx;
+}
+</style>

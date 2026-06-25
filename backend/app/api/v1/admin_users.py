@@ -51,6 +51,7 @@ def create_user(
     data = {
         "id": user.id,
         "student_no": user.student_no,
+        "meow_no": user.student_no,
         "role": user.role,
         "status": user.status,
         "must_change_password": user.must_change_password,

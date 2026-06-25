@@ -200,6 +200,7 @@
 <script module="drawer" lang="wxs" src="./drawer.wxs"></script>
 
 <script setup lang="ts">
+import { onHide, onShow } from "@dcloudio/uni-app";
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 
 import {
@@ -286,6 +287,7 @@ let amapMarkers: any[] = [];
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let mapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
+const isPageVisible = ref(true);
 const isSearchMode = computed(() => searchKeyword.value.trim().length > 0);
 const activeFilterLabel = computed(() => getMapFilterLabel(activeFilter.value));
 const visibleItems = computed(() => {
@@ -607,6 +609,10 @@ function getViewportQuery() {
 }
 
 async function refreshMapPoints() {
+  if (!isPageVisible.value) {
+    return;
+  }
+
   const token = await getAccessToken();
   if (!token) {
     return;
@@ -650,6 +656,10 @@ async function loadBottomContent() {
 }
 
 async function runSearch(keyword: string) {
+  if (!isPageVisible.value) {
+    return;
+  }
+
   const normalizedKeyword = keyword.trim();
   if (!normalizedKeyword) {
     searchResultItems.value = [];
@@ -926,6 +936,25 @@ watch(searchKeyword, (keyword) => {
 
 onMounted(() => {
   void loadInitialMapData();
+});
+
+onShow(() => {
+  isPageVisible.value = true;
+  if (supportsAmapWeb && amapInstance) {
+    setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+      void refreshMapPoints();
+    }, 150);
+  } else if (!supportsAmapWeb) {
+    void refreshMapPoints();
+  }
+});
+
+onHide(() => {
+  isPageVisible.value = false;
+  if (mapRefreshTimer) {
+    clearTimeout(mapRefreshTimer);
+  }
 });
 
 onBeforeUnmount(() => {

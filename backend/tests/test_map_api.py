@@ -11,6 +11,7 @@ def create_member(
     db: Session,
     *,
     must_change_password: bool = False,
+    profile_completed: bool = True,
 ) -> User:
     user = User(
         student_no=f"map{uuid4().hex[:10]}",
@@ -21,7 +22,13 @@ def create_member(
     )
     db.add(user)
     db.flush()
-    db.add(UserProfile(user_id=user.id, nickname="地图测试成员"))
+    db.add(
+        UserProfile(
+            user_id=user.id,
+            nickname="地图测试成员",
+            profile_completed=profile_completed,
+        )
+    )
     db.commit()
     db.refresh(user)
     return user
@@ -248,3 +255,13 @@ def test_map_endpoints_require_password_changed(api_client, db_session):
 
     assert response.status_code == 403
     assert response.json()["code"] == 40301
+
+
+def test_map_endpoints_require_profile_completed(api_client, db_session):
+    user = create_member(db_session, profile_completed=False)
+    seed_map_data(db_session)
+
+    response = api_client.get("/api/v1/map/init", headers=auth_headers(user))
+
+    assert response.status_code == 403
+    assert response.json()["code"] == 63006

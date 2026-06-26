@@ -54,11 +54,11 @@ def change_password(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    service.change_password(db, current_user, payload)
+    data = service.change_password(db, current_user, payload)
     return api_success(
-        data=None,
+        data=data,
         trace_id=request.state.trace_id,
-        message="密码修改成功，请重新登录",
+        message="密码修改成功",
     )
 
 

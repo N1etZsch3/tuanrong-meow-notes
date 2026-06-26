@@ -3,8 +3,14 @@ import { LOGIN_ROUTE } from "@/services/auth-session";
 
 export { LOGIN_ROUTE };
 export const HOME_ROUTE = "/pages/index/index";
+export const CHANGE_PASSWORD_ROUTE = "/pages/auth/change-password";
+export const PROFILE_SETUP_ROUTE = "/pages/profile/complete";
 
-export type StartupRoute = typeof LOGIN_ROUTE | typeof HOME_ROUTE;
+export type StartupRoute =
+  | typeof LOGIN_ROUTE
+  | typeof CHANGE_PASSWORD_ROUTE
+  | typeof PROFILE_SETUP_ROUTE
+  | typeof HOME_ROUTE;
 
 export interface StartupUserSession {
   accessToken: string;
@@ -51,6 +57,14 @@ export async function resolveStartupRoute(
     if (!currentUser) {
       session.clearSession();
       return LOGIN_ROUTE;
+    }
+
+    if (currentUser.must_change_password) {
+      return CHANGE_PASSWORD_ROUTE;
+    }
+
+    if (!currentUser.profile_completed) {
+      return PROFILE_SETUP_ROUTE;
     }
 
     await initializeResources(currentUser);

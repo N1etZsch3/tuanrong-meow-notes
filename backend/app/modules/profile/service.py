@@ -1,0 +1,62 @@
+from sqlalchemy.orm import Session
+
+from app.modules.auth.models import User, UserProfile
+from app.modules.auth.service import clean_initial_display_text, clean_initial_text, now_utc
+from app.modules.profile.schemas import CompleteProfileRequest, UpdateProfileRequest
+
+
+def profile_payload(user: User) -> dict:
+    profile = user.profile
+    return {
+        "user_id": user.id,
+        "student_no": user.student_no,
+        "meow_no": user.student_no,
+        "role": user.role,
+        "nickname": clean_initial_display_text(profile.nickname if profile else None),
+        "avatar_url": profile.avatar_url if profile else None,
+        "department": clean_initial_text(profile.department if profile else None),
+        "contact_info": clean_initial_text(profile.contact_info if profile else None),
+        "profile_completed": bool(profile and profile.profile_completed),
+        "profile_completed_at": profile.profile_completed_at if profile else None,
+    }
+
+
+def complete_profile(db: Session, user: User, payload: CompleteProfileRequest) -> dict:
+    profile = user.profile
+    if profile is None:
+        profile = UserProfile(user_id=user.id, nickname=payload.nickname)
+        db.add(profile)
+
+    profile.nickname = payload.nickname
+    profile.avatar_url = payload.avatar_url
+    profile.department = payload.department
+    profile.contact_info = payload.contact_info
+    profile.profile_completed = True
+    profile.profile_completed_at = now_utc()
+    db.commit()
+    db.refresh(profile)
+    return {
+        "profile_completed": True,
+        "next_action": "enter_app",
+    }
+
+
+def update_profile(db: Session, user: User, payload: UpdateProfileRequest) -> dict:
+    profile = user.profile
+    if profile is None:
+        profile = UserProfile(user_id=user.id, nickname="")
+        db.add(profile)
+
+    fields_set = payload.model_fields_set
+    if "nickname" in fields_set and payload.nickname is not None:
+        profile.nickname = payload.nickname.strip()
+    if "avatar_url" in fields_set:
+        profile.avatar_url = payload.avatar_url
+    if "department" in fields_set:
+        profile.department = payload.department
+    if "contact_info" in fields_set:
+        profile.contact_info = payload.contact_info
+
+    db.commit()
+    db.refresh(profile)
+    return profile_payload(user)

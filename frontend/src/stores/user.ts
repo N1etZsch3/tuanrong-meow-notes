@@ -7,8 +7,11 @@ import {
   normalizeCurrentUser,
   normalizeLoginUser,
   renewAccessToken,
+  changePassword,
+  type ChangePasswordPayload,
   type LoginPayload,
 } from "@/api/auth";
+import { completeProfile, type CompleteProfilePayload } from "@/api/profile";
 import { STORAGE_KEYS } from "@/constants/storage";
 import type { CurrentUser } from "@/types/user";
 
@@ -52,6 +55,8 @@ export const useUserStore = defineStore("user", {
       state.currentUser?.role === "super_admin",
     mustChangePassword: (state) =>
       Boolean(state.currentUser?.must_change_password),
+    profileCompleted: (state) =>
+      Boolean(state.currentUser?.profile_completed),
   },
   actions: {
     setAccessToken(accessToken: string, expiresInSeconds?: number) {
@@ -82,6 +87,40 @@ export const useUserStore = defineStore("user", {
         normalizeLoginUser(response),
         response.expires_in,
       );
+      return response;
+    },
+    async changeCurrentPassword(payload: ChangePasswordPayload) {
+      if (!this.accessToken) {
+        throw new Error("请先登录");
+      }
+
+      const response = await changePassword(payload, this.accessToken);
+      this.setAccessToken(response.access_token, response.expires_in);
+      if (this.currentUser) {
+        this.setCurrentUser({
+          ...this.currentUser,
+          must_change_password: response.must_change_password,
+          profile_completed: response.profile_completed,
+        });
+      }
+      return response;
+    },
+    async completeCurrentProfile(payload: CompleteProfilePayload) {
+      if (!this.accessToken) {
+        throw new Error("请先登录");
+      }
+
+      const response = await completeProfile(payload, this.accessToken);
+      if (this.currentUser) {
+        this.setCurrentUser({
+          ...this.currentUser,
+          nickname: payload.nickname,
+          avatar_url: payload.avatar_url || this.currentUser.avatar_url,
+          department: payload.department,
+          contact_info: payload.contact_info,
+          profile_completed: response.profile_completed,
+        });
+      }
       return response;
     },
     shouldRenewAccessToken(now = Date.now()) {

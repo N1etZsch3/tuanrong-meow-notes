@@ -10,7 +10,7 @@
         </view>
         <view class="hero-copy">
           <text class="hero-title">成员登录</text>
-          <text class="hero-subtitle">使用学号登录校园猫协任务系统</text>
+          <text class="hero-subtitle">使用喵喵号登录校园猫协任务系统</text>
         </view>
       </view>
 
@@ -20,12 +20,12 @@
         <view class="form-group">
           <view class="field-label">
             <image class="field-icon-img" :src="iconStudent" mode="aspectFit" />
-            <text>学号</text>
+            <text>喵喵号</text>
           </view>
           <input
-            v-model.trim="form.student_no"
+            v-model.trim="form.meow_no"
             class="field-input"
-            placeholder="请输入学号"
+            placeholder="请输入喵喵号"
             placeholder-class="input-placeholder"
             maxlength="64"
           />
@@ -112,7 +112,7 @@
         <image class="notice-cat" :src="loginCat" mode="aspectFit" />
         <view class="notice-copy">
           <text>本系统仅限校园猫协成员使用，</text>
-          <text>请使用学号登录并严格遵守任务与救助规范，</text>
+          <text>请使用喵喵号登录并严格遵守任务与救助规范，</text>
           <text>共同守护校园猫咪安全与健康。</text>
         </view>
       </view>
@@ -155,6 +155,7 @@
 import { onMounted, reactive, ref } from "vue";
 
 import { getCaptcha } from "@/api/auth";
+import { CHANGE_PASSWORD_ROUTE, HOME_ROUTE, PROFILE_SETUP_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
 import loginBackground from "../../../素材/登录页素材/登录页背景.png";
@@ -174,7 +175,7 @@ import pawLineIcon from "../../../素材/svg/登录页/猫爪-copy-copy.svg";
 const userStore = useUserStore();
 
 const form = reactive({
-  student_no: "",
+  meow_no: "",
   password: "",
   captcha_code: "",
   captcha_id: "",
@@ -216,8 +217,8 @@ async function loadCaptcha() {
 }
 
 function validateForm(): boolean {
-  if (!form.student_no) {
-    uni.showToast({ title: "请输入学号", icon: "none" });
+  if (!form.meow_no) {
+    uni.showToast({ title: "请输入喵喵号", icon: "none" });
     return false;
   }
 
@@ -247,18 +248,24 @@ async function handleLogin() {
   isLoading.value = true;
   try {
     const result = await userStore.loginWithPassword({
-      student_no: form.student_no,
+      meow_no: form.meow_no,
       password: form.password,
       captcha_id: form.captcha_id,
       captcha_code: form.captcha_code,
       agree_terms: form.agreed,
     });
-    if (result.must_change_password) {
+    if (result.next_action === "change_password" || result.must_change_password) {
       uni.showToast({ title: "请先修改初始密码", icon: "none" });
+      uni.redirectTo({ url: CHANGE_PASSWORD_ROUTE });
       return;
     }
 
-    uni.reLaunch({ url: "/pages/index/index" });
+    if (result.next_action === "complete_profile") {
+      uni.redirectTo({ url: PROFILE_SETUP_ROUTE });
+      return;
+    }
+
+    uni.reLaunch({ url: HOME_ROUTE });
   } catch (error) {
     const message = error instanceof Error ? error.message : "登录失败";
     uni.showToast({ title: message, icon: "none" });

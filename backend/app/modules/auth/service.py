@@ -1,3 +1,4 @@
+import re
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
@@ -25,6 +26,9 @@ from app.modules.auth.schemas import (
 
 VALID_ROLES = {"member", "admin"}
 VALID_STATUSES = {"active", "blocked", "left", "deleted"}
+MEOW_NO_PREFIX = "trmx"
+MEOW_NO_WIDTH = 4
+PASSWORD_ALLOWED_PATTERN = re.compile(r"^[A-Za-z0-9@_!]+$")
 
 
 def now_utc() -> datetime:
@@ -35,6 +39,19 @@ def as_utc(value: datetime) -> datetime:
     if value.tzinfo is None:
         return value.replace(tzinfo=UTC)
     return value.astimezone(UTC)
+
+
+def clean_initial_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    if stripped and set(stripped) == {"?"}:
+        return None
+    return value
+
+
+def clean_initial_display_text(value: str | None) -> str:
+    return clean_initial_text(value) or ""
 
 
 def create_captcha(
@@ -69,14 +86,28 @@ def profile_payload(profile: UserProfile | None) -> dict:
             "real_name": None,
             "department": None,
             "grade": None,
+            "contact_info": None,
         }
     return {
-        "nickname": profile.nickname,
+        "nickname": clean_initial_display_text(profile.nickname),
         "avatar_url": profile.avatar_url,
-        "real_name": profile.real_name,
-        "department": profile.department,
-        "grade": profile.grade,
+        "real_name": clean_initial_text(profile.real_name),
+        "department": clean_initial_text(profile.department),
+        "grade": clean_initial_text(profile.grade),
+        "contact_info": clean_initial_text(profile.contact_info),
     }
+
+
+def is_profile_completed(profile: UserProfile | None) -> bool:
+    return bool(profile and profile.profile_completed)
+
+
+def next_action_for(user: User) -> str:
+    if user.must_change_password:
+        return "change_password"
+    if not is_profile_completed(user.profile):
+        return "complete_profile"
+    return "enter_app"
 
 
 def login_user_payload(user: User) -> dict:
@@ -84,10 +115,12 @@ def login_user_payload(user: User) -> dict:
     return {
         "id": user.id,
         "student_no": user.student_no,
-        "nickname": profile.nickname if profile else "",
+        "meow_no": user.student_no,
+        "nickname": clean_initial_display_text(profile.nickname if profile else None),
         "avatar_url": profile.avatar_url if profile else None,
         "role": user.role,
         "status": user.status,
+        "profile_completed": is_profile_completed(profile),
     }
 
 
@@ -95,20 +128,36 @@ def current_user_payload(user: User) -> dict:
     return {
         "id": user.id,
         "student_no": user.student_no,
+        "meow_no": user.student_no,
         "role": user.role,
         "status": user.status,
         "must_change_password": user.must_change_password,
+        "profile_completed": is_profile_completed(user.profile),
         "profile": profile_payload(user.profile),
     }
 
 
 def validate_password_strength(password: str) -> None:
-    if len(password) < 8 or len(password) > 64:
+    if len(password) < 8 or len(password) > 20:
+        raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
+    if PASSWORD_ALLOWED_PATTERN.fullmatch(password) is None:
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
     if not any(character.isalpha() for character in password) or not any(
         character.isdigit() for character in password
     ):
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
+
+
+def generate_next_meow_no(db: Session) -> str:
+    values = db.scalars(
+        select(User.student_no).where(User.student_no.like(f"{MEOW_NO_PREFIX}%"))
+    ).all()
+    max_sequence = 0
+    for value in values:
+        suffix = value.removeprefix(MEOW_NO_PREFIX)
+        if suffix.isdigit():
+            max_sequence = max(max_sequence, int(suffix))
+    return f"{MEOW_NO_PREFIX}{max_sequence + 1:0{MEOW_NO_WIDTH}d}"
 
 
 def get_user_by_student_no(db: Session, student_no: str) -> User | None:
@@ -146,13 +195,13 @@ def login(db: Session, payload: LoginRequest) -> dict:
         raise APIError(code=ErrorCode.AGREEMENT_REQUIRED, message="未勾选协议", status_code=400)
 
     captcha = validate_captcha(db, payload.captcha_id, payload.captcha_code)
-    user = get_user_by_student_no(db, payload.student_no)
+    user = get_user_by_student_no(db, payload.account_no)
 
     if user is None:
         db.commit()
         raise APIError(
             code=ErrorCode.INVALID_CREDENTIALS,
-            message="学号或密码错误",
+            message="喵喵号或密码错误",
             status_code=401,
         )
     if user.status != "active":
@@ -169,7 +218,7 @@ def login(db: Session, payload: LoginRequest) -> dict:
         record_login_failure(db, user)
         raise APIError(
             code=ErrorCode.INVALID_CREDENTIALS,
-            message="学号或密码错误",
+            message="喵喵号或密码错误",
             status_code=401,
         )
 
@@ -192,6 +241,7 @@ def login(db: Session, payload: LoginRequest) -> dict:
         "token_type": "Bearer",
         "expires_in": settings.access_token_expire_seconds,
         "must_change_password": user.must_change_password,
+        "next_action": next_action_for(user),
         "user": login_user_payload(user),
     }
 
@@ -210,7 +260,7 @@ def renew_access_token(user: User) -> dict:
     }
 
 
-def change_password(db: Session, user: User, payload: ChangePasswordRequest) -> None:
+def change_password(db: Session, user: User, payload: ChangePasswordRequest) -> dict:
     if payload.new_password != payload.confirm_password:
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
     if not verify_password(payload.old_password, user.password_hash):
@@ -229,6 +279,23 @@ def change_password(db: Session, user: User, payload: ChangePasswordRequest) -> 
     user.login_failed_count = 0
     user.locked_until = None
     db.commit()
+    db.refresh(user)
+
+    settings = get_settings()
+    return {
+        "access_token": create_access_token(
+            user_id=user.id,
+            student_no=user.student_no,
+            role=user.role,
+            token_version=user.token_version,
+        ),
+        "token_type": "Bearer",
+        "expires_in": settings.access_token_expire_seconds,
+        "must_change_password": user.must_change_password,
+        "profile_completed": is_profile_completed(user.profile),
+        "token_invalidated": True,
+        "next_action": next_action_for(user),
+    }
 
 
 def log_admin_operation(
@@ -257,13 +324,15 @@ def log_admin_operation(
 def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequest) -> User:
     if payload.role not in VALID_ROLES:
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
-    validate_password_strength(payload.initial_password)
-    if get_user_by_student_no(db, payload.student_no):
-        raise APIError(code=ErrorCode.RESOURCE_EXISTS, message="学号已存在", status_code=409)
+    account_no = payload.account_no or generate_next_meow_no(db)
+    initial_password = payload.initial_password or account_no
+    validate_password_strength(initial_password)
+    if get_user_by_student_no(db, account_no):
+        raise APIError(code=ErrorCode.RESOURCE_EXISTS, message="喵喵号已存在", status_code=409)
 
     user = User(
-        student_no=payload.student_no,
-        password_hash=hash_password(payload.initial_password),
+        student_no=account_no,
+        password_hash=hash_password(initial_password),
         role=payload.role,
         status="active",
         must_change_password=payload.must_change_password,
@@ -274,11 +343,12 @@ def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequ
     db.add(
         UserProfile(
             user_id=user.id,
-            nickname=payload.profile.nickname,
-            real_name=payload.profile.real_name,
-            department=payload.profile.department,
-            grade=payload.profile.grade,
+            nickname=clean_initial_display_text(payload.profile.nickname),
+            real_name=clean_initial_text(payload.profile.real_name),
+            department=clean_initial_text(payload.profile.department),
+            grade=clean_initial_text(payload.profile.grade),
             joined_at=payload.profile.joined_at,
+            profile_completed=False,
         )
     )
     log_admin_operation(
@@ -287,7 +357,7 @@ def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequ
         operation_type="user_create",
         target_id=user.id,
         summary=f"创建成员账号 {user.student_no}",
-        after_data={"student_no": user.student_no, "role": user.role},
+        after_data={"meow_no": user.student_no, "role": user.role},
     )
     db.commit()
     db.refresh(user)
@@ -329,9 +399,11 @@ def list_users(
             {
                 "id": user.id,
                 "student_no": user.student_no,
+                "meow_no": user.student_no,
                 "role": user.role,
                 "status": user.status,
                 "must_change_password": user.must_change_password,
+                "profile_completed": is_profile_completed(user.profile),
                 "last_login_at": user.last_login_at,
                 "profile": profile_payload(user.profile),
             }

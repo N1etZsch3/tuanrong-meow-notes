@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.responses import api_success
 from app.db.session import get_db
-from app.modules.auth.dependencies import require_password_changed
+from app.modules.auth.dependencies import require_profile_completed
 from app.modules.auth.models import User
 from app.modules.map import service
 
@@ -17,7 +17,7 @@ def init_map(
     request: Request,
     campus_id: UUID | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_password_changed),
+    current_user: User = Depends(require_profile_completed),
 ):
     data = service.map_init(db, campus_id=campus_id)
     return api_success(data=data, trace_id=request.state.trace_id)
@@ -37,7 +37,7 @@ def list_points(
     user_lng: float | None = None,
     user_lat: float | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_password_changed),
+    current_user: User = Depends(require_profile_completed),
 ):
     data = service.map_points(
         db,
@@ -66,7 +66,7 @@ def search_map(
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_password_changed),
+    current_user: User = Depends(require_profile_completed),
 ):
     data = service.search(
         db,
@@ -88,7 +88,7 @@ def point_summary(
     user_lng: float | None = None,
     user_lat: float | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_password_changed),
+    current_user: User = Depends(require_profile_completed),
 ):
     data = service.summary(db, point_id=point_id, user_lng=user_lng, user_lat=user_lat)
     return api_success(data=data, trace_id=request.state.trace_id)
@@ -99,7 +99,7 @@ def point_navigation(
     point_id: UUID,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_password_changed),
+    current_user: User = Depends(require_profile_completed),
 ):
     data = service.navigation(db, point_id=point_id)
     return api_success(data=data, trace_id=request.state.trace_id)
@@ -111,7 +111,7 @@ def bottom_content(
     mode: str = "auto",
     limit: int = Query(default=10, ge=1, le=50),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_password_changed),
+    current_user: User = Depends(require_profile_completed),
 ):
     data = service.bottom_content(db, mode=mode, limit=limit)
     return api_success(data=data, trace_id=request.state.trace_id)

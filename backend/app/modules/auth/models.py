@@ -68,6 +68,8 @@ class UserProfile(Base):
     joined_at: Mapped[date | None] = mapped_column(Date)
     bio: Mapped[str | None] = mapped_column(Text)
     contact_info: Mapped[str | None] = mapped_column(String(128))
+    profile_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    profile_completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

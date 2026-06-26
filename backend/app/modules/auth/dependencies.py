@@ -51,6 +51,16 @@ def require_password_changed(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def require_profile_completed(user: User = Depends(require_password_changed)) -> User:
+    if not user.profile or not user.profile.profile_completed:
+        raise APIError(
+            code=ErrorCode.PROFILE_INCOMPLETE,
+            message="请先完成个人资料初始化",
+            status_code=403,
+        )
+    return user
+
+
 def require_admin(user: User = Depends(require_password_changed)) -> User:
     if user.role not in {"admin", "super_admin"}:
         raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)

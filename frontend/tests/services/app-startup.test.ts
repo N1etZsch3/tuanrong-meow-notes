@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  CHANGE_PASSWORD_ROUTE,
   HOME_ROUTE,
   LOGIN_ROUTE,
+  PROFILE_SETUP_ROUTE,
   resolveStartupRoute,
   type StartupUserSession,
 } from "@/services/app-startup";
@@ -16,6 +18,7 @@ const currentUser: CurrentUser = {
   nickname: "小林",
   avatar_url: null,
   must_change_password: false,
+  profile_completed: true,
 };
 
 function createSession(
@@ -53,6 +56,42 @@ describe("app startup flow", () => {
     ).resolves.toBe(HOME_ROUTE);
     expect(session.refreshCurrentUser).toHaveBeenCalledTimes(1);
     expect(initializeResources).toHaveBeenCalledWith(currentUser);
+  });
+
+  it("routes to change password when the current user must update the initial password", async () => {
+    const mustChangeUser: CurrentUser = {
+      ...currentUser,
+      must_change_password: true,
+      profile_completed: false,
+    };
+    const session = createSession(
+      "token-1",
+      vi.fn().mockResolvedValue(mustChangeUser),
+    );
+    const initializeResources = vi.fn();
+
+    await expect(
+      resolveStartupRoute(session, initializeResources),
+    ).resolves.toBe(CHANGE_PASSWORD_ROUTE);
+    expect(initializeResources).not.toHaveBeenCalled();
+  });
+
+  it("routes to profile setup when identity initialization is incomplete", async () => {
+    const incompleteProfileUser: CurrentUser = {
+      ...currentUser,
+      must_change_password: false,
+      profile_completed: false,
+    };
+    const session = createSession(
+      "token-1",
+      vi.fn().mockResolvedValue(incompleteProfileUser),
+    );
+    const initializeResources = vi.fn();
+
+    await expect(
+      resolveStartupRoute(session, initializeResources),
+    ).resolves.toBe(PROFILE_SETUP_ROUTE);
+    expect(initializeResources).not.toHaveBeenCalled();
   });
 
   it("clears stale session and routes to login when user refresh fails", async () => {

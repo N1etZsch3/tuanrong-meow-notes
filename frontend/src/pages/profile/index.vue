@@ -1,38 +1,511 @@
 <template>
-  <view class="page">
-    <DefaultState
-      state="under_development"
-      title="个人中心建设中"
-      description="个人资料、任务记录、通知入口和管理员入口正在接入。"
-      primary-label="刷新页面"
-      primary-icon="refresh"
-      secondary-label="返回地图"
-      secondary-icon="map"
-      with-tab-bar
-      @primary="refreshPage"
-      @secondary="goMap"
-    />
+  <view class="profile-page">
+    <scroll-view class="profile-scroll" scroll-y>
+      <view class="page-inner">
+        <view class="hero">
+          <view>
+            <text class="hero-title">我的</text>
+            <text class="hero-subtitle">个人信息与任务记录</text>
+          </view>
+          <image class="hero-cat" :src="catLineArt" mode="aspectFit" />
+        </view>
+
+        <view class="profile-card" @tap="goProfileDetail">
+          <image class="avatar" :src="profileAvatar" mode="aspectFill" />
+          <view class="profile-main">
+            <view class="name-row">
+              <text class="nickname">{{ dashboard?.profile.nickname || "未命名成员" }}</text>
+              <text class="role-pill">{{ roleLabel }}</text>
+            </view>
+            <text class="meta-line">喵喵号 {{ dashboard?.profile.meow_no || "--" }}</text>
+            <text class="meta-line">部门：{{ dashboard?.profile.department || "未设置" }}</text>
+          </view>
+          <text class="chevron">›</text>
+          <view class="paw-mark" />
+        </view>
+
+        <view class="stats-card">
+          <button
+            v-for="item in PROFILE_STAT_ENTRIES"
+            :key="item.key"
+            class="stat-button"
+            :class="`stat-${item.color}`"
+            @tap="goRecord(item.recordType)"
+          >
+            <text class="stat-icon">{{ item.icon }}</text>
+            <text class="stat-label">{{ item.label }}</text>
+            <text class="stat-value">{{ getStatValue(dashboard?.stats || null, item.key) }}</text>
+          </button>
+        </view>
+
+        <button class="favorite-card" @tap="goRecord('favorite_cats')">
+          <view class="favorite-copy">
+            <text class="favorite-title">收藏猫咪</text>
+            <text class="favorite-subtitle">查看你收藏的猫咪们</text>
+            <text class="favorite-action">›</text>
+          </view>
+          <image class="favorite-image" :src="favoriteCat" mode="aspectFit" />
+        </button>
+
+        <view class="menu-card">
+          <button class="menu-row" @tap="goProfileDetail">
+            <text class="menu-icon">⚙</text>
+            <text class="menu-label">账号设置</text>
+            <text class="menu-chevron">›</text>
+          </button>
+          <button class="menu-row" @tap="showPendingToast('消息通知')">
+            <text class="menu-icon">♧</text>
+            <text class="menu-label">消息通知</text>
+            <text class="menu-chevron">›</text>
+          </button>
+          <button class="menu-row" @tap="showPendingToast('帮助与反馈')">
+            <text class="menu-icon">?</text>
+            <text class="menu-label">帮助与反馈</text>
+            <text class="menu-chevron">›</text>
+          </button>
+          <button v-if="dashboard?.profile.show_admin_entry" class="menu-row" @tap="goAdmin">
+            <text class="menu-icon">▣</text>
+            <text class="menu-label">管理员入口</text>
+            <text class="menu-chevron">›</text>
+          </button>
+        </view>
+
+        <button class="logout-button" @tap="confirmLogout">退出登录</button>
+
+        <view v-if="isLoading" class="state-line">正在加载个人中心...</view>
+        <view v-else-if="errorMessage" class="state-line is-error" @tap="loadDashboard">
+          {{ errorMessage }}
+        </view>
+      </view>
+    </scroll-view>
     <AppTabBar active-key="profile" />
   </view>
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from "vue";
+import { onShow } from "@dcloudio/uni-app";
+
+import { getMeDashboard, type MeDashboardResponse } from "@/api/me";
 import AppTabBar from "@/components/AppTabBar.vue";
-import DefaultState from "@/components/DefaultState.vue";
+import { LOGIN_ROUTE } from "@/services/app-startup";
+import { useUserStore } from "@/stores/user";
 
-function refreshPage() {
-  uni.showToast({ title: "个人中心暂未接入", icon: "none" });
+import {
+  PROFILE_STAT_ENTRIES,
+  buildRecordRoute,
+  getRoleLabel,
+  getStatValue,
+  type ProfileRecordType,
+} from "./profile-page";
+import defaultAvatar from "../../../素材/svg/萌猫/橘猫.svg";
+import catLineArt from "../../../素材/svg/萌猫/猫.svg";
+import favoriteCat from "../../../素材/svg/用户页/猫咪插画.svg";
+
+const userStore = useUserStore();
+const dashboard = ref<MeDashboardResponse | null>(null);
+const isLoading = ref(false);
+const errorMessage = ref("");
+
+const profileAvatar = computed(
+  () => dashboard.value?.profile.avatar_url || userStore.currentUser?.avatar_url || defaultAvatar,
+);
+const roleLabel = computed(() => getRoleLabel(dashboard.value?.profile.role || userStore.currentUser?.role));
+
+async function loadDashboard() {
+  const accessToken = await userStore.ensureFreshAccessToken();
+  if (!accessToken) {
+    uni.reLaunch({ url: LOGIN_ROUTE });
+    return;
+  }
+
+  isLoading.value = true;
+  errorMessage.value = "";
+  try {
+    dashboard.value = await getMeDashboard(accessToken);
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : "个人中心加载失败";
+  } finally {
+    isLoading.value = false;
+  }
 }
 
-function goMap() {
-  uni.reLaunch({ url: "/pages/index/index" });
+function goProfileDetail() {
+  uni.navigateTo({ url: "/pages/profile/detail" });
 }
+
+function goRecord(type: ProfileRecordType) {
+  uni.navigateTo({ url: buildRecordRoute(type) });
+}
+
+function goAdmin() {
+  uni.navigateTo({ url: "/pages/admin/index" });
+}
+
+function showPendingToast(title: string) {
+  uni.showToast({ title: `${title}暂未开放`, icon: "none" });
+}
+
+function confirmLogout() {
+  uni.showModal({
+    title: "退出登录",
+    content: "确认退出当前账号吗？",
+    confirmText: "退出",
+    success: async (result) => {
+      if (!result.confirm) {
+        return;
+      }
+      try {
+        await userStore.logoutFromServer();
+      } finally {
+        uni.reLaunch({ url: LOGIN_ROUTE });
+      }
+    },
+  });
+}
+
+onShow(() => {
+  void loadDashboard();
+});
 </script>
 
 <style scoped>
-.page {
+.profile-page {
+  height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 84% 12%, rgba(225, 242, 214, 0.72) 0, rgba(225, 242, 214, 0) 180rpx),
+    linear-gradient(180deg, #fbfcfb 0%, #f6faf2 100%);
+  color: #20242a;
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+}
+
+.profile-scroll {
   height: 100vh;
   box-sizing: border-box;
+}
+
+.page-inner {
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 92rpx 38rpx calc(env(safe-area-inset-bottom) + 164rpx);
+}
+
+.hero {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 44rpx;
+}
+
+.hero-title,
+.hero-subtitle {
+  display: block;
+}
+
+.hero-title {
+  color: #16191f;
+  font-size: 62rpx;
+  font-weight: 900;
+  line-height: 1.1;
+}
+
+.hero-subtitle {
+  margin-top: 12rpx;
+  color: #5f6670;
+  font-size: 27rpx;
+}
+
+.hero-cat {
+  width: 126rpx;
+  height: 102rpx;
+}
+
+.profile-card,
+.stats-card,
+.favorite-card,
+.menu-card {
+  box-sizing: border-box;
+  border-radius: 30rpx;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 16rpx 42rpx rgba(42, 63, 43, 0.1);
+}
+
+.profile-card {
+  position: relative;
+  min-height: 196rpx;
+  padding: 34rpx 54rpx 34rpx 34rpx;
+  display: flex;
+  align-items: center;
+  gap: 30rpx;
   overflow: hidden;
+}
+
+.avatar {
+  width: 132rpx;
+  height: 132rpx;
+  border: 6rpx solid #ffffff;
+  border-radius: 50%;
+  background: #edf6e9;
+  flex: 0 0 auto;
+}
+
+.profile-main {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  flex: 1;
+}
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  min-width: 0;
+}
+
+.nickname {
+  overflow: hidden;
+  color: #171b22;
+  font-size: 36rpx;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.role-pill {
+  border-radius: 12rpx;
+  background: #e3f1d6;
+  color: #2f8037;
+  flex: 0 0 auto;
+  font-size: 22rpx;
+  font-weight: 800;
+  padding: 8rpx 14rpx;
+}
+
+.meta-line {
+  display: block;
+  margin-top: 14rpx;
+  color: #555c67;
+  font-size: 25rpx;
+  line-height: 1.2;
+}
+
+.chevron,
+.menu-chevron {
+  color: #69717d;
+  font-size: 58rpx;
+  line-height: 1;
+}
+
+.paw-mark {
+  position: absolute;
+  right: -12rpx;
+  bottom: -24rpx;
+  width: 180rpx;
+  height: 122rpx;
+  border-radius: 100rpx 100rpx 0 0;
+  background: rgba(196, 229, 180, 0.46);
+}
+
+.stats-card {
+  margin-top: 26rpx;
+  padding: 34rpx 14rpx;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.stat-button {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12rpx;
+  line-height: 1;
+}
+
+.stat-button::after,
+.favorite-card::after,
+.menu-row::after,
+.logout-button::after {
+  border: 0;
+}
+
+.stat-button + .stat-button {
+  border-left: 2rpx solid #e7ece7;
+}
+
+.stat-icon {
+  width: 54rpx;
+  height: 54rpx;
+  border-radius: 16rpx;
+  color: #ffffff;
+  font-size: 34rpx;
+  font-weight: 900;
+  line-height: 54rpx;
+  text-align: center;
+}
+
+.stat-green .stat-icon {
+  background: #278331;
+}
+
+.stat-blue .stat-icon {
+  background: #4a85f4;
+}
+
+.stat-orange .stat-icon {
+  background: #f47b24;
+}
+
+.stat-purple .stat-icon {
+  background: #8056df;
+}
+
+.stat-label {
+  color: #4d535d;
+  font-size: 24rpx;
+}
+
+.stat-value {
+  color: currentColor;
+  font-size: 40rpx;
+  font-weight: 900;
+}
+
+.stat-green {
+  color: #278331;
+}
+
+.stat-blue {
+  color: #4a85f4;
+}
+
+.stat-orange {
+  color: #f47b24;
+}
+
+.stat-purple {
+  color: #8056df;
+}
+
+.favorite-card {
+  width: 100%;
+  min-height: 180rpx;
+  margin: 28rpx 0 0;
+  padding: 26rpx 34rpx;
+  border: 2rpx solid rgba(226, 241, 218, 0.95);
+  background: linear-gradient(100deg, #f8fff2 0%, #ffffff 52%, #eef9e6 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+}
+
+.favorite-copy {
+  min-width: 0;
+}
+
+.favorite-title,
+.favorite-subtitle,
+.favorite-action {
+  display: block;
+}
+
+.favorite-title {
+  color: #1c2026;
+  font-size: 34rpx;
+  font-weight: 900;
+}
+
+.favorite-subtitle {
+  margin-top: 14rpx;
+  color: #626a75;
+  font-size: 25rpx;
+}
+
+.favorite-action {
+  width: 54rpx;
+  height: 54rpx;
+  margin-top: 24rpx;
+  border-radius: 50%;
+  background: #6caf55;
+  color: #ffffff;
+  font-size: 52rpx;
+  line-height: 44rpx;
+  text-align: center;
+}
+
+.favorite-image {
+  width: 232rpx;
+  height: 150rpx;
+  flex: 0 0 auto;
+}
+
+.menu-card {
+  margin-top: 28rpx;
+  padding: 16rpx 26rpx;
+}
+
+.menu-row {
+  height: 100rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #2c3036;
+  display: flex;
+  align-items: center;
+  text-align: left;
+}
+
+.menu-row + .menu-row {
+  border-top: 2rpx solid #eef1ef;
+}
+
+.menu-icon {
+  width: 68rpx;
+  color: #2f8037;
+  font-size: 38rpx;
+  font-weight: 900;
+}
+
+.menu-label {
+  flex: 1;
+  color: #2c3036;
+  font-size: 28rpx;
+}
+
+.menu-chevron {
+  font-size: 46rpx;
+}
+
+.logout-button {
+  width: 100%;
+  height: 86rpx;
+  margin: 28rpx 0 0;
+  border-radius: 26rpx;
+  background: #fff5f2;
+  color: #c34839;
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 86rpx;
+}
+
+.state-line {
+  margin-top: 22rpx;
+  color: #767d85;
+  font-size: 24rpx;
+  text-align: center;
+}
+
+.state-line.is-error {
+  color: #c34839;
 }
 </style>

@@ -52,10 +52,29 @@ export interface MapShellItem {
   icon_key?: string | null;
 }
 
+export interface CampusExternalPoiResult {
+  id: string;
+  title: string;
+  address: string | null;
+  lng: number;
+  lat: number;
+}
+
 export interface MapFilterOption {
   key: MapFilterKey;
   label: string;
   description: string;
+}
+
+export type MapMarkerDisplayMode = "icon" | "label" | "preview";
+
+export interface MapMarkerDisplayModeInput {
+  zoom: number;
+  visibleMarkerCount: number;
+  previewEnabled?: boolean;
+  labelMinZoom?: number | null;
+  previewMinZoom?: number | null;
+  selected?: boolean;
 }
 
 export const ALL_MAP_FILTER_KEY: MapFilterKey = "all";
@@ -141,6 +160,49 @@ export function isMapShellItemVisibleByFilter(
   filterKey: MapFilterKey,
 ): boolean {
   return filterKey === ALL_MAP_FILTER_KEY || item.type === filterKey;
+}
+
+export function getMarkerDisplayMode(
+  input: MapMarkerDisplayModeInput,
+): MapMarkerDisplayMode {
+  const previewEnabled = input.previewEnabled !== false;
+  const labelMinZoom = input.labelMinZoom ?? 16;
+  const previewMinZoom = input.previewMinZoom ?? 15;
+
+  if (previewEnabled && (input.selected || input.visibleMarkerCount <= 2)) {
+    return "preview";
+  }
+
+  if (input.visibleMarkerCount >= 8 || input.zoom >= labelMinZoom + 2) {
+    return "icon";
+  }
+
+  if (input.zoom >= labelMinZoom || input.zoom >= previewMinZoom) {
+    return "label";
+  }
+
+  return "icon";
+}
+
+export function isLngLatInsideBounds(
+  point: LngLat,
+  bounds: LngLatBounds,
+): boolean {
+  return (
+    point.lng >= bounds.south_west.lng &&
+    point.lng <= bounds.north_east.lng &&
+    point.lat >= bounds.south_west.lat &&
+    point.lat <= bounds.north_east.lat
+  );
+}
+
+export function filterCampusExternalPoiResults(
+  results: CampusExternalPoiResult[],
+  bounds: LngLatBounds,
+): CampusExternalPoiResult[] {
+  return results.filter((result) =>
+    isLngLatInsideBounds({ lng: result.lng, lat: result.lat }, bounds),
+  );
 }
 
 export function searchMapShellItems(

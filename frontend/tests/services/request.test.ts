@@ -68,6 +68,26 @@ describe("request service", () => {
     );
   });
 
+  it("treats aborted map requests as canceled without routing to login", async () => {
+    const reLaunch = vi.fn();
+    vi.stubGlobal("uni", {
+      reLaunch,
+      request: (options: UniNamespace.RequestOptions) => {
+        options.fail?.({
+          errMsg: "request:fail NS_BINDING_ABORTED",
+        } as UniNamespace.GeneralCallbackResult);
+      },
+    });
+
+    await expect(
+      request({ url: "/map/points", token: "token-1" }),
+    ).rejects.toMatchObject({
+      name: "ApiRequestCanceledError",
+      message: "request:fail NS_BINDING_ABORTED",
+    });
+    expect(reLaunch).not.toHaveBeenCalled();
+  });
+
   it("clears session and routes to login when token is expired", async () => {
     const removeStorageSync = vi.fn();
     const reLaunch = vi.fn((options: UniNamespace.ReLaunchOptions) => {

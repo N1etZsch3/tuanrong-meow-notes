@@ -26,6 +26,8 @@
         :latitude="mapCenter.lat"
         :scale="Math.round(campusMapConfig.default_zoom)"
         :markers="nativeMapMarkers"
+        :polyline="nativeMapPolylines"
+        :include-points="nativeMapIncludePoints"
         :show-location="false"
         :enable-zoom="true"
         :enable-scroll="true"
@@ -47,9 +49,9 @@
           hover-class="filter-chip-hover"
           @tap="toggleFilterMenu"
         >
-          <text class="filter-placeholder-icon">筛</text>
+          <image class="filter-chip-icon" :src="activeFilterIcon" mode="aspectFit" />
           <text class="filter-label">{{ activeFilterLabel }}</text>
-          <text class="filter-chevron" :class="{ 'is-open': filterMenuOpen }">⌄</text>
+          <view class="filter-chevron-mark" :class="{ 'is-open': filterMenuOpen }" />
         </button>
         <view v-if="filterMenuOpen" class="filter-menu">
           <button
@@ -59,8 +61,15 @@
             :class="{ 'is-active': option.key === activeFilter }"
             @tap="selectFilter(option.key)"
           >
-            <text class="filter-option-title">{{ option.label }}</text>
-            <text class="filter-option-desc">{{ option.description }}</text>
+            <image
+              class="filter-option-icon"
+              :src="getFilterOptionIcon(option.key)"
+              mode="aspectFit"
+            />
+            <view class="filter-option-copy">
+              <text class="filter-option-title">{{ option.label }}</text>
+              <text class="filter-option-desc">{{ option.description }}</text>
+            </view>
           </button>
         </view>
       </view>
@@ -217,9 +226,15 @@ import {
 } from "@/api/map";
 import AppTabBar from "@/components/AppTabBar.vue";
 import { appEnv } from "@/config/app-env";
-import { ApiBusinessError } from "@/services/request";
+import { ApiBusinessError, isRequestCanceledError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
 
+import allMarkerPointIcon from "../../../素材/svg/地图点/事件工单-待办.svg";
+import catPointMarkerIcon from "../../../素材/svg/地图点/1.svg";
+import dailyTaskPointIcon from "../../../素材/svg/地图点/待办.svg";
+import emergencyTaskPointIcon from "../../../素材/svg/地图点/风险危险源.svg";
+import landmarkPointIcon from "../../../素材/svg/地图点/10.svg";
+import supplyPointMarkerIcon from "../../../素材/svg/地图点/-s-个体户.svg";
 import catMarkerIcon from "../../../素材/svg/默认/暂时不用/cat-marker.svg";
 import emergencyMarkerIcon from "../../../素材/svg/默认/暂时不用/emergency-marker.svg";
 import locationIcon from "../../../素材/svg/菜单/定位.svg";
@@ -233,18 +248,22 @@ import {
   HBNU_CAMPUS_CORE_BOUNDS,
   MAP_FILTER_OPTIONS,
   expandLngLatBounds,
+  filterCampusExternalPoiResults,
   formatDistance,
   getMapFilterLabel,
   getMapPointQueryByFilter,
+  getMarkerDisplayMode,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
   mapSearchResultToShellItem,
   resolveMapShellItemType,
+  type CampusExternalPoiResult,
   type MapFilterKey,
   type CampusMapConfig,
   type LngLat,
   type MapShellItem,
   type MapShellItemType,
+  type MapMarkerDisplayMode,
 } from "./map-page";
 
 type MapLoadState = "idle" | "loading" | "ready" | "error";
@@ -257,46 +276,71 @@ const drawerConfig = ref({
   windowHeight: sysInfo.windowHeight,
 });
 const filterMenuOpen = ref(false);
-const activeFilter = ref<MapFilterKey>(ALL_MAP_FILTER_KEY);
+const activeFilter = ref<MapFilterKey | null>(null);
 const searchKeyword = ref("");
 const mapLoadState = ref<MapLoadState>("idle");
 const currentDrawerProgress = ref(1);
+const currentMapZoom = ref(HBNU_CAMPUS.default_zoom);
 
 function onDrawerProgressChange(progress: number) {
   currentDrawerProgress.value = progress;
-  // If progress is 0, we could unfocus search if needed, etc.
+  scheduleMapResizeAfterDrawerChange();
 }
 const contentLoadState = ref<ContentLoadState>("idle");
 const contentErrorMessage = ref("");
 const campusMapConfig = ref<CampusMapConfig>(HBNU_CAMPUS);
 const mapCenter = ref<LngLat>({ ...HBNU_CAMPUS.center });
+const userLocation = ref<LngLat | null>(null);
 const mapPointMarkers = ref<MapPointMarkerDto[]>([]);
+const nativeRoutePoints = ref<Array<{ longitude: number; latitude: number }>>([]);
 const bottomContentItems = ref<MapShellItem[]>([]);
 const searchResultItems = ref<MapShellItem[]>([]);
 const selectedSummary = ref<MapPointSummaryResponse | null>(null);
+const selectedExternalTarget = ref<MapShellItem | null>(null);
 const amapRuntimeConfig = ref({
   web_key: appEnv.amapWebKey,
   security_js_code: appEnv.amapSecurityJsCode,
   map_style: "amap://styles/fresh",
 });
 const supportsAmapWeb = typeof window !== "undefined" && typeof document !== "undefined";
+const MAP_FILTER_ICON_SRC: Record<MapFilterKey, string> = {
+  all: allMarkerPointIcon,
+  emergency_task: emergencyTaskPointIcon,
+  daily_task: dailyTaskPointIcon,
+  cat: catPointMarkerIcon,
+  supply: supplyPointMarkerIcon,
+  landmark: landmarkPointIcon,
+};
 
 let amapInstance: any = null;
 let amapScriptElement: HTMLScriptElement | null = null;
 let amapMarkers: any[] = [];
+let userLocationMarker: any = null;
+let walkingRouteRenderer: any = null;
+let directRoutePolyline: any = null;
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let mapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let mapResizeTimer: ReturnType<typeof setTimeout> | null = null;
 
 const isPageVisible = ref(true);
 const isSearchMode = computed(() => searchKeyword.value.trim().length > 0);
-const activeFilterLabel = computed(() => getMapFilterLabel(activeFilter.value));
+const activeFilterLabel = computed(() =>
+  activeFilter.value ? getMapFilterLabel(activeFilter.value) : "选择标记",
+);
+const activeFilterIcon = computed(() =>
+  activeFilter.value ? MAP_FILTER_ICON_SRC[activeFilter.value] : allMarkerPointIcon,
+);
 const visibleItems = computed(() => {
   const items = isSearchMode.value
     ? searchResultItems.value
     : bottomContentItems.value;
 
   return items.filter((item) => {
-    return activeFilter.value === ALL_MAP_FILTER_KEY || item.type === activeFilter.value;
+    return (
+      !activeFilter.value ||
+      activeFilter.value === ALL_MAP_FILTER_KEY ||
+      item.type === activeFilter.value
+    );
   });
 });
 const summaryType = computed<MapShellItemType>(() => {
@@ -371,6 +415,24 @@ const nativeMapMarkers = computed(() => {
     };
   });
 });
+const nativeMapPolylines = computed(() => {
+  if (nativeRoutePoints.value.length < 2) {
+    return [];
+  }
+
+  return [
+    {
+      points: nativeRoutePoints.value,
+      color: "#267b2fCC",
+      width: 6,
+      dottedLine: false,
+      arrowLine: true,
+      borderColor: "#ffffff",
+      borderWidth: 2,
+    },
+  ];
+});
+const nativeMapIncludePoints = computed(() => nativeRoutePoints.value);
 
 function toggleFilterMenu() {
   filterMenuOpen.value = !filterMenuOpen.value;
@@ -379,6 +441,10 @@ function toggleFilterMenu() {
 function selectFilter(filterKey: MapFilterKey) {
   activeFilter.value = filterKey;
   filterMenuOpen.value = false;
+}
+
+function getFilterOptionIcon(filterKey: MapFilterKey): string {
+  return MAP_FILTER_ICON_SRC[filterKey];
 }
 
 
@@ -390,7 +456,19 @@ function focusSearch() {
 
 function clearSearch() {
   searchKeyword.value = "";
+  searchResultItems.value = [];
   selectedSummary.value = null;
+  selectedExternalTarget.value = null;
+  clearSearchResultMarkers();
+}
+
+function clearSearchResultMarkers() {
+  if (activeFilter.value) {
+    return;
+  }
+
+  mapPointMarkers.value = [];
+  clearAmapMarkers();
 }
 
 function selectFirstSearchResult() {
@@ -406,7 +484,13 @@ function selectShellItem(item: MapShellItem) {
   }
 
   if (item.map_point_id) {
+    selectedExternalTarget.value = null;
     void loadPointSummary(item.map_point_id);
+    return;
+  }
+
+  if (item.lng !== undefined && item.lat !== undefined) {
+    showSearchPointSummary(item);
   }
 }
 
@@ -463,6 +547,10 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 function handleMapError(error: unknown, fallbackMessage: string) {
+  if (isRequestCanceledError(error)) {
+    return;
+  }
+
   if (error instanceof ApiBusinessError) {
     contentErrorMessage.value = error.message;
     if (error.code === 40101 || error.code === 40102 || error.code === 40301) {
@@ -494,6 +582,420 @@ function centerMapToCampus() {
       campusMapConfig.value.center.lat,
     ]);
   }
+}
+
+function getAmapPositionLngLat(position: any): LngLat | null {
+  if (!position) {
+    return null;
+  }
+
+  if (typeof position.lng === "number" && typeof position.lat === "number") {
+    return { lng: position.lng, lat: position.lat };
+  }
+
+  if (typeof position.getLng === "function" && typeof position.getLat === "function") {
+    return { lng: position.getLng(), lat: position.getLat() };
+  }
+
+  return null;
+}
+
+function clearUserLocationMarker() {
+  if (amapInstance && userLocationMarker) {
+    amapInstance.remove(userLocationMarker);
+  }
+
+  userLocationMarker = null;
+}
+
+function renderUserLocationMarker(point: LngLat) {
+  if (!supportsAmapWeb || !window.AMap || !amapInstance) {
+    return;
+  }
+
+  clearUserLocationMarker();
+  userLocationMarker = new window.AMap.Marker({
+    position: [point.lng, point.lat],
+    zIndex: 200,
+    offset: new window.AMap.Pixel(0, 0),
+    content: `
+      <div style="position:relative;transform:translate(-50%,-100%);">
+        <div style="width:32px;height:32px;border-radius:18px;background:#267b2f;border:3px solid #fff;box-shadow:0 8px 18px rgba(17,24,39,.2);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px;font-weight:900;">我</div>
+        <div style="position:absolute;left:50%;top:30px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid #267b2f;transform:translateX(-50%);"></div>
+      </div>
+    `,
+  });
+  amapInstance.add(userLocationMarker);
+}
+
+function setUserLocation(point: LngLat) {
+  userLocation.value = point;
+  renderUserLocationMarker(point);
+}
+
+function getCurrentLocationForNavigation(): Promise<LngLat | null> {
+  if (userLocation.value) {
+    return Promise.resolve(userLocation.value);
+  }
+
+  return new Promise((resolve) => {
+    uni.getLocation({
+      type: "gcj02",
+      success: (location) => {
+        const point = {
+          lng: location.longitude,
+          lat: location.latitude,
+        };
+        setUserLocation(point);
+        resolve(point);
+      },
+      fail: () => {
+        resolve(null);
+      },
+    });
+  });
+}
+
+function clearAmapRoute() {
+  if (walkingRouteRenderer?.clear) {
+    walkingRouteRenderer.clear();
+  }
+
+  if (amapInstance && directRoutePolyline) {
+    amapInstance.remove(directRoutePolyline);
+  }
+
+  walkingRouteRenderer = null;
+  directRoutePolyline = null;
+  nativeRoutePoints.value = [];
+}
+
+function renderNativeRoute(from: LngLat, destination: LngLat) {
+  clearAmapRoute();
+  nativeRoutePoints.value = [
+    { longitude: from.lng, latitude: from.lat },
+    { longitude: destination.lng, latitude: destination.lat },
+  ];
+  mapCenter.value = {
+    lng: (from.lng + destination.lng) / 2,
+    lat: (from.lat + destination.lat) / 2,
+  };
+}
+
+function renderFallbackRoute(from: LngLat, destination: LngLat) {
+  if (!supportsAmapWeb || !window.AMap || !amapInstance) {
+    renderNativeRoute(from, destination);
+    return;
+  }
+
+  clearAmapRoute();
+  directRoutePolyline = new window.AMap.Polyline({
+    path: [
+      [from.lng, from.lat],
+      [destination.lng, destination.lat],
+    ],
+    strokeColor: "#267b2f",
+    strokeWeight: 6,
+    strokeOpacity: 0.78,
+    lineJoin: "round",
+  });
+  amapInstance.add(directRoutePolyline);
+  amapInstance.setFitView([directRoutePolyline, userLocationMarker].filter(Boolean), false, [80, 60, 240, 60]);
+}
+
+function renderAmapWalkingRoute(from: LngLat, destination: LngLat) {
+  if (!supportsAmapWeb || !window.AMap || !amapInstance) {
+    return;
+  }
+
+  clearAmapRoute();
+  window.AMap.plugin("AMap.Walking", () => {
+    walkingRouteRenderer = new window.AMap.Walking({
+      map: amapInstance,
+      hideMarkers: false,
+      autoFitView: true,
+    });
+    walkingRouteRenderer.search(
+      [from.lng, from.lat],
+      [destination.lng, destination.lat],
+      (status: string) => {
+        if (status !== "complete") {
+          renderFallbackRoute(from, destination);
+        }
+      },
+    );
+  });
+}
+
+function mapExternalPoiToShellItem(poi: CampusExternalPoiResult): MapShellItem {
+  return {
+    id: `amap-poi-${poi.id}`,
+    type: "landmark",
+    title: poi.title,
+    subtitle: poi.address || "湖北师范大学校内地点",
+    description: poi.address || "校园范围内地址",
+    distance_meters: null,
+    status_label: "导航",
+    tag_label: getMapFilterLabel("landmark"),
+    lng: poi.lng,
+    lat: poi.lat,
+    icon_key: "landmark",
+  };
+}
+
+function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | null {
+  if (item.lng === undefined || item.lat === undefined) {
+    return null;
+  }
+
+  const isTask = item.type === "emergency_task" || item.type === "daily_task";
+  const pointType = isTask ? "task" : item.type;
+  const businessType =
+    item.type === "emergency_task"
+      ? "emergency"
+      : item.type === "daily_task"
+        ? "daily"
+        : null;
+  const isExternal = !item.map_point_id;
+
+  return {
+    point_id: item.map_point_id || item.id,
+    point_type: pointType,
+    point_scope: isExternal ? "search_external" : "search_internal",
+    business_type: businessType,
+    business_id: null,
+    name: item.title,
+    subtitle: item.subtitle,
+    lng: item.lng,
+    lat: item.lat,
+    area_id: null,
+    area_name: null,
+    marker_key: item.icon_key || item.type,
+    icon_key: item.icon_key || item.type,
+    display_level: isExternal ? 60 : 80,
+    visibility: "public",
+    status: "active",
+    cover_photo_url: item.cover_photo_url || null,
+    preview_enabled: true,
+    preview_min_zoom: 15,
+    label_min_zoom: 16,
+    distance_meters: item.distance_meters,
+    extra: {
+      source: isExternal ? "amap_poi" : "map_search",
+    },
+  };
+}
+
+function createSearchPointSummary(item: MapShellItem): MapPointSummaryResponse {
+  const isTask = item.type === "emergency_task" || item.type === "daily_task";
+  const pointType = isTask ? "task" : item.type;
+  const businessType =
+    item.type === "emergency_task"
+      ? "emergency"
+      : item.type === "daily_task"
+        ? "daily"
+        : null;
+
+  return {
+    point_id: item.map_point_id || item.id,
+    point_type: pointType,
+    business_type: businessType,
+    business_id: null,
+    title: item.title,
+    subtitle: item.subtitle,
+    cover_photo_url: item.cover_photo_url || null,
+    tags: [item.tag_label || getItemTypeLabel(item.type)],
+    description: item.description,
+    location_name: item.subtitle || item.title,
+    location_detail: item.description,
+    route_instruction: "可从我的位置导航到该点位。",
+    landmark_hint: null,
+    entrance_hint: null,
+    lng: item.lng ?? mapCenter.value.lng,
+    lat: item.lat ?? mapCenter.value.lat,
+    distance_meters: item.distance_meters,
+    photos: [],
+    business_summary: {
+      source: item.map_point_id ? "map_search" : "amap_poi",
+    },
+    actions: [
+      {
+        key: "navigate",
+        label: "导航",
+        enabled: item.lng !== undefined && item.lat !== undefined,
+        disabled_reason: null,
+        method: null,
+        path: null,
+        target_type: "map",
+      },
+    ],
+  };
+}
+
+function showSearchPointSummary(item: MapShellItem) {
+  if (item.lng === undefined || item.lat === undefined) {
+    return;
+  }
+
+  selectedExternalTarget.value = item;
+  selectedSummary.value = createSearchPointSummary(item);
+  centerMapToPoint({ lng: item.lng, lat: item.lat });
+  renderAmapMarkers();
+}
+
+function searchCampusExternalPois(keyword: string): Promise<MapShellItem[]> {
+  const normalizedKeyword = keyword.trim();
+  if (!normalizedKeyword) {
+    return Promise.resolve([]);
+  }
+
+  if (supportsAmapWeb && window.AMap) {
+    return searchCampusExternalPoisByAmapJs(normalizedKeyword);
+  }
+
+  return searchCampusExternalPoisByRest(normalizedKeyword);
+}
+
+function searchCampusExternalPoisByAmapJs(keyword: string): Promise<MapShellItem[]> {
+  return new Promise((resolve) => {
+    window.AMap.plugin("AMap.PlaceSearch", () => {
+      const placeSearch = new window.AMap.PlaceSearch({
+        city: "黄石",
+        citylimit: true,
+        pageSize: 10,
+        extensions: "base",
+      });
+      placeSearch.search(keyword, (status: string, result: any) => {
+        if (status !== "complete" || !Array.isArray(result?.poiList?.pois)) {
+          resolve([]);
+          return;
+        }
+
+        const pois = result.poiList.pois
+          .map((poi: any): CampusExternalPoiResult | null => {
+            const location = getAmapPositionLngLat(poi.location);
+            if (!location) {
+              return null;
+            }
+
+            return {
+              id: String(poi.id || `${location.lng}-${location.lat}`),
+              title: String(poi.name || poi.title || ""),
+              address: typeof poi.address === "string" ? poi.address : null,
+              lng: location.lng,
+              lat: location.lat,
+            };
+          })
+          .filter(Boolean) as CampusExternalPoiResult[];
+
+        resolve(
+          filterCampusExternalPoiResults(
+            pois,
+            campusMapConfig.value.limit_bounds,
+          ).map(mapExternalPoiToShellItem),
+        );
+      });
+    });
+  });
+}
+
+function searchCampusExternalPoisByRest(keyword: string): Promise<MapShellItem[]> {
+  const key = amapRuntimeConfig.value.web_key;
+  if (!key) {
+    return Promise.resolve([]);
+  }
+
+  return new Promise((resolve) => {
+    uni.request({
+      url: "https://restapi.amap.com/v3/place/text",
+      method: "GET",
+      data: {
+        key,
+        keywords: keyword,
+        city: "黄石",
+        citylimit: true,
+        offset: 10,
+        page: 1,
+        extensions: "base",
+      },
+      success: (response) => {
+        const data = response.data as { pois?: Array<Record<string, unknown>> };
+        const pois = Array.isArray(data?.pois)
+          ? data.pois
+              .map((poi): CampusExternalPoiResult | null => {
+                const location = parseAmapRestLocation(poi.location);
+                if (!location) {
+                  return null;
+                }
+
+                return {
+                  id: String(poi.id || `${location.lng}-${location.lat}`),
+                  title: String(poi.name || ""),
+                  address: typeof poi.address === "string" ? poi.address : null,
+                  lng: location.lng,
+                  lat: location.lat,
+                };
+              })
+              .filter(Boolean) as CampusExternalPoiResult[]
+          : [];
+
+        resolve(
+          filterCampusExternalPoiResults(
+            pois,
+            campusMapConfig.value.limit_bounds,
+          ).map(mapExternalPoiToShellItem),
+        );
+      },
+      fail: () => {
+        resolve([]);
+      },
+    });
+  });
+}
+
+function parseAmapRestLocation(location: unknown): LngLat | null {
+  if (typeof location !== "string") {
+    return null;
+  }
+
+  const [lngText, latText] = location.split(",");
+  const lng = Number(lngText);
+  const lat = Number(latText);
+
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+    return null;
+  }
+
+  return { lng, lat };
+}
+
+function resizeAmapAfterLayoutChange() {
+  if (!supportsAmapWeb) {
+    return;
+  }
+
+  window.dispatchEvent(new Event("resize"));
+  if (amapInstance?.resize) {
+    amapInstance.resize();
+  }
+}
+
+function scheduleMapResizeAfterDrawerChange() {
+  if (mapResizeTimer) {
+    clearTimeout(mapResizeTimer);
+  }
+
+  if (supportsAmapWeb && typeof window.requestAnimationFrame === "function") {
+    window.requestAnimationFrame(() => {
+      resizeAmapAfterLayoutChange();
+    });
+  } else {
+    resizeAmapAfterLayoutChange();
+  }
+
+  mapResizeTimer = setTimeout(() => {
+    resizeAmapAfterLayoutChange();
+  }, 340);
 }
 
 function applyMapInit(data: MapInitResponse) {
@@ -542,7 +1044,7 @@ function initializeAmap() {
   amapScriptElement = document.createElement("script");
   amapScriptElement.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(
     webKey,
-  )}&plugin=AMap.Geolocation&callback=__initCampusCatMap`;
+  )}&plugin=AMap.Geolocation,AMap.PlaceSearch,AMap.Walking&callback=__initCampusCatMap`;
   amapScriptElement.onerror = () => {
     mapLoadState.value = "error";
   };
@@ -581,7 +1083,12 @@ function mountAmap() {
   );
   amapInstance.setLimitBounds(limitBounds);
   amapInstance.on("moveend", scheduleRefreshMapPoints);
-  amapInstance.on("zoomend", scheduleRefreshMapPoints);
+  currentMapZoom.value = amapInstance.getZoom?.() || campusMapConfig.value.default_zoom;
+  amapInstance.on("zoomend", () => {
+    currentMapZoom.value = amapInstance.getZoom?.() || currentMapZoom.value;
+    renderAmapMarkers();
+    scheduleRefreshMapPoints();
+  });
   mapLoadState.value = "ready";
   renderAmapMarkers();
 }
@@ -610,6 +1117,12 @@ function getViewportQuery() {
 
 async function refreshMapPoints() {
   if (!isPageVisible.value) {
+    return;
+  }
+
+  if (!activeFilter.value) {
+    mapPointMarkers.value = [];
+    clearAmapMarkers();
     return;
   }
 
@@ -675,22 +1188,39 @@ async function runSearch(keyword: string) {
   contentLoadState.value = "loading";
   selectedSummary.value = null;
   try {
-    const filterQuery = getMapPointQueryByFilter(activeFilter.value);
-    const data = await searchMap(token, {
-      keyword: normalizedKeyword,
-      campus_id: campusMapConfig.value.id,
-      point_types: filterQuery.point_types,
-      page: 1,
-      page_size: 20,
+    const filterQuery = activeFilter.value
+      ? getMapPointQueryByFilter(activeFilter.value)
+      : {};
+    const [data, externalPoiItems] = await Promise.all([
+      searchMap(token, {
+        keyword: normalizedKeyword,
+        campus_id: campusMapConfig.value.id,
+        point_types: filterQuery.point_types,
+        page: 1,
+        page_size: 20,
+      }),
+      searchCampusExternalPois(normalizedKeyword),
+    ]);
+    const items = [
+      ...data.items.map(mapSearchResultToShellItem),
+      ...externalPoiItems,
+    ].filter((item) => {
+      return (
+        !activeFilter.value ||
+        activeFilter.value === ALL_MAP_FILTER_KEY ||
+        item.type === activeFilter.value
+      );
     });
-    searchResultItems.value = data.items
-      .map(mapSearchResultToShellItem)
-      .filter((item) => {
-        return activeFilter.value === ALL_MAP_FILTER_KEY || item.type === activeFilter.value;
-      });
+    searchResultItems.value = items;
+    mapPointMarkers.value = items
+      .map(mapSearchShellItemToMarker)
+      .filter((marker): marker is MapPointMarkerDto => Boolean(marker));
+    renderAmapMarkers();
     contentLoadState.value = "ready";
   } catch (error) {
     searchResultItems.value = [];
+    mapPointMarkers.value = [];
+    clearAmapMarkers();
     contentLoadState.value = "error";
     handleMapError(error, "搜索失败，请稍后重试。");
   }
@@ -703,12 +1233,14 @@ async function loadPointSummary(pointId: string) {
   }
 
   contentLoadState.value = "loading";
+  selectedExternalTarget.value = null;
   try {
     selectedSummary.value = await getMapPointSummary(token, pointId);
     centerMapToPoint({
       lng: selectedSummary.value.lng,
       lat: selectedSummary.value.lat,
     });
+    renderAmapMarkers();
     contentLoadState.value = "ready";
   } catch (error) {
     selectedSummary.value = null;
@@ -733,20 +1265,24 @@ async function handleSummaryAction(action: CardActionDto) {
   }
 
   try {
-    const navigation = await getMapPointNavigation(token, selectedSummary.value.point_id);
-    if (supportsAmapWeb && navigation.amap_navigation.web_url) {
-      window.open(navigation.amap_navigation.web_url, "_blank");
+    const from = (await getCurrentLocationForNavigation()) || mapCenter.value;
+    const externalTarget = selectedExternalTarget.value;
+    if (externalTarget?.lng !== undefined && externalTarget.lat !== undefined) {
+      renderInAppRoute(from, { lng: externalTarget.lng, lat: externalTarget.lat });
       return;
     }
 
-    uni.showModal({
-      title: navigation.title,
-      content:
-        navigation.route_instruction ||
-        navigation.entrance_hint ||
-        "已获取导航目标点，可在地图中查看位置。",
-      showCancel: false,
+    const navigation = await getMapPointNavigation(token, selectedSummary.value.point_id, {
+      from_lng: from.lng,
+      from_lat: from.lat,
+      mode: "walking",
     });
+    const destination = {
+      lng: navigation.destination.lng,
+      lat: navigation.destination.lat,
+    };
+
+    renderInAppRoute(from, destination);
   } catch (error) {
     handleMapError(error, "导航信息加载失败");
     uni.showToast({ title: contentErrorMessage.value, icon: "none" });
@@ -769,7 +1305,7 @@ async function loadInitialMapData() {
     } else {
       mapLoadState.value = "ready";
     }
-    await Promise.all([refreshMapPoints(), loadBottomContent()]);
+    await loadBottomContent();
     contentLoadState.value = "ready";
   } catch (error) {
     mapLoadState.value = "error";
@@ -787,16 +1323,41 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#039;");
 }
 
-function createAmapMarkerContent(item: MapShellItem): string {
+function createAmapMarkerContent(
+  item: MapShellItem,
+  mode: MapMarkerDisplayMode,
+): string {
   const color = getMarkerColor(item.type);
   const symbol = escapeHtml(getItemSymbol(item.type));
   const title = escapeHtml(item.title);
+  const subtitle = item.subtitle ? escapeHtml(item.subtitle) : "";
+  const description = item.description ? escapeHtml(item.description) : "";
+  const coverPhoto = item.cover_photo_url ? escapeHtml(item.cover_photo_url) : "";
+  const titleHtml =
+    mode === "icon"
+      ? ""
+      : `<div style="position:absolute;left:50%;top:40px;transform:translateX(-50%);max-width:132px;padding:4px 8px;border-radius:9px;background:rgba(255,255,255,.94);color:#111827;font-family:'Songti SC','STSong','SimSun','Noto Serif CJK SC',serif;font-size:12px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;box-shadow:0 6px 14px rgba(17,24,39,.13);">${title}</div>`;
+  const previewHtml =
+    mode !== "preview"
+      ? ""
+      : `
+        <div style="position:absolute;left:50%;top:66px;width:158px;box-sizing:border-box;transform:translateX(-50%);padding:8px;border-radius:8px;background:rgba(255,255,255,.97);box-shadow:0 10px 24px rgba(17,24,39,.16);font-family:'Songti SC','STSong','SimSun','Noto Serif CJK SC',serif;color:#111827;">
+          ${
+            coverPhoto
+              ? `<img src="${coverPhoto}" style="width:100%;height:56px;border-radius:6px;object-fit:cover;display:block;margin-bottom:6px;" />`
+              : ""
+          }
+          <div style="font-size:11px;line-height:1.35;color:#4b5563;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${description || subtitle || title}</div>
+          <div style="margin-top:6px;font-size:11px;font-weight:900;color:#267b2f;text-align:right;">详情</div>
+        </div>
+      `;
 
   return `
     <div style="position:relative;transform:translate(-50%,-100%);">
       <div style="width:34px;height:34px;border-radius:17px;background:${color};color:#fff;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:15px;box-shadow:0 8px 18px rgba(17,24,39,.18);border:3px solid #fff;">${symbol}</div>
       <div style="position:absolute;left:50%;top:31px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:10px solid ${color};transform:translateX(-50%);"></div>
-      <div style="position:absolute;left:50%;top:40px;transform:translateX(-50%);max-width:132px;padding:4px 8px;border-radius:9px;background:rgba(255,255,255,.94);color:#111827;font-size:12px;font-weight:800;white-space:nowrap;box-shadow:0 6px 14px rgba(17,24,39,.13);">${title}</div>
+      ${titleHtml}
+      ${previewHtml}
     </div>
   `;
 }
@@ -817,16 +1378,24 @@ function renderAmapMarkers() {
   clearAmapMarkers();
   amapMarkers = mapPointMarkers.value.map((marker) => {
     const item = mapMarkerToShellItem(marker);
+    const mode = getMarkerDisplayMode({
+      zoom: currentMapZoom.value,
+      visibleMarkerCount: mapPointMarkers.value.length,
+      previewEnabled: marker.preview_enabled,
+      previewMinZoom: marker.preview_min_zoom,
+      labelMinZoom: marker.label_min_zoom,
+      selected: selectedSummary.value?.point_id === marker.point_id,
+    });
     const amapMarker = new window.AMap.Marker({
       position: [marker.lng, marker.lat],
-      content: createAmapMarkerContent(item),
+      content: createAmapMarkerContent(item, mode),
       zIndex: marker.display_level,
       offset: new window.AMap.Pixel(0, 0),
     });
 
     amapMarker.on("click", () => {
       centerMapToPoint({ lng: marker.lng, lat: marker.lat });
-      void loadPointSummary(marker.point_id);
+      handleMapMarkerSelected(marker);
     });
 
     return amapMarker;
@@ -849,7 +1418,28 @@ function handleNativeMarkerTap(event: Event) {
   }
 
   centerMapToPoint({ lng: marker.lng, lat: marker.lat });
+  handleMapMarkerSelected(marker);
+}
+
+function handleMapMarkerSelected(marker: MapPointMarkerDto) {
+  if (marker.point_scope === "search_external") {
+    showSearchPointSummary(mapMarkerToShellItem(marker));
+    return;
+  }
+
+  selectedExternalTarget.value = null;
   void loadPointSummary(marker.point_id);
+}
+
+function renderInAppRoute(from: LngLat, destination: LngLat) {
+  if (supportsAmapWeb && window.AMap && amapInstance) {
+    renderAmapWalkingRoute(from, destination);
+    uni.showToast({ title: "已在地图内规划路线", icon: "none" });
+    return;
+  }
+
+  renderNativeRoute(from, destination);
+  uni.showToast({ title: "已在地图内显示路线", icon: "none" });
 }
 
 function locateMe() {
@@ -857,10 +1447,12 @@ function locateMe() {
     uni.getLocation({
       type: "gcj02",
       success: (location) => {
-        mapCenter.value = {
+        const point = {
           lng: location.longitude,
           lat: location.latitude,
         };
+        mapCenter.value = point;
+        setUserLocation(point);
         void refreshMapPoints();
         uni.showToast({
           title: `已获取位置 ${location.latitude.toFixed(4)}`,
@@ -889,15 +1481,14 @@ function locateMe() {
       showCircle: false,
     });
     geolocation.getCurrentPosition((status: string, result: any) => {
-      if (status === "complete" && result?.position) {
+      const point = getAmapPositionLngLat(result?.position);
+      if (status === "complete" && point) {
         amapInstance.setZoomAndCenter(
           campusMapConfig.value.default_zoom,
-          result.position,
+          [point.lng, point.lat],
         );
-        mapCenter.value = {
-          lng: result.position.lng,
-          lat: result.position.lat,
-        };
+        mapCenter.value = point;
+        setUserLocation(point);
         void refreshMapPoints();
         uni.showToast({ title: "已定位到当前位置", icon: "none" });
         return;
@@ -911,6 +1502,7 @@ function locateMe() {
 
 watch(activeFilter, () => {
   selectedSummary.value = null;
+  selectedExternalTarget.value = null;
   void refreshMapPoints();
   if (isSearchMode.value) {
     void runSearch(searchKeyword.value);
@@ -919,6 +1511,7 @@ watch(activeFilter, () => {
 
 watch(searchKeyword, (keyword) => {
   selectedSummary.value = null;
+  selectedExternalTarget.value = null;
   if (searchTimer) {
     clearTimeout(searchTimer);
   }
@@ -926,6 +1519,11 @@ watch(searchKeyword, (keyword) => {
   if (!keyword.trim()) {
     searchResultItems.value = [];
     contentLoadState.value = "ready";
+    if (activeFilter.value) {
+      void refreshMapPoints();
+    } else {
+      clearSearchResultMarkers();
+    }
     return;
   }
 
@@ -966,7 +1564,13 @@ onBeforeUnmount(() => {
     clearTimeout(mapRefreshTimer);
   }
 
+  if (mapResizeTimer) {
+    clearTimeout(mapResizeTimer);
+  }
+
   clearAmapMarkers();
+  clearAmapRoute();
+  clearUserLocationMarker();
 
   if (amapInstance?.destroy) {
     amapInstance.destroy();
@@ -1126,15 +1730,10 @@ onBeforeUnmount(() => {
   transform: translateY(2rpx);
 }
 
-.filter-placeholder-icon {
-  width: 34rpx;
-  height: 34rpx;
-  border-radius: 10rpx;
-  border: 3rpx solid #2b3340;
-  color: #2b3340;
-  font-size: 18rpx;
-  font-weight: 900;
-  line-height: 34rpx;
+.filter-chip-icon {
+  width: 40rpx;
+  height: 40rpx;
+  flex-shrink: 0;
 }
 
 .filter-label {
@@ -1142,13 +1741,16 @@ onBeforeUnmount(() => {
   font-weight: 900;
 }
 
-.filter-chevron {
-  color: #111827;
-  font-size: 28rpx;
+.filter-chevron-mark {
+  width: 14rpx;
+  height: 14rpx;
+  border-right: 4rpx solid #111827;
+  border-bottom: 4rpx solid #111827;
+  transform: rotate(45deg);
   transition: transform 0.18s ease;
 }
 
-.filter-chevron.is-open {
+.filter-chevron-mark.is-open {
   transform: rotate(180deg);
 }
 
@@ -1173,11 +1775,26 @@ onBeforeUnmount(() => {
   color: #2a313d;
   line-height: 1.2;
   text-align: left;
+  display: grid;
+  grid-template-columns: 44rpx minmax(0, 1fr);
+  align-items: center;
+  gap: 14rpx;
 }
 
 .filter-option.is-active {
   background: #edf8e8;
   color: #267b2f;
+}
+
+.filter-option-icon {
+  width: 42rpx;
+  height: 42rpx;
+}
+
+.filter-option-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .filter-option-title {

@@ -43,7 +43,7 @@
         </text>
       </view>
 
-      <view class="filter-wrap">
+      <view class="filter-wrap" :isOpen="filterMenuOpen" :change:isOpen="menuWxs.onMenuToggle">
         <button
           class="filter-chip"
           hover-class="filter-chip-hover"
@@ -51,7 +51,7 @@
         >
           <image class="filter-chip-icon" :src="activeFilterIcon" mode="aspectFit" />
           <text class="filter-label">{{ activeFilterLabel }}</text>
-          <view class="filter-chevron-mark" :class="{ 'is-open': filterMenuOpen }" />
+          <image class="filter-chevron-mark" :src="arrowIcon" mode="aspectFit" />
         </button>
         <view v-if="filterMenuOpen" class="filter-menu">
           <button
@@ -207,6 +207,27 @@
 </template>
 
 <script module="drawer" lang="wxs" src="./drawer.wxs"></script>
+<script module="menuWxs" lang="wxs">
+function onMenuToggle(isOpen, oldValue, ownerInstance, instance) {
+  var arrowInstance = ownerInstance.selectComponent('.filter-chevron-mark');
+  if (arrowInstance) {
+    if (isOpen) {
+      arrowInstance.setStyle({
+        transform: 'translateX(96rpx) rotate(180deg)',
+        transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      });
+    } else {
+      arrowInstance.setStyle({
+        transform: 'translateX(0) rotate(0deg)',
+        transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+      });
+    }
+  }
+}
+module.exports = {
+  onMenuToggle: onMenuToggle
+};
+</script>
 
 <script setup lang="ts">
 import { onHide, onShow } from "@dcloudio/uni-app";
@@ -229,18 +250,19 @@ import { appEnv } from "@/config/app-env";
 import { ApiBusinessError, isRequestCanceledError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
 
-import allMarkerPointIcon from "../../../素材/svg/地图点/事件工单-待办.svg";
-import catPointMarkerIcon from "../../../素材/svg/地图点/1.svg";
-import dailyTaskPointIcon from "../../../素材/svg/地图点/待办.svg";
-import emergencyTaskPointIcon from "../../../素材/svg/地图点/风险危险源.svg";
-import landmarkPointIcon from "../../../素材/svg/地图点/10.svg";
-import supplyPointMarkerIcon from "../../../素材/svg/地图点/-s-个体户.svg";
+import allMarkerPointIcon from "../../../素材/svg/地图点/全部.svg";
+import catPointMarkerIcon from "../../../素材/svg/地图点/猫咪点.svg";
+import dailyTaskPointIcon from "../../../素材/svg/地图点/日常任务.svg";
+import emergencyTaskPointIcon from "../../../素材/svg/地图点/紧急任务.svg";
+import landmarkPointIcon from "../../../素材/svg/地图点/地标.svg";
+import supplyPointMarkerIcon from "../../../素材/svg/地图点/物资点.svg";
 import catMarkerIcon from "../../../素材/svg/默认/暂时不用/cat-marker.svg";
 import emergencyMarkerIcon from "../../../素材/svg/默认/暂时不用/emergency-marker.svg";
 import locationIcon from "../../../素材/svg/菜单/定位.svg";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 import supplyMarkerIcon from "../../../素材/svg/默认/暂时不用/supply-marker.svg";
 import taskMarkerIcon from "../../../素材/svg/默认/暂时不用/task_marker.svg";
+import arrowIcon from "../../../素材/svg/地图点/箭头.svg";
 import loadingBackground from "../../../素材/加载页素材/加载页背景.png";
 import {
   ALL_MAP_FILTER_KEY,
@@ -1742,16 +1764,10 @@ onBeforeUnmount(() => {
 }
 
 .filter-chevron-mark {
-  width: 14rpx;
-  height: 14rpx;
-  border-right: 4rpx solid #111827;
-  border-bottom: 4rpx solid #111827;
-  transform: rotate(45deg);
-  transition: transform 0.18s ease;
-}
-
-.filter-chevron-mark.is-open {
-  transform: rotate(180deg);
+  width: 28rpx;
+  height: 28rpx;
+  transform: rotate(0deg);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .filter-menu {

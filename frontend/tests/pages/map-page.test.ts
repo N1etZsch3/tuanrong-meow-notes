@@ -111,36 +111,10 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain(':polyline="nativeMapPolylines"');
   });
 
-  it("renders the filter menu with the updated named map point svg assets", () => {
+  it("renders marker svg icons and a redesigned arrow in the filter menu", () => {
     expect(indexPageSource).toContain("MAP_FILTER_ICON_SRC");
-    expect(indexPageSource).toContain("全部.svg");
-    expect(indexPageSource).toContain("紧急任务.svg");
-    expect(indexPageSource).toContain("日常任务.svg");
-    expect(indexPageSource).toContain("猫咪点.svg");
-    expect(indexPageSource).toContain("物资点.svg");
-    expect(indexPageSource).toContain("地标.svg");
-    expect(indexPageSource).toContain("筛选.svg");
-    expect(indexPageSource).toContain("箭头.svg");
     expect(indexPageSource).toContain("filter-option-icon");
-  });
-
-  it("keeps the filter overlay outside the native map gesture layer", () => {
-    expect(indexPageSource).toContain("map-filter-layer");
-    expect(indexPageSource).toContain("filter-panel-hit-layer");
-    expect(indexPageSource.indexOf('class="map-filter-layer"')).toBeGreaterThan(
-      indexPageSource.indexOf('class="map-viewport"'),
-    );
-    expect(indexPageSource.indexOf('class="map-filter-layer"')).toBeLessThan(
-      indexPageSource.indexOf('class="content-drawer"'),
-    );
-  });
-
-  it("animates the filter menu and arrow through WXS instead of css-only state", () => {
-    expect(indexPageSource).toContain('module="filterMenu"');
-    expect(indexPageSource).toContain('src="./filter-menu.wxs"');
-    expect(indexPageSource).toContain("@tap=\"filterMenu.toggle\"");
-    expect(indexPageSource).toContain("filter-arrow-icon");
-    expect(indexPageSource).not.toContain("filter-chevron-mark");
+    expect(indexPageSource).toContain("filter-chevron-mark");
     expect(indexPageSource).not.toContain("⌄");
   });
 

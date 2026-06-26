@@ -14,9 +14,5 @@ declare module "@vue/runtime-core" {
       touchmove: (...args: unknown[]) => void;
       touchend: (...args: unknown[]) => void;
     };
-    filterMenu: {
-      sync: (...args: unknown[]) => void;
-      toggle: (...args: unknown[]) => void;
-    };
   }
 }

@@ -48,5 +48,29 @@
 		"navigationBarTitleText": "猫协地图",
 		"navigationBarBackgroundColor": "#F6FAF0",
 		"backgroundColor": "#F6FAF0"
+	},
+	"tabBar": {
+		"custom": true,
+		"color": "#6f747c",
+		"selectedColor": "#267b2f",
+		"backgroundColor": "#ffffff",
+		"list": [
+			{
+				"pagePath": "pages/index/index",
+				"text": "地图"
+			},
+			{
+				"pagePath": "pages/cats/index",
+				"text": "猫咪库"
+			},
+			{
+				"pagePath": "pages/tasks/index",
+				"text": "任务"
+			},
+			{
+				"pagePath": "pages/profile/index",
+				"text": "我的"
+			}
+		]
 	}
 }

@@ -1,0 +1,58 @@
+var isOpen = false;
+
+function px(value) {
+  return value + 'rpx';
+}
+
+function getPanelStyle(open, transition) {
+  var opacity = open ? 1 : 0;
+  var translateY = open ? 0 : -18;
+  var scaleY = open ? 1 : 0.86;
+  var pointerEvents = open ? 'auto' : 'none';
+
+  return {
+    opacity: opacity,
+    pointerEvents: pointerEvents,
+    transform: 'translateY(' + px(translateY) + ') scaleY(' + scaleY + ')',
+    transition: transition
+  };
+}
+
+function getArrowStyle(open, transition) {
+  var translateX = open ? 196 : 0;
+  var rotate = open ? 90 : 0;
+
+  return {
+    transform: 'translateX(' + px(translateX) + ') rotate(' + rotate + 'deg)',
+    transition: transition
+  };
+}
+
+function apply(ownerInstance, open, transition) {
+  var panel = ownerInstance.selectComponent('.filter-menu');
+  if (panel) {
+    panel.setStyle(getPanelStyle(open, transition));
+  }
+
+  var arrow = ownerInstance.selectComponent('.filter-arrow-icon');
+  if (arrow) {
+    arrow.setStyle(getArrowStyle(open, transition));
+  }
+}
+
+function sync(newValue, oldValue, ownerInstance, instance) {
+  var nextOpen = !!(newValue && newValue.open);
+  isOpen = nextOpen;
+  apply(ownerInstance, isOpen, 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease');
+}
+
+function toggle(e, ownerInstance) {
+  isOpen = !isOpen;
+  apply(ownerInstance, isOpen, 'transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), opacity 180ms ease');
+  ownerInstance.callMethod('setFilterMenuOpen', isOpen);
+}
+
+module.exports = {
+  sync: sync,
+  toggle: toggle
+};

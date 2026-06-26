@@ -14,5 +14,8 @@ declare module "@vue/runtime-core" {
       touchmove: (...args: unknown[]) => void;
       touchend: (...args: unknown[]) => void;
     };
+    filterAnim: {
+      onMenuStateChange: (...args: unknown[]) => void;
+    };
   }
 }

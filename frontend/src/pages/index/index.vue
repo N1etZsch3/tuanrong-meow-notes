@@ -17,6 +17,37 @@
       <text class="title-subtitle">探索校园 · 守护猫咪</text>
     </view>
 
+    <view class="filter-wrap" :change:menuState="filterAnim.onMenuStateChange" :menuState="filterMenuOpen">
+      <button
+        class="filter-chip"
+        hover-class="filter-chip-hover"
+        @tap="toggleFilterMenu"
+      >
+        <image class="filter-chip-icon" :src="activeFilterIcon" mode="aspectFit" />
+        <text class="filter-label">{{ activeFilterLabel }}</text>
+        <image class="filter-chevron-mark" :src="arrowIcon" mode="aspectFit" />
+      </button>
+      <view class="filter-menu" :class="{ 'is-visible': filterMenuOpen }">
+        <button
+          v-for="option in MAP_FILTER_OPTIONS"
+          :key="option.key"
+          class="filter-option"
+          :class="{ 'is-active': option.key === activeFilter }"
+          @tap="selectFilter(option.key)"
+        >
+          <image
+            class="filter-option-icon"
+            :src="getFilterOptionIcon(option.key)"
+            mode="aspectFit"
+          />
+          <view class="filter-option-copy">
+            <text class="filter-option-title">{{ option.label }}</text>
+            <text class="filter-option-desc">{{ option.description }}</text>
+          </view>
+        </button>
+      </view>
+    </view>
+
     <view class="map-viewport">
       <view v-if="supportsAmapWeb" id="campus-amap" class="amap-host" />
       <map
@@ -43,36 +74,7 @@
         </text>
       </view>
 
-      <view class="filter-wrap">
-        <button
-          class="filter-chip"
-          hover-class="filter-chip-hover"
-          @tap="toggleFilterMenu"
-        >
-          <image class="filter-chip-icon" :src="activeFilterIcon" mode="aspectFit" />
-          <text class="filter-label">{{ activeFilterLabel }}</text>
-          <view class="filter-chevron-mark" :class="{ 'is-open': filterMenuOpen }" />
-        </button>
-        <view v-if="filterMenuOpen" class="filter-menu">
-          <button
-            v-for="option in MAP_FILTER_OPTIONS"
-            :key="option.key"
-            class="filter-option"
-            :class="{ 'is-active': option.key === activeFilter }"
-            @tap="selectFilter(option.key)"
-          >
-            <image
-              class="filter-option-icon"
-              :src="getFilterOptionIcon(option.key)"
-              mode="aspectFit"
-            />
-            <view class="filter-option-copy">
-              <text class="filter-option-title">{{ option.label }}</text>
-              <text class="filter-option-desc">{{ option.description }}</text>
-            </view>
-          </button>
-        </view>
-      </view>
+
 
       <button class="my-location-btn" hover-class="map-button-hover" @tap="locateMe">
         <image class="my-location-icon" :src="locationIcon" mode="aspectFit" />
@@ -207,6 +209,7 @@
 </template>
 
 <script module="drawer" lang="wxs" src="./drawer.wxs"></script>
+<script module="filterAnim" lang="wxs" src="./filter-anim.wxs"></script>
 
 <script setup lang="ts">
 import { onHide, onShow } from "@dcloudio/uni-app";
@@ -229,12 +232,13 @@ import { appEnv } from "@/config/app-env";
 import { ApiBusinessError, isRequestCanceledError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
 
-import allMarkerPointIcon from "../../../素材/svg/地图点/事件工单-待办.svg";
+import allMarkerPointIcon from "../../../素材/svg/地图点/待办.svg";
 import catPointMarkerIcon from "../../../素材/svg/地图点/1.svg";
-import dailyTaskPointIcon from "../../../素材/svg/地图点/待办.svg";
+import dailyTaskPointIcon from "../../../素材/svg/地图点/事件工单-待办.svg";
 import emergencyTaskPointIcon from "../../../素材/svg/地图点/风险危险源.svg";
 import landmarkPointIcon from "../../../素材/svg/地图点/10.svg";
 import supplyPointMarkerIcon from "../../../素材/svg/地图点/-s-个体户.svg";
+import arrowIcon from "../../../素材/svg/地图点/7.svg";
 import catMarkerIcon from "../../../素材/svg/默认/暂时不用/cat-marker.svg";
 import emergencyMarkerIcon from "../../../素材/svg/默认/暂时不用/emergency-marker.svg";
 import locationIcon from "../../../素材/svg/菜单/定位.svg";
@@ -1695,8 +1699,8 @@ onBeforeUnmount(() => {
 .filter-wrap {
   position: absolute;
   z-index: 5;
-  left: 28rpx;
-  top: 34rpx;
+  left: 52rpx;
+  top: 228rpx;
 }
 
 .filter-chip {
@@ -1742,16 +1746,9 @@ onBeforeUnmount(() => {
 }
 
 .filter-chevron-mark {
-  width: 14rpx;
-  height: 14rpx;
-  border-right: 4rpx solid #111827;
-  border-bottom: 4rpx solid #111827;
-  transform: rotate(45deg);
+  width: 24rpx;
+  height: 24rpx;
   transition: transform 0.18s ease;
-}
-
-.filter-chevron-mark.is-open {
-  transform: rotate(180deg);
 }
 
 .filter-menu {
@@ -1764,6 +1761,13 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 6rpx;
+  opacity: 0;
+  transform: translateY(-16rpx) scale(0.95);
+  pointer-events: none;
+}
+
+.filter-menu.is-visible {
+  pointer-events: auto;
 }
 
 .filter-option {

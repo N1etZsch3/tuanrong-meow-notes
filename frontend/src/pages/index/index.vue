@@ -229,12 +229,12 @@ import { appEnv } from "@/config/app-env";
 import { ApiBusinessError, isRequestCanceledError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
 
-import allMarkerPointIcon from "../../../素材/svg/地图点/事件工单-待办.svg";
-import catPointMarkerIcon from "../../../素材/svg/地图点/1.svg";
-import dailyTaskPointIcon from "../../../素材/svg/地图点/待办.svg";
-import emergencyTaskPointIcon from "../../../素材/svg/地图点/风险危险源.svg";
-import landmarkPointIcon from "../../../素材/svg/地图点/10.svg";
-import supplyPointMarkerIcon from "../../../素材/svg/地图点/-s-个体户.svg";
+import allMarkerPointIcon from "../../../素材/svg/地图点/全部.svg";
+import catPointMarkerIcon from "../../../素材/svg/地图点/猫咪点.svg";
+import dailyTaskPointIcon from "../../../素材/svg/地图点/日常任务.svg";
+import emergencyTaskPointIcon from "../../../素材/svg/地图点/紧急任务.svg";
+import landmarkPointIcon from "../../../素材/svg/地图点/地标.svg";
+import supplyPointMarkerIcon from "../../../素材/svg/地图点/物资点.svg";
 import catMarkerIcon from "../../../素材/svg/默认/暂时不用/cat-marker.svg";
 import emergencyMarkerIcon from "../../../素材/svg/默认/暂时不用/emergency-marker.svg";
 import locationIcon from "../../../素材/svg/菜单/定位.svg";

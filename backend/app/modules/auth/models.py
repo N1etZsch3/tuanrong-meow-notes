@@ -62,6 +62,8 @@ class UserProfile(Base):
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
     nickname: Mapped[str] = mapped_column(String(64))
     avatar_url: Mapped[str | None] = mapped_column(String(512))
+    avatar_asset_id: Mapped[UUID | None] = mapped_column(ForeignKey("file_assets.id"))
+    avatar_thumb_url: Mapped[str | None] = mapped_column(String(1024))
     real_name: Mapped[str | None] = mapped_column(String(64))
     department: Mapped[str | None] = mapped_column(String(128))
     grade: Mapped[str | None] = mapped_column(String(32))

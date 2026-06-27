@@ -14,6 +14,7 @@ from app.main import create_app
 @pytest.fixture
 def db_session() -> Generator[Session, None, None]:
     import app.modules.auth.models  # noqa: F401
+    import app.modules.files.models  # noqa: F401
     import app.modules.map.models  # noqa: F401
 
     engine = create_engine(

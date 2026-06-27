@@ -29,6 +29,17 @@ class Settings(BaseSettings):
     auth_lock_minutes: int = 15
     amap_web_key: str = "replace-with-amap-web-key"
     amap_security_js_code: str = "replace-with-amap-security-js-code"
+    tencent_cos_secret_id: str = ""
+    tencent_cos_secret_key: str = ""
+    tencent_cos_region: str = "ap-guangzhou"
+    tencent_cos_bucket: str = ""
+    tencent_cos_app_id: str = ""
+    tencent_cos_scheme: str = "https"
+    tencent_cos_domain: str = ""
+    tencent_cos_cdn_domain: str = ""
+    tencent_cos_env_prefix: str = "dev"
+    file_upload_max_mb: int = 10
+    file_image_max_pixels: int = 20_000_000
 
     @property
     def required_database_url(self) -> str:
@@ -44,6 +55,10 @@ class Settings(BaseSettings):
     def cors_origin_regex(self) -> str | None:
         regex = self.cors_allow_origin_regex.strip()
         return regex or None
+
+    @property
+    def file_upload_max_bytes(self) -> int:
+        return self.file_upload_max_mb * 1024 * 1024
 
     model_config = SettingsConfigDict(
         env_prefix="CATMAP_",

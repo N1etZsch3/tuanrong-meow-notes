@@ -6,6 +6,7 @@ from alembic import context
 from app.core.config import get_settings
 from app.db.base import Base
 from app.modules.auth import models  # noqa: F401
+from app.modules.files import models as file_models  # noqa: F401
 from app.modules.map import models as map_models  # noqa: F401
 
 config = context.config

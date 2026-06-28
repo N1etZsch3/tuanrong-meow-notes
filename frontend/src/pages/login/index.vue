@@ -240,11 +240,6 @@ function validateForm(): boolean {
     return false;
   }
 
-  if (!form.agreed) {
-    uni.showToast({ title: "请先勾选协议", icon: "none" });
-    return false;
-  }
-
   return true;
 }
 

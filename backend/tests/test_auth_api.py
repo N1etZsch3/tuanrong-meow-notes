@@ -153,7 +153,7 @@ def test_login_password_failure_does_not_consume_captcha(api_client, db_session)
     assert user.login_failed_count == 1
 
 
-def test_login_rejects_missing_agreement(api_client, db_session):
+def test_first_login_rejects_missing_agreement(api_client, db_session):
     create_user(db_session)
     captcha = create_captcha(db_session)
 
@@ -170,6 +170,27 @@ def test_login_rejects_missing_agreement(api_client, db_session):
 
     assert response.status_code == 400
     assert response.json()["code"] == 40005
+
+
+def test_returning_login_allows_missing_agreement_after_password_changed(api_client, db_session):
+    create_user(db_session, must_change_password=False, profile_completed=True)
+    captcha = create_captcha(db_session)
+
+    response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "student_no": "20252160A1010",
+            "password": "Password123",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": False,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["must_change_password"] is False
+    assert data["next_action"] == "enter_app"
 
 
 def test_get_current_user_returns_profile(api_client, db_session):

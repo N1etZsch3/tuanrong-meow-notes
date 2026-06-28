@@ -191,9 +191,6 @@ def record_login_failure(db: Session, user: User | None) -> None:
 
 
 def login(db: Session, payload: LoginRequest) -> dict:
-    if not payload.agree_terms:
-        raise APIError(code=ErrorCode.AGREEMENT_REQUIRED, message="未勾选协议", status_code=400)
-
     captcha = validate_captcha(db, payload.captcha_id, payload.captcha_code)
     user = get_user_by_student_no(db, payload.account_no)
 
@@ -221,6 +218,9 @@ def login(db: Session, payload: LoginRequest) -> dict:
             message="喵喵号或密码错误",
             status_code=401,
         )
+    if user.must_change_password and not payload.agree_terms:
+        db.commit()
+        raise APIError(code=ErrorCode.AGREEMENT_REQUIRED, message="未勾选协议", status_code=400)
 
     current_time = now_utc()
     captcha.used_at = current_time

@@ -36,4 +36,8 @@ describe("login agreement memory", () => {
     expect(loginPageSource).toContain("rememberAgreementAcceptedForAccounts");
     expect(loginPageSource).toContain("watch(");
   });
+
+  it("lets the backend decide when agreement is required", () => {
+    expect(loginPageSource).not.toContain("请先勾选协议");
+  });
 });

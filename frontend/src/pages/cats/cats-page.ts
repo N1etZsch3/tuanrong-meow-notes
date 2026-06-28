@@ -4,6 +4,8 @@ export const EMPTY_CAT_STATS: CatStatsResponse = {
   total_cats: 0,
   active_cats: 0,
   waiting_adoption_cats: 0,
+  adopted_cats: 0,
+  deceased_cats: 0,
   watching_cats: 0,
   neutered_cats: 0,
   neuter_rate: 0,
@@ -18,10 +20,30 @@ export interface CatListQueryInput {
   page_size: number;
 }
 
+export interface CatStatsDisplayItem {
+  key: string;
+  label: string;
+  value: number;
+  tone: "green" | "orange" | "blue" | "purple";
+  has_icon?: boolean;
+}
+
 export type CatTagTone = "green" | "blue" | "orange" | "red" | "purple" | "gray";
 
 export function normalizeCatStats(stats: CatStatsResponse | null): CatStatsResponse {
   return stats ?? EMPTY_CAT_STATS;
+}
+
+export function buildCatStatsDisplayItems(stats: CatStatsResponse | null): CatStatsDisplayItem[] {
+  const resolvedStats = normalizeCatStats(stats);
+
+  return [
+    { key: "total", label: "在档猫咪", value: resolvedStats.total_cats, tone: "green", has_icon: true },
+    { key: "active", label: "正常在校", value: resolvedStats.active_cats, tone: "green", has_icon: true },
+    { key: "waiting_adoption", label: "待领养", value: resolvedStats.waiting_adoption_cats, tone: "orange" },
+    { key: "adopted", label: "已领养", value: resolvedStats.adopted_cats, tone: "blue" },
+    { key: "graduated", label: "毕业", value: resolvedStats.deceased_cats, tone: "purple", has_icon: false },
+  ];
 }
 
 export function buildCatListQuery(input: CatListQueryInput): CatListQuery {
@@ -81,10 +103,10 @@ export function getCatTagTone(tag: string): CatTagTone {
   if (["已绝育", "已预约"].includes(tag)) {
     return "blue";
   }
-  if (["待观察", "异常", "疑似生病", "治疗中", "暂时失踪", "待领养"].includes(tag)) {
+  if (["待观察", "需观察", "异常", "疑似生病", "治疗中", "暂时失踪", "待领养"].includes(tag)) {
     return "orange";
   }
-  if (["受伤", "未绝育", "已死亡"].includes(tag)) {
+  if (["受伤", "未绝育", "已死亡", "毕业"].includes(tag)) {
     return "red";
   }
   if (["亲人", "温顺", "活泼", "贪吃"].includes(tag)) {

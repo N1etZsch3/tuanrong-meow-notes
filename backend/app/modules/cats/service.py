@@ -11,7 +11,7 @@ STATUS_LABELS = {
     "missing": "暂时失踪",
     "waiting_adoption": "待领养",
     "adopted": "已领养",
-    "deceased": "已死亡",
+    "deceased": "毕业",
     "transferred": "转移照护",
     "archived": "归档",
 }
@@ -19,7 +19,7 @@ STATUS_LABELS = {
 HEALTH_STATUS_LABELS = {
     "unknown": "未知",
     "healthy": "健康",
-    "watching": "需观察",
+    "watching": "待观察",
     "abnormal": "异常",
     "injured": "受伤",
     "sick": "疑似生病",
@@ -52,6 +52,8 @@ def stats(db: Session) -> dict:
         "total_cats": total,
         "active_cats": sum(1 for cat in cats if cat.status == "active"),
         "waiting_adoption_cats": sum(1 for cat in cats if cat.status == "waiting_adoption"),
+        "adopted_cats": sum(1 for cat in cats if cat.status == "adopted"),
+        "deceased_cats": sum(1 for cat in cats if cat.status == "deceased"),
         "watching_cats": sum(1 for cat in cats if cat.health_status == "watching"),
         "neutered_cats": neutered,
         "neuter_rate": round(neutered / total * 100) if total else 0,

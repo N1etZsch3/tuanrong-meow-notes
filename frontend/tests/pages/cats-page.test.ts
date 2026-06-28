@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import catsPageSource from "../../src/pages/cats/index.vue?raw";
 import {
+  buildCatStatsDisplayItems,
   buildCatListQuery,
   formatCatSeenTime,
   getCatTagTone,
@@ -23,6 +24,45 @@ describe("cats page behavior", () => {
     expect(catsPageSource).toContain("errorMessage");
     expect(catsPageSource).toContain("empty-list");
     expect(catsPageSource).toContain("markImageFailed");
+  });
+
+  it("uses the shared app background and map-page title treatment", () => {
+    expect(catsPageSource).toContain("加载页背景.png");
+    expect(catsPageSource).toContain("萌猫/暹罗猫.svg");
+    expect(catsPageSource).toContain("page-title-row");
+    expect(catsPageSource).toContain("page-title-icon");
+    expect(catsPageSource).not.toContain("hero-icon-shell");
+  });
+
+  it("uses svg filter controls and lazy list loading", () => {
+    expect(catsPageSource).toContain("地图点/箭头.svg");
+    expect(catsPageSource).toContain("picker-arrow-icon");
+    expect(catsPageSource).toContain("activePicker");
+    expect(catsPageSource).toContain("clear-filter-icon");
+    expect(catsPageSource).toContain("@scrolltolower=\"loadMoreCats\"");
+    expect(catsPageSource).toContain("isLoadingMore");
+    expect(catsPageSource).toContain("hasMore");
+  });
+
+  it("builds the stat card items from the new archive counts", () => {
+    expect(
+      buildCatStatsDisplayItems({
+        total_cats: 100,
+        active_cats: 55,
+        waiting_adoption_cats: 10,
+        adopted_cats: 20,
+        deceased_cats: 5,
+        watching_cats: 7,
+        neutered_cats: 48,
+        neuter_rate: 48,
+      }),
+    ).toEqual([
+      { key: "total", label: "在档猫咪", value: 100, tone: "green", has_icon: true },
+      { key: "active", label: "正常在校", value: 55, tone: "green", has_icon: true },
+      { key: "waiting_adoption", label: "待领养", value: 10, tone: "orange" },
+      { key: "adopted", label: "已领养", value: 20, tone: "blue" },
+      { key: "graduated", label: "毕业", value: 5, tone: "purple", has_icon: false },
+    ]);
   });
 
   it("builds cat list query from page controls", () => {
@@ -81,6 +121,8 @@ describe("cats page behavior", () => {
     expect(normalizeCatStats(null)).toMatchObject({
       total_cats: 0,
       active_cats: 0,
+      adopted_cats: 0,
+      deceased_cats: 0,
       neuter_rate: 0,
     });
   });

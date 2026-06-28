@@ -1,25 +1,45 @@
 <template>
   <view class="cats-page">
-    <scroll-view class="cats-scroll" scroll-y refresher-enabled :refresher-triggered="isRefreshing" @refresherrefresh="refreshPage">
+    <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
+
+    <scroll-view
+      class="cats-scroll"
+      scroll-y
+      refresher-enabled
+      :refresher-triggered="isRefreshing"
+      lower-threshold="180"
+      :show-scrollbar="false"
+      @refresherrefresh="refreshPage"
+      @scrolltolower="loadMoreCats"
+    >
       <view class="page-inner">
-        <view class="hero">
-          <view class="hero-icon-shell">
-            <image class="hero-icon" :src="catIcon" mode="aspectFit" />
+        <view class="page-title">
+          <view class="page-title-row">
+            <text class="page-title-text">猫咪库</text>
+            <image class="page-title-icon" :src="titleMascotIcon" mode="aspectFit" />
           </view>
-          <view class="hero-copy">
-            <text class="hero-title">猫咪库</text>
-            <text class="hero-subtitle">校园猫咪档案管理</text>
-          </view>
+          <text class="page-title-subtitle">记录校园里的每一位喵校友</text>
         </view>
 
         <view class="stats-card">
-          <view v-for="item in statsItems" :key="item.key" class="stat-item" :class="`stat-${item.tone}`">
-            <text class="stat-label">{{ item.label }}</text>
-            <text class="stat-value">{{ item.value }}</text>
+          <view class="stats-grid">
+            <view v-for="item in statsItems" :key="item.key" class="stat-item">
+              <image
+                v-if="item.has_icon !== false"
+                class="stat-icon"
+                :class="`stat-icon-${item.tone}`"
+                :src="statIconMap[item.key]"
+                mode="aspectFit"
+              />
+              <view v-else class="stat-icon-placeholder" />
+              <text class="stat-label">{{ item.label }}</text>
+              <text class="stat-value" :class="`stat-value-${item.tone}`">{{ item.value }}</text>
+            </view>
           </view>
-          <view class="neuter-rate">
-            <text class="rate-label">绝育率</text>
-            <text class="rate-value">{{ resolvedStats.neuter_rate }}%</text>
+          <view class="neuter-rate-row">
+            <text>当前已绝育</text>
+            <text class="neuter-count">{{ resolvedStats.neutered_cats }}</text>
+            <text>只流浪喵</text>
           </view>
         </view>
 
@@ -42,12 +62,21 @@
             :range="filterKeyPickerOptions"
             range-key="label"
             :value="selectedFilterKeyIndex"
+            @tap="openPicker('filter_key')"
+            @cancel="closePicker"
             @change="handleFilterKeyChange"
           >
-            <view class="picker-shell">
+            <view class="filter-control">
               <text class="picker-caption">筛选项</text>
-              <text class="picker-value">{{ selectedFilterKeyLabel }}</text>
-              <text class="picker-arrow">⌄</text>
+              <view class="picker-shell">
+                <text class="picker-value">{{ selectedFilterKeyLabel }}</text>
+                <image
+                  class="picker-arrow-icon"
+                  :class="{ 'is-open': activePicker === 'filter_key' }"
+                  :src="filterArrowIcon"
+                  mode="aspectFit"
+                />
+              </view>
             </view>
           </picker>
           <picker
@@ -55,12 +84,21 @@
             :range="filterValuePickerOptions"
             range-key="label"
             :value="selectedFilterValueIndex"
+            @tap="openPicker('filter_value')"
+            @cancel="closePicker"
             @change="handleFilterValueChange"
           >
-            <view class="picker-shell">
+            <view class="filter-control">
               <text class="picker-caption">可选值</text>
-              <text class="picker-value">{{ selectedFilterValueLabel }}</text>
-              <text class="picker-arrow">⌄</text>
+              <view class="picker-shell">
+                <text class="picker-value">{{ selectedFilterValueLabel }}</text>
+                <image
+                  class="picker-arrow-icon"
+                  :class="{ 'is-open': activePicker === 'filter_value' }"
+                  :src="filterArrowIcon"
+                  mode="aspectFit"
+                />
+              </view>
             </view>
           </picker>
           <picker
@@ -68,24 +106,33 @@
             :range="sortOptions"
             range-key="label"
             :value="selectedSortIndex"
+            @tap="openPicker('sort')"
+            @cancel="closePicker"
             @change="handleSortChange"
           >
-            <view class="picker-shell">
+            <view class="filter-control">
               <text class="picker-caption">排序</text>
-              <text class="picker-value">{{ selectedSortLabel }}</text>
-              <text class="picker-arrow">⌄</text>
+              <view class="picker-shell">
+                <text class="picker-value">{{ selectedSortLabel }}</text>
+                <image
+                  class="picker-arrow-icon"
+                  :class="{ 'is-open': activePicker === 'sort' }"
+                  :src="filterArrowIcon"
+                  mode="aspectFit"
+                />
+              </view>
             </view>
           </picker>
           <button class="clear-filter-button" @tap="clearFilters">
-            <text class="clear-icon">⌫</text>
+            <image class="clear-filter-icon" :src="clearFilterIcon" mode="aspectFit" />
             <text>清除筛选</text>
           </button>
         </view>
 
-        <view v-if="isLoading" class="state-panel">
+        <view v-if="isLoading && cats.length === 0" class="state-panel">
           <text class="state-title">正在加载猫咪档案...</text>
         </view>
-        <view v-else-if="errorMessage" class="state-panel is-error" @tap="loadCatsPage">
+        <view v-else-if="errorMessage && cats.length === 0" class="state-panel is-error" @tap="loadCatsPage">
           <text class="state-title">{{ errorMessage }}</text>
           <text class="state-action">点按重试</text>
         </view>
@@ -107,6 +154,7 @@
               class="cat-photo"
               :src="cat.avatar_thumbnail_url || cat.avatar_url || ''"
               mode="aspectFill"
+              lazy-load
               @error="markImageFailed(cat.cat_id)"
             />
             <view v-else class="cat-photo-placeholder">
@@ -139,9 +187,15 @@
             </view>
             <text class="card-arrow">›</text>
           </button>
+
+          <view class="list-footer">
+            <text v-if="isLoadingMore">正在加载更多猫咪...</text>
+            <text v-else-if="!hasMore">已展示全部 {{ totalCats }} 只猫咪</text>
+          </view>
         </view>
       </view>
     </scroll-view>
+
     <AppTabBar active-key="cats" />
   </view>
 </template>
@@ -165,11 +219,19 @@ import { useUserStore } from "@/stores/user";
 
 import {
   buildCatListQuery,
+  buildCatStatsDisplayItems,
   formatCatSeenTime,
   getCatTagTone,
   normalizeCatStats,
 } from "./cats-page";
-import catIcon from "../../../素材/icon/猫咪.png";
+import loadingBackground from "../../../素材/加载页素材/加载页背景.png";
+import titleMascotIcon from "../../../素材/svg/萌猫/暹罗猫.svg";
+import totalStatsIcon from "../../../素材/svg/猫咪库/总计.svg";
+import activeStatsIcon from "../../../素材/svg/猫咪库/盾牌.svg";
+import waitingAdoptionStatsIcon from "../../../素材/svg/猫咪库/未领养.svg";
+import neuteredStatsIcon from "../../../素材/svg/猫咪库/领养.svg";
+import filterArrowIcon from "../../../素材/svg/地图点/箭头.svg";
+import clearFilterIcon from "../../../素材/svg/猫咪库/删除.svg";
 
 type PickerChangeEvent = {
   detail: {
@@ -177,8 +239,17 @@ type PickerChangeEvent = {
   };
 };
 
+type PickerKind = "filter_key" | "filter_value" | "sort";
+
 const PAGE_SIZE = 20;
 const DEFAULT_SORT_OPTION: CatSortOption = { value: "last_seen_desc", label: "最近出现" };
+const statIconMap: Record<string, string> = {
+  total: totalStatsIcon,
+  active: activeStatsIcon,
+  waiting_adoption: waitingAdoptionStatsIcon,
+  adopted: neuteredStatsIcon,
+  graduated: "",
+};
 
 const userStore = useUserStore();
 const stats = ref<CatStatsResponse | null>(null);
@@ -189,22 +260,21 @@ const keyword = ref("");
 const selectedFilterKey = ref("");
 const selectedFilterValue = ref("");
 const selectedSort = ref(DEFAULT_SORT_OPTION.value);
+const currentPage = ref(1);
+const totalCats = ref(0);
+const hasMore = ref(false);
 const isLoading = ref(false);
+const isLoadingMore = ref(false);
 const isRefreshing = ref(false);
 const errorMessage = ref("");
 const imageFailedIds = ref<string[]>([]);
+const activePicker = ref<PickerKind | "">("");
 
 const resolvedStats = computed(() => normalizeCatStats(stats.value));
-const statsItems = computed(() => [
-  { key: "total", label: "在档猫咪", value: resolvedStats.value.total_cats, tone: "green" },
-  { key: "active", label: "正常在校", value: resolvedStats.value.active_cats, tone: "green" },
-  { key: "adoption", label: "待领养", value: resolvedStats.value.waiting_adoption_cats, tone: "orange" },
-  { key: "watching", label: "待观察", value: resolvedStats.value.watching_cats, tone: "blue" },
-  { key: "neutered", label: "已绝育", value: resolvedStats.value.neutered_cats, tone: "purple" },
-]);
+const statsItems = computed(() => buildCatStatsDisplayItems(stats.value));
 
 const filterKeyPickerOptions = computed(() => [
-  { key: "", label: "筛选项", values: [] },
+  { key: "", label: "全部", values: [] },
   ...filterOptions.value,
 ]);
 const selectedFilterOption = computed(() =>
@@ -224,7 +294,7 @@ const selectedSortIndex = computed(() =>
   Math.max(0, sortOptions.value.findIndex((item) => item.value === selectedSort.value)),
 );
 const selectedFilterKeyLabel = computed(
-  () => filterKeyPickerOptions.value[selectedFilterKeyIndex.value]?.label ?? "筛选项",
+  () => filterKeyPickerOptions.value[selectedFilterKeyIndex.value]?.label ?? "全部",
 );
 const selectedFilterValueLabel = computed(
   () => filterValuePickerOptions.value[selectedFilterValueIndex.value]?.label ?? "全部",
@@ -242,23 +312,50 @@ async function resolveAccessToken() {
   return accessToken;
 }
 
-async function loadCatsList(accessToken?: string) {
+async function loadCatsList(accessToken?: string, options: { reset?: boolean } = { reset: true }) {
+  const reset = options.reset ?? true;
+  if (!reset && (isLoading.value || isLoadingMore.value || !hasMore.value)) {
+    return;
+  }
+
   const token = accessToken ?? await resolveAccessToken();
   if (!token) {
     return;
   }
-  const response = await getCats(
-    token,
-    buildCatListQuery({
-      keyword: keyword.value,
-      filter_key: selectedFilterKey.value,
-      filter_value: selectedFilterValue.value,
-      sort: selectedSort.value,
-      page: 1,
-      page_size: PAGE_SIZE,
-    }),
-  );
-  cats.value = response.items;
+
+  const nextPage = reset ? 1 : currentPage.value + 1;
+  if (!reset) {
+    isLoadingMore.value = true;
+  }
+
+  try {
+    const response = await getCats(
+      token,
+      buildCatListQuery({
+        keyword: keyword.value,
+        filter_key: selectedFilterKey.value,
+        filter_value: selectedFilterValue.value,
+        sort: selectedSort.value,
+        page: nextPage,
+        page_size: PAGE_SIZE,
+      }),
+    );
+    const existingIds = new Set(cats.value.map((cat) => cat.cat_id));
+    cats.value = reset
+      ? response.items
+      : [
+          ...cats.value,
+          ...response.items.filter((cat) => !existingIds.has(cat.cat_id)),
+        ];
+    currentPage.value = response.page;
+    totalCats.value = response.total;
+    hasMore.value = response.has_more;
+    if (reset) {
+      imageFailedIds.value = [];
+    }
+  } finally {
+    isLoadingMore.value = false;
+  }
 }
 
 async function loadCatsPage() {
@@ -288,6 +385,10 @@ async function loadCatsPage() {
     filterOptions.value = optionsResponse.filter_options;
     sortOptions.value = optionsResponse.sort_options.length > 0 ? optionsResponse.sort_options : [DEFAULT_SORT_OPTION];
     cats.value = listResponse.items;
+    currentPage.value = listResponse.page;
+    totalCats.value = listResponse.total;
+    hasMore.value = listResponse.has_more;
+    imageFailedIds.value = [];
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "猫咪库加载失败";
   } finally {
@@ -304,10 +405,31 @@ async function refreshPage() {
 async function handleSearchConfirm() {
   errorMessage.value = "";
   try {
-    await loadCatsList();
+    await loadCatsList(undefined, { reset: true });
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "猫咪列表刷新失败";
   }
+}
+
+async function loadMoreCats() {
+  if (isLoading.value || isLoadingMore.value || !hasMore.value) {
+    return;
+  }
+
+  try {
+    await loadCatsList(undefined, { reset: false });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "加载更多失败";
+    uni.showToast({ title: message, icon: "none" });
+  }
+}
+
+function openPicker(kind: PickerKind) {
+  activePicker.value = kind;
+}
+
+function closePicker() {
+  activePicker.value = "";
 }
 
 function pickerIndex(event: PickerChangeEvent) {
@@ -318,18 +440,21 @@ function handleFilterKeyChange(event: PickerChangeEvent) {
   const selected = filterKeyPickerOptions.value[pickerIndex(event)];
   selectedFilterKey.value = selected?.key ?? "";
   selectedFilterValue.value = "";
+  closePicker();
   void handleSearchConfirm();
 }
 
 function handleFilterValueChange(event: PickerChangeEvent) {
   const selected = filterValuePickerOptions.value[pickerIndex(event)];
   selectedFilterValue.value = selected?.value ?? "";
+  closePicker();
   void handleSearchConfirm();
 }
 
 function handleSortChange(event: PickerChangeEvent) {
   const selected = sortOptions.value[pickerIndex(event)];
   selectedSort.value = selected?.value ?? DEFAULT_SORT_OPTION.value;
+  closePicker();
   void handleSearchConfirm();
 }
 
@@ -338,6 +463,7 @@ function clearFilters() {
   selectedFilterKey.value = "";
   selectedFilterValue.value = "";
   selectedSort.value = DEFAULT_SORT_OPTION.value;
+  closePicker();
   void handleSearchConfirm();
 }
 
@@ -362,16 +488,25 @@ onShow(() => {
 
 <style scoped>
 .cats-page {
+  position: relative;
   height: 100vh;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 84% 10%, rgba(210, 237, 195, 0.72) 0, rgba(210, 237, 195, 0) 190rpx),
-    linear-gradient(180deg, #fbfdf8 0%, #f5faf1 100%);
+  background: #f7fbef;
   color: #151a20;
   font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
 }
 
+.page-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .cats-scroll {
+  position: relative;
+  z-index: 1;
   height: 100vh;
   box-sizing: border-box;
 }
@@ -379,52 +514,38 @@ onShow(() => {
 .page-inner {
   box-sizing: border-box;
   min-height: 100vh;
-  padding: 72rpx 32rpx calc(env(safe-area-inset-bottom) + 154rpx);
+  padding: var(--catmap-page-title-top, 46rpx) var(--catmap-page-title-side, 42rpx) calc(env(safe-area-inset-bottom) + 154rpx);
 }
 
-.hero {
+.page-title {
+  margin-bottom: 28rpx;
+}
+
+.page-title-row {
   display: flex;
   align-items: center;
-  gap: 24rpx;
-  margin-bottom: 34rpx;
+  gap: var(--catmap-page-title-gap, 20rpx);
 }
 
-.hero-icon-shell {
-  width: 92rpx;
-  height: 92rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 14rpx 34rpx rgba(48, 101, 50, 0.12);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.hero-icon {
-  width: 54rpx;
-  height: 54rpx;
-}
-
-.hero-copy {
-  min-width: 0;
-}
-
-.hero-title,
-.hero-subtitle {
-  display: block;
-}
-
-.hero-title {
-  color: #111720;
-  font-size: 54rpx;
+.page-title-text {
+  color: #111827;
+  font-size: var(--catmap-page-title-font-size, 58rpx);
   font-weight: 900;
-  line-height: 1.1;
+  letter-spacing: 1rpx;
+  line-height: 1;
 }
 
-.hero-subtitle {
-  margin-top: 12rpx;
-  color: #68707b;
-  font-size: 27rpx;
+.page-title-icon {
+  width: var(--catmap-page-title-icon-size, 54rpx);
+  height: var(--catmap-page-title-icon-size, 54rpx);
+}
+
+.page-title-subtitle {
+  display: block;
+  margin-top: var(--catmap-page-title-subtitle-margin, 22rpx);
+  color: #6b7280;
+  font-size: var(--catmap-page-title-subtitle-size, 28rpx);
+  font-weight: 700;
   line-height: 1.2;
 }
 
@@ -434,103 +555,179 @@ onShow(() => {
 .cat-card,
 .state-panel {
   box-sizing: border-box;
-  border: 2rpx solid rgba(223, 237, 216, 0.9);
-  background: rgba(255, 255, 255, 0.94);
+  border: 2rpx solid rgba(197, 230, 193, 0.78);
   box-shadow: 0 15rpx 38rpx rgba(39, 76, 42, 0.08);
 }
 
 .stats-card {
-  border-radius: 30rpx;
-  padding: 30rpx 22rpx 24rpx;
+  position: relative;
+  min-height: 246rpx;
+  overflow: hidden;
+  border-radius: 28rpx;
+  padding: 30rpx 34rpx 24rpx;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 18rpx 42rpx rgba(34, 83, 40, 0.12);
+}
+
+.stats-card::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background:
+    radial-gradient(circle at 95% 100%, rgba(141, 219, 111, 0.5) 0, rgba(141, 219, 111, 0.32) 92rpx, rgba(141, 219, 111, 0) 190rpx),
+    radial-gradient(circle at 88% 0, rgba(207, 239, 192, 0.45) 0, rgba(207, 239, 192, 0) 120rpx),
+    linear-gradient(140deg, rgba(248, 255, 246, 0.95) 0%, rgba(255, 255, 255, 0.88) 58%, rgba(232, 248, 221, 0.82) 100%);
+  pointer-events: none;
+}
+
+.stats-card::after {
+  position: absolute;
+  right: -54rpx;
+  bottom: -84rpx;
+  width: 286rpx;
+  height: 170rpx;
+  border-radius: 60% 40% 0 0;
+  background: linear-gradient(135deg, rgba(144, 212, 113, 0.15), rgba(104, 192, 88, 0.52));
+  content: "";
+  transform: rotate(-8deg);
+}
+
+.stats-grid {
+  position: relative;
+  z-index: 2;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
-  row-gap: 26rpx;
+  align-items: start;
+  gap: 0;
 }
 
 .stat-item {
+  position: relative;
   min-width: 0;
   text-align: center;
 }
 
-.stat-item + .stat-item {
-  border-left: 2rpx solid #e4eee0;
+.stat-item + .stat-item::before {
+  position: absolute;
+  top: 8rpx;
+  bottom: 0;
+  left: 0;
+  width: 2rpx;
+  background: rgba(170, 198, 164, 0.32);
+  content: "";
 }
 
-.stat-label,
-.stat-value {
+.stat-icon,
+.stat-icon-placeholder {
+  width: 42rpx;
+  height: 42rpx;
+}
+
+.stat-icon-green {
+  filter: brightness(0) saturate(100%) invert(46%) sepia(89%) saturate(466%) hue-rotate(83deg) brightness(90%) contrast(91%);
+}
+
+.stat-icon-orange {
+  filter: brightness(0) saturate(100%) invert(59%) sepia(89%) saturate(1228%) hue-rotate(347deg) brightness(98%) contrast(95%);
+}
+
+.stat-icon-blue {
+  filter: brightness(0) saturate(100%) invert(52%) sepia(90%) saturate(1755%) hue-rotate(189deg) brightness(96%) contrast(91%);
+}
+
+.stat-icon-purple {
+  filter: brightness(0) saturate(100%) invert(53%) sepia(67%) saturate(2018%) hue-rotate(222deg) brightness(99%) contrast(93%);
+}
+
+.stat-value,
+.stat-label {
   display: block;
 }
 
 .stat-label {
-  color: #2d333b;
+  margin-top: 14rpx;
+  color: #1f2933;
   font-size: 23rpx;
-  line-height: 1.1;
+  font-weight: 800;
+  line-height: 1.12;
 }
 
 .stat-value {
-  margin-top: 15rpx;
-  font-size: 48rpx;
+  margin-top: 10rpx;
+  font-size: 42rpx;
   font-weight: 900;
   line-height: 1;
 }
 
-.stat-green .stat-value {
-  color: #228031;
+.stat-value-green {
+  color: #14952f;
 }
 
-.stat-blue .stat-value {
-  color: #3389e6;
+.stat-value-orange {
+  color: #f47b1c;
 }
 
-.stat-orange .stat-value {
-  color: #ee7c18;
+.stat-value-blue {
+  color: #2f8be6;
 }
 
-.stat-purple .stat-value {
-  color: #785fe8;
+.stat-value-purple {
+  color: #7656ed;
 }
 
-.neuter-rate {
-  grid-column: 1 / -1;
-  border-top: 2rpx dashed #dcebd5;
-  padding-top: 22rpx;
-  color: #17202a;
+.neuter-rate-row {
+  position: relative;
+  z-index: 2;
+  margin-top: 28rpx;
+  border-top: 2rpx dashed rgba(180, 204, 174, 0.45);
+  padding-top: 16rpx;
+  color: #111827;
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: center;
-  gap: 18rpx;
-  font-size: 29rpx;
+  gap: 8rpx;
+  font-size: 25rpx;
+  font-weight: 800;
+  line-height: 1;
+  text-align: center;
+}
+
+.neuter-count {
+  color: #129735;
+  font-size: 42rpx;
   font-weight: 900;
 }
 
-.rate-value {
-  color: #238033;
-  font-size: 38rpx;
+.search-box,
+.filter-card,
+.cat-card,
+.state-panel {
+  background: rgba(255, 255, 255, 0.93);
 }
 
 .search-box {
-  min-height: 88rpx;
+  min-height: 72rpx;
   margin-top: 28rpx;
   border: 0;
-  border-radius: 28rpx;
-  padding: 0 16rpx 0 28rpx;
+  border-radius: 24rpx;
+  padding: 0 14rpx 0 24rpx;
   display: flex;
   align-items: center;
-  gap: 16rpx;
+  gap: 14rpx;
 }
 
 .search-icon {
   color: #323946;
-  font-size: 42rpx;
+  font-size: 36rpx;
   line-height: 1;
 }
 
 .search-input {
   flex: 1;
   min-width: 0;
-  height: 88rpx;
+  height: 72rpx;
   color: #222831;
-  font-size: 28rpx;
+  font-size: 25rpx;
 }
 
 .search-placeholder {
@@ -553,82 +750,96 @@ onShow(() => {
 }
 
 .search-button {
-  width: 96rpx;
-  height: 58rpx;
-  border-radius: 18rpx;
+  width: 84rpx;
+  height: 50rpx;
+  border-radius: 16rpx;
   background: #2f8a38;
   color: #ffffff;
-  font-size: 24rpx;
+  font-size: 22rpx;
   font-weight: 900;
-  line-height: 58rpx;
+  line-height: 50rpx;
 }
 
 .filter-card {
   margin-top: 28rpx;
-  border-radius: 28rpx;
-  padding: 24rpx;
+  border-radius: 26rpx;
+  padding: 20rpx 18rpx;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 18rpx;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 82rpx;
+  align-items: end;
+  gap: 12rpx;
 }
 
 .filter-picker {
   min-width: 0;
 }
 
-.picker-shell {
-  height: 76rpx;
-  box-sizing: border-box;
-  border: 2rpx solid #cfe4c9;
-  border-radius: 24rpx;
-  padding: 8rpx 18rpx;
-  background: rgba(255, 255, 255, 0.78);
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-}
-
-.picker-caption,
-.picker-value,
-.picker-arrow {
-  line-height: 1;
+.filter-control {
+  min-width: 0;
 }
 
 .picker-caption {
-  display: none;
+  display: block;
+  margin: 0 0 10rpx 14rpx;
+  color: rgba(82, 90, 102, 0.68);
+  font-size: 19rpx;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.picker-shell {
+  height: 58rpx;
+  box-sizing: border-box;
+  border: 2rpx solid #c4dac2;
+  border-radius: 19rpx;
+  padding: 0 12rpx 0 16rpx;
+  background: rgba(255, 255, 255, 0.82);
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
 }
 
 .picker-value {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  color: #20262e;
-  font-size: 25rpx;
+  color: #151a20;
+  font-size: 21rpx;
   font-weight: 900;
+  line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.picker-arrow {
-  color: #151a20;
-  font-size: 30rpx;
+.picker-arrow-icon {
+  width: 21rpx;
+  height: 21rpx;
+  flex: 0 0 auto;
+  transform: rotate(180deg);
+  transition: transform 0.2s ease;
+}
+
+.picker-arrow-icon.is-open {
+  transform: rotate(0deg);
 }
 
 .clear-filter-button {
-  grid-column: 1 / -1;
-  height: 62rpx;
-  color: #278435;
-  font-size: 24rpx;
+  height: 82rpx;
+  color: #0d9b2e;
+  font-size: 18rpx;
   font-weight: 900;
-  line-height: 62rpx;
+  line-height: 1.1;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 10rpx;
+  justify-content: flex-end;
+  gap: 8rpx;
 }
 
-.clear-icon {
-  font-size: 30rpx;
+.clear-filter-icon {
+  width: 32rpx;
+  height: 32rpx;
+  filter: brightness(0) saturate(100%) invert(37%) sepia(92%) saturate(1118%) hue-rotate(111deg) brightness(93%) contrast(95%);
 }
 
 .state-panel {
@@ -836,5 +1047,14 @@ onShow(() => {
   font-size: 56rpx;
   line-height: 1;
   transform: translateY(-50%);
+}
+
+.list-footer {
+  min-height: 52rpx;
+  color: #6a7480;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 52rpx;
+  text-align: center;
 }
 </style>

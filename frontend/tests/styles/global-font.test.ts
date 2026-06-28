@@ -19,4 +19,11 @@ describe("global Chinese font rules", () => {
     expect(agents).toContain("微信小程序视口");
     expect(agents).toContain("手机");
   });
+
+  test("keeps shared page title metrics and loading background rule", () => {
+    expect(appVue).toContain("--catmap-page-title-top: 46rpx");
+    expect(appVue).toContain("--catmap-page-title-side: 42rpx");
+    expect(appVue).toContain("--catmap-page-title-font-size: 58rpx");
+    expect(agents).toContain("frontend/素材/加载页素材/加载页背景.png");
+  });
 });

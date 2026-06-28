@@ -1607,35 +1607,35 @@ onBeforeUnmount(() => {
 .map-title {
   position: absolute;
   z-index: 3;
-  top: 46rpx;
-  left: 42rpx;
-  right: 42rpx;
+  top: var(--catmap-page-title-top, 46rpx);
+  left: var(--catmap-page-title-side, 42rpx);
+  right: var(--catmap-page-title-side, 42rpx);
 }
 
 .title-row {
   display: flex;
   align-items: center;
-  gap: 20rpx;
+  gap: var(--catmap-page-title-gap, 20rpx);
 }
 
 .title-text {
   color: #111827;
-  font-size: 58rpx;
+  font-size: var(--catmap-page-title-font-size, 58rpx);
   font-weight: 900;
   letter-spacing: 1rpx;
   line-height: 1;
 }
 
 .title-paw {
-  width: 54rpx;
-  height: 54rpx;
+  width: var(--catmap-page-title-icon-size, 54rpx);
+  height: var(--catmap-page-title-icon-size, 54rpx);
 }
 
 .title-subtitle {
   display: block;
-  margin-top: 22rpx;
+  margin-top: var(--catmap-page-title-subtitle-margin, 22rpx);
   color: #6b7280;
-  font-size: 28rpx;
+  font-size: var(--catmap-page-title-subtitle-size, 28rpx);
   font-weight: 700;
   line-height: 1.2;
 }

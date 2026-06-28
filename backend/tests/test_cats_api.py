@@ -58,6 +58,8 @@ def test_cats_empty_list_contract(api_client, db_session):
         "total_cats": 0,
         "active_cats": 0,
         "waiting_adoption_cats": 0,
+        "adopted_cats": 0,
+        "deceased_cats": 0,
         "watching_cats": 0,
         "neutered_cats": 0,
         "neuter_rate": 0,
@@ -159,6 +161,28 @@ def test_cats_list_search_filter_stats_and_favorites(api_client, db_session):
         personality_tags=["胆小"],
         last_seen_at=None,
     )
+    seed_cat(
+        db_session,
+        name="领养团子",
+        coat_color="橘猫",
+        resident_area_text="北门",
+        health_status="healthy",
+        neuter_status="neutered",
+        status="adopted",
+        personality_tags=["贪吃"],
+        last_seen_at=now - timedelta(days=2),
+    )
+    seed_cat(
+        db_session,
+        name="毕业花花",
+        coat_color="狸花",
+        resident_area_text="教学楼A",
+        health_status="recovered",
+        neuter_status="neutered",
+        status="deceased",
+        personality_tags=["警惕"],
+        last_seen_at=now - timedelta(days=3),
+    )
     db_session.add(CatFavorite(user_id=user.id, cat_id=xiaoju.id))
     db_session.commit()
 
@@ -177,17 +201,19 @@ def test_cats_list_search_filter_stats_and_favorites(api_client, db_session):
 
     assert stats_response.status_code == 200
     assert stats_response.json()["data"] == {
-        "total_cats": 3,
+        "total_cats": 5,
         "active_cats": 2,
         "waiting_adoption_cats": 1,
+        "adopted_cats": 1,
+        "deceased_cats": 1,
         "watching_cats": 2,
-        "neutered_cats": 1,
-        "neuter_rate": 33,
+        "neutered_cats": 3,
+        "neuter_rate": 60,
     }
 
     assert list_response.status_code == 200
     list_data = list_response.json()["data"]
-    assert list_data["total"] == 3
+    assert list_data["total"] == 5
     assert list_data["has_more"] is True
     assert [item["name"] for item in list_data["items"]] == ["小橘", "台阶狸花"]
     assert list_data["items"][0]["alias_summary"] == "橘子"

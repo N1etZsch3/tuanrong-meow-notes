@@ -24,6 +24,8 @@ describe("cats api", () => {
       total_cats: 0,
       active_cats: 0,
       waiting_adoption_cats: 0,
+      adopted_cats: 0,
+      deceased_cats: 0,
       watching_cats: 0,
       neutered_cats: 0,
       neuter_rate: 0,

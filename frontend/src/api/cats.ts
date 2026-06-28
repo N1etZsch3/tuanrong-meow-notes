@@ -4,6 +4,8 @@ export interface CatStatsResponse {
   total_cats: number;
   active_cats: number;
   waiting_adoption_cats: number;
+  adopted_cats: number;
+  deceased_cats: number;
   watching_cats: number;
   neutered_cats: number;
   neuter_rate: number;

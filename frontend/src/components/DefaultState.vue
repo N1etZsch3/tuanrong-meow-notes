@@ -58,7 +58,7 @@ import {
   type DefaultStateKey,
 } from "./default-state";
 
-import loadingBackground from "../../素材/加载页素材/加载页背景.png";
+import loadingBackground from "../../素材/加载页素材/加载页背景.jpg";
 
 const ACTION_ICONS: Record<string, string> = {
   back: "‹",
@@ -201,14 +201,14 @@ function handleBack() {
   z-index: 1;
   height: 100%;
   box-sizing: border-box;
-  padding: 64rpx 34rpx 44rpx;
+  padding: var(--catmap-page-title-top, 92rpx) 34rpx 36rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
 .with-tab-bar .default-state-content {
-  padding-top: 58rpx;
+  padding-top: var(--catmap-page-title-top, 92rpx);
   padding-bottom: 22rpx;
 }
 
@@ -222,21 +222,20 @@ function handleBack() {
   display: block;
   color: #2f7d2e;
   font-family: "Songti SC", "STSong", "SimSun", serif;
-  font-size: 60rpx;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
   line-height: 1.12;
-  letter-spacing: 3rpx;
   text-shadow: 0 7rpx 16rpx rgba(58, 127, 47, 0.12);
 }
 
 .heading-subtitle {
-  margin-top: 20rpx;
+  margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 12rpx;
   color: #6a7078;
-  font-size: 25rpx;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
   font-weight: 700;
   line-height: 1.2;
 }
@@ -252,13 +251,13 @@ function handleBack() {
   max-width: 684rpx;
   flex: 1;
   min-height: 0;
-  margin-top: 48rpx;
+  margin-top: 38rpx;
   box-sizing: border-box;
   border: 2rpx solid rgba(231, 240, 226, 0.82);
   border-radius: 58rpx;
   background: rgba(255, 255, 255, 0.84);
   box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.92), 0 18rpx 44rpx rgba(64, 102, 60, 0.08);
-  padding: 42rpx 46rpx 40rpx;
+  padding: 38rpx 46rpx 36rpx;
   display: flex;
   flex-direction: column;
   align-items: center;

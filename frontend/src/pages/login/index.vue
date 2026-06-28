@@ -162,7 +162,7 @@ import {
   rememberAgreementAcceptedForAccounts,
 } from "@/pages/login/agreement";
 
-import loginBackground from "../../../素材/登录页素材/登录页背景.png";
+import loginBackground from "../../../素材/登录页素材/登录页背景.jpg";
 import loginCat from "../../../素材/svg/萌猫/三花猫.svg";
 import logoImage from "../../../素材/登录页素材/协会徽标.jpg";
 import iconStudent from "../../../素材/登录页素材/学号.svg";

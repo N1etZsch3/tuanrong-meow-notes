@@ -12,6 +12,8 @@ Thumbs.db
 # Logs
 *.log
 logs/
+*.burp
+喵扎特抓包/
 
 # Node / frontend
 node_modules/
@@ -21,6 +23,7 @@ build/
 .vite/
 .nuxt/
 coverage/
+frontend/project.private.config.json
 
 # Python / backend
 __pycache__/

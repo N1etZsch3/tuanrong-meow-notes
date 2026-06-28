@@ -56,6 +56,19 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("userStore.ensureFreshAccessToken()");
   });
 
+  it("uses the WeChat mini program native map path only", () => {
+    expect(indexPageSource).toContain('<map');
+    expect(indexPageSource).toContain('class="native-map"');
+    expect(indexPageSource).toContain(':show-location="true"');
+    expect(indexPageSource).toContain("uni.getLocation");
+    expect(indexPageSource).toContain("uni.openLocation");
+    expect(indexPageSource).not.toContain("supportsAmapWeb");
+    expect(indexPageSource).not.toContain("window.AMap");
+    expect(indexPageSource).not.toContain("appEnv");
+    expect(indexPageSource).not.toContain("campus-amap");
+    expect(indexPageSource).not.toContain("amap-host");
+  });
+
   it("ignores canceled map requests instead of treating them as page errors", () => {
     expect(indexPageSource).toContain("isRequestCanceledError");
   });
@@ -99,17 +112,30 @@ describe("map page shell behavior", () => {
     ).toBe("preview");
   });
 
-  it("resizes the amap instance after WXS drawer layout changes", () => {
-    expect(indexPageSource).toContain("scheduleMapResizeAfterDrawerChange");
-    expect(indexPageSource).toContain("amapInstance.resize");
+  it("keeps drawer state native-map friendly without web map resize hooks", () => {
+    expect(indexPageSource).toContain("function onDrawerProgressChange(progress: number)");
+    expect(indexPageSource).toContain("currentDrawerProgress.value = progress");
+    expect(indexPageSource).not.toContain("scheduleMapResizeAfterDrawerChange");
+    expect(indexPageSource).not.toContain("amapInstance.resize");
   });
 
-  it("keeps navigation inside the app instead of opening external amap urls", () => {
+  it("keeps navigation in the mini program map APIs", () => {
     expect(indexPageSource).not.toContain("window.open");
-    expect(indexPageSource).toContain("renderAmapWalkingRoute");
     expect(indexPageSource).toContain("renderNativeRoute");
     expect(indexPageSource).toContain("renderInAppRoute");
+    expect(indexPageSource).toContain("uni.openLocation");
     expect(indexPageSource).toContain(':polyline="nativeMapPolylines"');
+    expect(indexPageSource).not.toContain("renderAmapWalkingRoute");
+  });
+
+  it("lowers and compacts the map title, map viewport, filter, and content drawer", () => {
+    expect(indexPageSource).toContain("top: var(--catmap-page-title-top, 92rpx)");
+    expect(indexPageSource).toContain("font-size: var(--catmap-page-title-font-size, 52rpx)");
+    expect(indexPageSource).toContain("font-size: var(--catmap-page-title-subtitle-size, 24rpx)");
+    expect(indexPageSource).toContain("top: 218rpx");
+    expect(indexPageSource).toContain("bottom: 664rpx");
+    expect(indexPageSource).toContain("top: 252rpx");
+    expect(indexPageSource).toContain("height: 460rpx");
   });
 
   it("renders marker svg icons and a redesigned arrow in the filter menu", () => {
@@ -180,17 +206,18 @@ describe("map page shell behavior", () => {
     expect(results[0].id).toBe("inside");
   });
 
-  it("keeps a non-web amap rest fallback for mini program poi search", () => {
-    expect(indexPageSource).toContain("searchCampusExternalPoisByRest");
-    expect(indexPageSource).toContain("https://restapi.amap.com/v3/place/text");
-    expect(indexPageSource).toContain("parseAmapRestLocation");
+  it("does not retain amap web sdk or rest poi search paths in the mini program page", () => {
+    expect(indexPageSource).not.toContain("searchCampusExternalPoisByRest");
+    expect(indexPageSource).not.toContain("searchCampusExternalPoisByAmapJs");
+    expect(indexPageSource).not.toContain("https://restapi.amap.com/v3/place/text");
+    expect(indexPageSource).not.toContain("parseAmapRestLocation");
   });
 
-  it("renders searched internal and external results as temporary map markers", () => {
+  it("renders searched backend results as temporary native map markers", () => {
     expect(indexPageSource).toContain("mapSearchShellItemToMarker");
-    expect(indexPageSource).toContain("createSearchPointSummary");
-    expect(indexPageSource).toContain("selectedExternalTarget");
-    expect(indexPageSource).toContain("search_external");
+    expect(indexPageSource).toContain("search_result");
+    expect(indexPageSource).not.toContain("selectedExternalTarget");
+    expect(indexPageSource).not.toContain("search_external");
   });
 
   it("keeps a readable label for each map filter", () => {

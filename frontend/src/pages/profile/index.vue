@@ -3,11 +3,13 @@
     <scroll-view class="profile-scroll" scroll-y>
       <view class="page-inner">
         <view class="hero">
-          <view>
-            <text class="hero-title">我的</text>
+          <view class="hero-copy">
+            <view class="hero-title-row">
+              <text class="hero-title">我的</text>
+              <image class="hero-cat" :src="catLineArt" mode="aspectFit" />
+            </view>
             <text class="hero-subtitle">个人信息与任务记录</text>
           </view>
-          <image class="hero-cat" :src="catLineArt" mode="aspectFit" />
         </view>
 
         <view class="profile-card" @tap="goProfileDetail">
@@ -188,14 +190,23 @@ onShow(() => {
 .page-inner {
   box-sizing: border-box;
   min-height: 100vh;
-  padding: 92rpx 38rpx calc(env(safe-area-inset-bottom) + 164rpx);
+  padding: var(--catmap-page-title-top, 92rpx) 38rpx calc(env(safe-area-inset-bottom) + 164rpx);
 }
 
 .hero {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
+  align-items: flex-start;
   margin-bottom: 44rpx;
+}
+
+.hero-copy {
+  min-width: 0;
+}
+
+.hero-title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--catmap-page-title-gap, 14rpx);
 }
 
 .hero-title,
@@ -205,20 +216,23 @@ onShow(() => {
 
 .hero-title {
   color: #16191f;
-  font-size: 62rpx;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
-  line-height: 1.1;
+  line-height: 1;
 }
 
 .hero-subtitle {
-  margin-top: 12rpx;
+  margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
   color: #5f6670;
-  font-size: 27rpx;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .hero-cat {
-  width: 126rpx;
-  height: 102rpx;
+  width: var(--catmap-page-title-icon-size, 48rpx);
+  height: var(--catmap-page-title-icon-size, 48rpx);
+  flex: 0 0 auto;
 }
 
 .profile-card,

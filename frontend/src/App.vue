@@ -22,13 +22,13 @@ uni-page-body {
 }
 
 page {
-  --catmap-page-title-top: 46rpx;
+  --catmap-page-title-top: 92rpx;
   --catmap-page-title-side: 42rpx;
-  --catmap-page-title-gap: 20rpx;
-  --catmap-page-title-font-size: 58rpx;
-  --catmap-page-title-icon-size: 54rpx;
-  --catmap-page-title-subtitle-margin: 22rpx;
-  --catmap-page-title-subtitle-size: 28rpx;
+  --catmap-page-title-gap: 14rpx;
+  --catmap-page-title-font-size: 52rpx;
+  --catmap-page-title-icon-size: 48rpx;
+  --catmap-page-title-subtitle-margin: 14rpx;
+  --catmap-page-title-subtitle-size: 24rpx;
 
   height: 100%;
   overflow: hidden;

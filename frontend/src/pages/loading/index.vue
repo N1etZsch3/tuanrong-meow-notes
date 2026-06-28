@@ -40,7 +40,7 @@ import {
 } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
-import loadingBackground from "../../../素材/加载页素材/加载页背景.png";
+import loadingBackground from "../../../素材/加载页素材/加载页背景.jpg";
 import loadingLogo from "../../../素材/加载页素材/加载页会徽.png";
 import wheatLeftIcon from "../../../素材/加载页素材/麦穗1.svg";
 import wheatRightIcon from "../../../素材/加载页素材/麦穗2.svg";

@@ -224,8 +224,8 @@ import {
   getCatTagTone,
   normalizeCatStats,
 } from "./cats-page";
-import loadingBackground from "../../../素材/加载页素材/加载页背景.png";
-import titleMascotIcon from "../../../素材/svg/萌猫/暹罗猫.svg";
+import loadingBackground from "../../../素材/加载页素材/加载页背景.jpg";
+import titleMascotIcon from "../../../素材/svg/萌猫/寿司.svg";
 import totalStatsIcon from "../../../素材/svg/猫咪库/总计.svg";
 import activeStatsIcon from "../../../素材/svg/猫咪库/盾牌.svg";
 import waitingAdoptionStatsIcon from "../../../素材/svg/猫咪库/未领养.svg";
@@ -514,7 +514,7 @@ onShow(() => {
 .page-inner {
   box-sizing: border-box;
   min-height: 100vh;
-  padding: var(--catmap-page-title-top, 46rpx) var(--catmap-page-title-side, 42rpx) calc(env(safe-area-inset-bottom) + 154rpx);
+  padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx) calc(env(safe-area-inset-bottom) + 154rpx);
 }
 
 .page-title {
@@ -524,27 +524,27 @@ onShow(() => {
 .page-title-row {
   display: flex;
   align-items: center;
-  gap: var(--catmap-page-title-gap, 20rpx);
+  gap: var(--catmap-page-title-gap, 14rpx);
 }
 
 .page-title-text {
   color: #111827;
-  font-size: var(--catmap-page-title-font-size, 58rpx);
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
   letter-spacing: 1rpx;
   line-height: 1;
 }
 
 .page-title-icon {
-  width: var(--catmap-page-title-icon-size, 54rpx);
-  height: var(--catmap-page-title-icon-size, 54rpx);
+  width: var(--catmap-page-title-icon-size, 48rpx);
+  height: var(--catmap-page-title-icon-size, 48rpx);
 }
 
 .page-title-subtitle {
   display: block;
-  margin-top: var(--catmap-page-title-subtitle-margin, 22rpx);
+  margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
   color: #6b7280;
-  font-size: var(--catmap-page-title-subtitle-size, 28rpx);
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
   font-weight: 700;
   line-height: 1.2;
 }

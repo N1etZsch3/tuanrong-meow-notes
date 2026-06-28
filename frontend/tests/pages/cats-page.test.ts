@@ -27,10 +27,13 @@ describe("cats page behavior", () => {
   });
 
   it("uses the shared app background and map-page title treatment", () => {
-    expect(catsPageSource).toContain("加载页背景.png");
-    expect(catsPageSource).toContain("萌猫/暹罗猫.svg");
+    expect(catsPageSource).toContain("加载页背景.jpg");
+    expect(catsPageSource).toContain("萌猫/寿司.svg");
     expect(catsPageSource).toContain("page-title-row");
     expect(catsPageSource).toContain("page-title-icon");
+    expect(catsPageSource).toContain("var(--catmap-page-title-top, 92rpx)");
+    expect(catsPageSource).toContain("var(--catmap-page-title-font-size, 52rpx)");
+    expect(catsPageSource).toContain("var(--catmap-page-title-subtitle-size, 24rpx)");
     expect(catsPageSource).not.toContain("hero-icon-shell");
   });
 

@@ -20,6 +20,17 @@ describe("profile center pages", () => {
     expect(profileIndexSource).not.toContain("个人中心建设中");
   });
 
+  it("keeps the profile title aligned with the shared page title treatment", () => {
+    expect(profileIndexSource).toContain("hero-title-row");
+    expect(profileIndexSource).toContain('<image class="hero-cat"');
+    expect(profileIndexSource).toContain("var(--catmap-page-title-top, 92rpx)");
+    expect(profileIndexSource).toContain("var(--catmap-page-title-font-size, 52rpx)");
+    expect(profileIndexSource).toContain("var(--catmap-page-title-icon-size, 48rpx)");
+    expect(profileIndexSource).toContain("var(--catmap-page-title-subtitle-size, 24rpx)");
+    expect(profileIndexSource).toMatch(/\.hero\s*{[^}]*align-items: flex-start;[^}]*}/s);
+    expect(profileIndexSource).not.toMatch(/\.hero\s*{[^}]*justify-content: space-between/s);
+  });
+
   it("defines clickable stats and favorite cat record entries", () => {
     expect(PROFILE_STAT_ENTRIES.map((item) => item.label)).toEqual([
       "累计任务",

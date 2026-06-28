@@ -21,9 +21,13 @@ describe("global Chinese font rules", () => {
   });
 
   test("keeps shared page title metrics and loading background rule", () => {
-    expect(appVue).toContain("--catmap-page-title-top: 46rpx");
+    expect(appVue).toContain("--catmap-page-title-top: 92rpx");
     expect(appVue).toContain("--catmap-page-title-side: 42rpx");
-    expect(appVue).toContain("--catmap-page-title-font-size: 58rpx");
-    expect(agents).toContain("frontend/素材/加载页素材/加载页背景.png");
+    expect(appVue).toContain("--catmap-page-title-gap: 14rpx");
+    expect(appVue).toContain("--catmap-page-title-font-size: 52rpx");
+    expect(appVue).toContain("--catmap-page-title-icon-size: 48rpx");
+    expect(appVue).toContain("--catmap-page-title-subtitle-margin: 14rpx");
+    expect(appVue).toContain("--catmap-page-title-subtitle-size: 24rpx");
+    expect(agents).toContain("frontend/素材/加载页素材/加载页背景.jpg");
   });
 });

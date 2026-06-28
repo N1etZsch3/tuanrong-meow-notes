@@ -94,6 +94,16 @@ function applyProgress(progress, ownerInstance, transition) {
     });
   }
 
+  var filterLayer = ownerInstance.selectComponent('.map-filter-layer');
+  if (filterLayer) {
+    filterLayer.setStyle({
+      top: px(mapT + 34) + 'px',
+      left: px(mapL + 28) + 'px',
+      opacity: mapOp,
+      transition: trans
+    });
+  }
+
   var titleInstance = ownerInstance.selectComponent('.map-title');
   if (titleInstance) {
     titleInstance.setStyle({ opacity: titleOp, transform: 'translateY(' + px(titleTrans) + 'px)', transition: trans });

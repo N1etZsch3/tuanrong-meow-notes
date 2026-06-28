@@ -1,0 +1,79 @@
+var config = {
+  rpxRatio: 0.5
+};
+var currentOpen = false;
+
+function px(rpx) {
+  return rpx * config.rpxRatio;
+}
+
+function getOpenFromState(value) {
+  return !!(value && value.open);
+}
+
+function updateConfig(value) {
+  if (value && value.rpxRatio) {
+    config.rpxRatio = value.rpxRatio;
+  }
+}
+
+function apply(open, ownerInstance, transition) {
+  var trans = transition || 'none';
+  var chipWidth = open ? 336 : 224;
+  var hitWidth = open ? 360 : 244;
+  var menuOpacity = open ? 1 : 0;
+  var menuPointerEvents = open ? 'auto' : 'none';
+  var menuTransform = open ? 'translateY(0px) scaleY(1)' : 'translateY(' + px(-8) + 'px) scaleY(0.96)';
+  var arrowTransform = open ? 'rotate(0deg)' : 'rotate(180deg)';
+
+  var hitLayer = ownerInstance.selectComponent('.filter-panel-hit-layer');
+  if (hitLayer) {
+    hitLayer.setStyle({
+      width: px(hitWidth) + 'px',
+      transition: trans
+    });
+  }
+
+  var chip = ownerInstance.selectComponent('.filter-chip');
+  if (chip) {
+    chip.setStyle({
+      width: px(chipWidth) + 'px',
+      transition: trans
+    });
+  }
+
+  var menu = ownerInstance.selectComponent('.filter-menu');
+  if (menu) {
+    menu.setStyle({
+      opacity: menuOpacity,
+      pointerEvents: menuPointerEvents,
+      transform: menuTransform,
+      transition: trans
+    });
+  }
+
+  var arrow = ownerInstance.selectComponent('.filter-arrow-icon');
+  if (arrow) {
+    arrow.setStyle({
+      transform: arrowTransform,
+      transition: trans
+    });
+  }
+}
+
+function sync(newValue, oldValue, ownerInstance, instance) {
+  updateConfig(newValue);
+  currentOpen = getOpenFromState(newValue);
+  apply(currentOpen, ownerInstance, 'all 0.22s cubic-bezier(0.25, 1, 0.5, 1)');
+}
+
+function toggle(event, ownerInstance) {
+  currentOpen = !currentOpen;
+  apply(currentOpen, ownerInstance, 'all 0.22s cubic-bezier(0.25, 1, 0.5, 1)');
+  ownerInstance.callMethod('setFilterMenuOpen', currentOpen);
+}
+
+module.exports = {
+  sync: sync,
+  toggle: toggle
+};

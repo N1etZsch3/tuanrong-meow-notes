@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import filterMenuWxsSource from "../../src/pages/index/filter-menu.wxs?raw";
 import indexPageSource from "../../src/pages/index/index.vue?raw";
 import mapPageSource from "../../src/pages/index/map-page.ts?raw";
 import {
@@ -114,8 +115,44 @@ describe("map page shell behavior", () => {
   it("renders marker svg icons and a redesigned arrow in the filter menu", () => {
     expect(indexPageSource).toContain("MAP_FILTER_ICON_SRC");
     expect(indexPageSource).toContain("filter-option-icon");
-    expect(indexPageSource).toContain("filter-chevron-mark");
+    expect(indexPageSource).toContain("filterArrowIcon");
+    expect(indexPageSource).toContain("filter-arrow-icon");
+    expect(indexPageSource).toContain("../../../素材/svg/地图点/全部.svg");
+    expect(indexPageSource).toContain("../../../素材/svg/地图点/紧急任务.svg");
+    expect(indexPageSource).toContain("../../../素材/svg/地图点/日常任务.svg");
+    expect(indexPageSource).toContain("../../../素材/svg/地图点/猫咪点.svg");
+    expect(indexPageSource).toContain("../../../素材/svg/地图点/物资点.svg");
+    expect(indexPageSource).toContain("../../../素材/svg/地图点/地标.svg");
+    expect(indexPageSource).toContain("../../../素材/svg/地图点/箭头.svg");
+    expect(indexPageSource).not.toContain("filter-chevron-mark");
     expect(indexPageSource).not.toContain("⌄");
+  });
+
+  it("keeps the filter menu in a native-map-safe cover layer", () => {
+    expect(indexPageSource).toContain('<cover-view class="map-filter-layer"');
+    expect(indexPageSource).toContain('class="filter-panel-hit-layer"');
+    expect(indexPageSource).toContain('@tap="filterMenu.toggle"');
+    expect(indexPageSource).toContain(
+      '<script module="filterMenu" lang="wxs" src="./filter-menu.wxs"></script>',
+    );
+    expect(indexPageSource).not.toContain('class="filter-wrap"');
+
+    const viewportIndex = indexPageSource.indexOf('class="map-viewport"');
+    const layerIndex = indexPageSource.indexOf('class="map-filter-layer"');
+    const drawerIndex = indexPageSource.indexOf('class="content-drawer"');
+
+    expect(viewportIndex).toBeGreaterThan(-1);
+    expect(layerIndex).toBeGreaterThan(viewportIndex);
+    expect(layerIndex).toBeLessThan(drawerIndex);
+  });
+
+  it("animates the filter menu width and arrow direction with WXS", () => {
+    expect(filterMenuWxsSource).toContain("filter-chip");
+    expect(filterMenuWxsSource).toContain("filter-menu");
+    expect(filterMenuWxsSource).toContain("filter-arrow-icon");
+    expect(filterMenuWxsSource).toContain("rotate(180deg)");
+    expect(filterMenuWxsSource).toContain("rotate(0deg)");
+    expect(filterMenuWxsSource).toContain("width");
   });
 
   it("filters external poi search results to the campus bounds", () => {

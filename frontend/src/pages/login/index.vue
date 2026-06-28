@@ -152,11 +152,15 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref, watch } from "vue";
 
 import { getCaptcha } from "@/api/auth";
 import { CHANGE_PASSWORD_ROUTE, HOME_ROUTE, PROFILE_SETUP_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import {
+  hasAcceptedAgreementForAccount,
+  rememberAgreementAcceptedForAccounts,
+} from "@/pages/login/agreement";
 
 import loginBackground from "../../../素材/登录页素材/登录页背景.png";
 import loginCat from "../../../素材/svg/萌猫/三花猫.svg";
@@ -199,6 +203,10 @@ const closeModal = () => {
 
 function onAgreementChange(e: any) {
   form.agreed = e.detail.value.length > 0;
+}
+
+function applyRememberedAgreement() {
+  form.agreed = hasAcceptedAgreementForAccount(form.meow_no);
 }
 
 function togglePassword() {
@@ -254,6 +262,12 @@ async function handleLogin() {
       captcha_code: form.captcha_code,
       agree_terms: form.agreed,
     });
+    rememberAgreementAcceptedForAccounts([
+      form.meow_no,
+      result.user.meow_no,
+      result.user.student_no,
+    ]);
+
     if (result.next_action === "change_password" || result.must_change_password) {
       uni.showToast({ title: "请先修改初始密码", icon: "none" });
       uni.redirectTo({ url: CHANGE_PASSWORD_ROUTE });
@@ -276,8 +290,16 @@ async function handleLogin() {
 }
 
 onMounted(() => {
+  applyRememberedAgreement();
   void loadCaptcha();
 });
+
+watch(
+  () => form.meow_no,
+  () => {
+    applyRememberedAgreement();
+  },
+);
 </script>
 
 <style scoped>

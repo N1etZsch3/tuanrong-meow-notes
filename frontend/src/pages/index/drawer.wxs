@@ -2,6 +2,7 @@ var config = {
   rpxRatio: 0.5,
   windowHeight: 800
 };
+var MAX_DRAWER_PROGRESS = 2;
 var currentProgress = 1; // 1 = Normal
 var startProgress = 1;
 var startY = 0;
@@ -29,9 +30,9 @@ function interpolate(p, p0, p1, v0, v1) {
 }
 
 function applyProgress(progress, ownerInstance, transition) {
+  progress = clamp(progress, 0, MAX_DRAWER_PROGRESS);
   var drawerH, mapB, mapT, titleOp, titleTrans, mapOp;
   var mapL, mapRad, drawerL, drawerRad;
-  var maxDrawerH = config.windowHeight / config.rpxRatio - 150;
   
   if (progress < 1) {
     drawerH = interpolate(progress, 0, 1, 132, 500);
@@ -56,14 +57,14 @@ function applyProgress(progress, ownerInstance, transition) {
     titleTrans = interpolate(progress, 1, 2, 0, -28);
     mapOp = 1;
   } else {
-    drawerH = interpolate(progress, 2, 3, 654, maxDrawerH);
-    mapB = interpolate(progress, 2, 3, 800, maxDrawerH + 150);
-    mapT = interpolate(progress, 2, 3, 40, 0);
+    drawerH = 654;
+    mapB = 800;
+    mapT = 40;
     mapL = 24;
     mapRad = 28;
     drawerL = 0;
     drawerRad = 0;
-    mapOp = interpolate(progress, 2.5, 3, 1, 0);
+    mapOp = 1;
     titleOp = 0;
     titleTrans = -28;
   }
@@ -130,7 +131,7 @@ function touchmove(e, ownerInstance) {
   // Move 184px (approx 368rpx) = 1.0 progress.
   var deltaProgress = -deltaY / px(368);
   
-  currentProgress = clamp(startProgress + deltaProgress, 0, 3);
+  currentProgress = clamp(startProgress + deltaProgress, 0, MAX_DRAWER_PROGRESS);
   applyProgress(currentProgress, ownerInstance, 'none');
 }
 
@@ -150,20 +151,19 @@ function touchend(e, ownerInstance) {
     }
   }
 
+  targetProgress = clamp(targetProgress, 0, MAX_DRAWER_PROGRESS);
   currentProgress = targetProgress;
   applyFinalProgress(targetProgress, ownerInstance);
-  ownerInstance.callMethod('onDrawerProgressChange', targetProgress);
 }
 
 function tap(e, ownerInstance) {
-  // Toggle between 0 and 1, or reset from 2/3
+  // Toggle between 0 and 1, or reset from the expanded state.
   if (currentProgress >= 1) {
     currentProgress = 0;
   } else {
     currentProgress = 1;
   }
   applyFinalProgress(currentProgress, ownerInstance);
-  ownerInstance.callMethod('onDrawerProgressChange', currentProgress);
 }
 
 module.exports = {

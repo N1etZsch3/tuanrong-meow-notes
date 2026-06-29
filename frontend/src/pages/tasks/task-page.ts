@@ -3,7 +3,7 @@ import type {
   TaskPhotoPayload,
   UploadedFileRef,
 } from "@/api/tasks";
-import type { UploadedImageAsset } from "@/api/files";
+import { buildFileAssetContentUrl, type UploadedImageAsset } from "@/api/files";
 
 export const DEFAULT_REQUIRED_ITEMS = "猫粮、水";
 export const DEFAULT_ROUTE_INSTRUCTION = "";
@@ -126,9 +126,24 @@ export function validatePublishDraft(draft: FeedingTaskDraft): ValidationResult 
 export function buildUploadedTaskPhoto(asset: UploadedImageAsset): UploadedFileRef {
   return {
     file_id: asset.asset_id,
-    file_url: asset.default_url,
-    thumbnail_url: asset.default_thumb_url,
+    file_url: buildFileAssetContentUrl(asset.asset_id, "task_detail_full"),
+    thumbnail_url: buildFileAssetContentUrl(asset.asset_id, "task_list_cover"),
   };
+}
+
+interface TaskListStatusSource {
+  status_label: string;
+  current_execution?: {
+    status?: string | null;
+  } | null;
+}
+
+export function getTaskListStatusLabel(task: TaskListStatusSource): string {
+  if (task.current_execution?.status === "completed") {
+    return "已完成";
+  }
+
+  return task.status_label;
 }
 
 export function buildSummerFeedingTaskPayload(

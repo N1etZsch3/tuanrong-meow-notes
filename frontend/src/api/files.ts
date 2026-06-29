@@ -26,6 +26,24 @@ export interface UploadImageOptions {
   caption?: string;
 }
 
+export function buildFileAssetContentUrl(
+  assetId: string,
+  scene: string,
+  variantKey?: string,
+): string {
+  const params = new URLSearchParams();
+  if (scene) {
+    params.set("scene", scene);
+  }
+  if (variantKey) {
+    params.set("variant_key", variantKey);
+  }
+
+  const suffix = params.toString();
+  const path = `/files/assets/${assetId}/content${suffix ? `?${suffix}` : ""}`;
+  return buildRequestUrl(appEnv.apiBaseUrl, path);
+}
+
 function compactFormData(data: UploadImageOptions): Record<string, string> {
   return Object.fromEntries(
     Object.entries(data).filter(([, value]) => value !== undefined && value !== ""),

@@ -11,6 +11,7 @@ import {
   buildUploadedTaskPhoto,
   createDefaultFeedingTaskDraft,
   formatExecutionDateSummary,
+  getTaskListStatusLabel,
   validatePublishDraft,
 } from "@/pages/tasks/task-page";
 
@@ -45,6 +46,27 @@ describe("summer feeding task pages", () => {
     expect(adminCreateTaskSource).toContain("publishSummerFeedingTask");
     expect(adminCreateTaskSource).toContain("uploadImage");
     expect(adminCreateTaskSource).toContain("map_point_scene");
+  });
+
+  it("uses a custom multi-select calendar instead of the native date picker", () => {
+    expect(adminCreateTaskSource).not.toContain('<picker mode="date"');
+    expect(adminCreateTaskSource).toContain('class="calendar-overlay"');
+    expect(adminCreateTaskSource).toContain('class="calendar-grid"');
+    expect(adminCreateTaskSource).toContain("toggleCalendarDate");
+    expect(adminCreateTaskSource).toContain("confirmCalendarDates");
+    expect(adminCreateTaskSource).toContain("calendarDraftDates");
+  });
+
+  it("keeps the publish action out of the top-right capsule collision area", () => {
+    const toolbarIndex = taskIndexSource.indexOf('class="toolbar"');
+    const publishToolbarIndex = taskIndexSource.indexOf('class="publish-toolbar"');
+
+    expect(toolbarIndex).toBeGreaterThan(-1);
+    expect(publishToolbarIndex).toBeGreaterThan(toolbarIndex);
+    expect(taskIndexSource).toContain('class="publish-button"');
+    expect(taskIndexSource).not.toMatch(
+      /<view class="page-title">[\s\S]*class="publish-button"[\s\S]*<view class="toolbar">/,
+    );
   });
 
   it("uses a native mini program map for publish-time task point selection", () => {
@@ -117,8 +139,30 @@ describe("summer feeding task pages", () => {
       }),
     ).toEqual({
       file_id: "asset-1",
-      file_url: "/uploads/task/asset-1.jpg",
-      thumbnail_url: "/uploads/task/asset-1-thumb.jpg",
+      file_url:
+        "http://localhost:8000/api/v1/files/assets/asset-1/content?scene=task_detail_full",
+      thumbnail_url:
+        "http://localhost:8000/api/v1/files/assets/asset-1/content?scene=task_list_cover",
     });
+  });
+
+  it("shows completed execution status in the task list status pill", () => {
+    expect(
+      getTaskListStatusLabel({
+        status_label: "进行中",
+        current_execution: {
+          status: "completed",
+        },
+      }),
+    ).toBe("已完成");
+
+    expect(
+      getTaskListStatusLabel({
+        status_label: "进行中",
+        current_execution: {
+          status: "pending",
+        },
+      }),
+    ).toBe("进行中");
   });
 });

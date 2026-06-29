@@ -132,11 +132,12 @@
 import { onLoad } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
-import { uploadImage } from "@/api/files";
+import { buildFileAssetContentUrl, uploadImage } from "@/api/files";
 import {
   checkinTask,
   getTaskDetail,
   type TaskDetailDto,
+  type TaskPhotoDto,
   type UploadedFileRef,
 } from "@/api/tasks";
 import { LOGIN_ROUTE } from "@/services/app-startup";
@@ -165,7 +166,7 @@ const coverPhoto = computed(() => {
   }
 
   const cover = task.value.photos.find((photo) => photo.is_cover);
-  return cover?.file_url || task.value.photos[0]?.file_url || "";
+  return getTaskPhotoUrl(cover || task.value.photos[0], "task_detail_full");
 });
 const currentExecution = computed(() => task.value?.current_execution || task.value?.next_execution || null);
 const currentDateText = computed(() => formatTaskDate(currentExecution.value?.execute_date));
@@ -183,6 +184,19 @@ async function getAccessToken(): Promise<string | null> {
 
 function formatActivityTime(value: string): string {
   return value ? value.replace("T", " ").slice(0, 16) : "";
+}
+
+function getTaskPhotoUrl(
+  photo: TaskPhotoDto | undefined,
+  scene: "task_detail_full" | "task_list_cover",
+): string {
+  if (!photo) {
+    return "";
+  }
+
+  return photo.file_id
+    ? buildFileAssetContentUrl(photo.file_id, scene)
+    : photo.file_url;
 }
 
 async function loadTaskDetail() {

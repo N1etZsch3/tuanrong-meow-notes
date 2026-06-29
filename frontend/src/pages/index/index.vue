@@ -282,11 +282,6 @@ const filterMenuOpen = ref(false);
 const activeFilter = ref<MapFilterKey | null>(null);
 const searchKeyword = ref("");
 const mapLoadState = ref<MapLoadState>("idle");
-const currentDrawerProgress = ref(1);
-
-function onDrawerProgressChange(progress: number) {
-  currentDrawerProgress.value = progress;
-}
 const contentLoadState = ref<ContentLoadState>("idle");
 const contentErrorMessage = ref("");
 const campusMapConfig = ref<CampusMapConfig>(HBNU_CAMPUS);

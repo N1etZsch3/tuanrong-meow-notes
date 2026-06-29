@@ -175,32 +175,31 @@ def get_asset_variant(
     current_user: User,
     scene: str | None,
     variant_key: str | None,
+    storage: ObjectStorage,
 ) -> dict:
-    if not scene and not variant_key:
-        raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
-    if scene and scene not in SCENE_VARIANT_MAP and not variant_key:
-        raise APIError(
-            code=ErrorCode.FILE_SCENE_UNSUPPORTED,
-            message="图片访问场景不支持",
-            status_code=400,
-        )
     asset = _load_asset(db, asset_id)
     _ensure_asset_access(asset, current_user)
-    selected_key = variant_key or SCENE_VARIANT_MAP[scene or ""]
-    variant = _find_variant(asset, selected_key)
-    if variant is None and variant_key is None:
-        variant = _find_variant(asset, asset.default_thumb_variant_key)
-    if variant is None:
-        variant = _find_variant(asset, asset.default_variant_key)
-    if variant is None:
-        variant = next((item for item in asset.variants if item.deleted_at is None), None)
-    if variant is None:
+    variant = _select_variant(asset=asset, scene=scene, variant_key=variant_key)
+    return selected_variant_payload(asset, variant, storage=storage)
+
+
+def get_asset_content_url(
+    *,
+    db: Session,
+    asset_id: UUID,
+    scene: str | None,
+    variant_key: str | None,
+    storage: ObjectStorage,
+) -> dict:
+    asset = _load_asset(db, asset_id)
+    if asset.visibility not in {"internal", "public"}:
         raise APIError(
-            code=ErrorCode.FILE_VARIANT_NOT_FOUND,
-            message="图片变体不存在",
-            status_code=400,
+            code=ErrorCode.FILE_FORBIDDEN,
+            message="无权访问该文件",
+            status_code=403,
         )
-    return selected_variant_payload(asset, variant)
+    variant = _select_variant(asset=asset, scene=scene, variant_key=variant_key)
+    return selected_variant_payload(asset, variant, storage=storage)
 
 
 def list_assets(
@@ -367,11 +366,16 @@ def variant_payload(variant: FileAssetVariant) -> dict:
     }
 
 
-def selected_variant_payload(asset: FileAsset, variant: FileAssetVariant) -> dict:
+def selected_variant_payload(
+    asset: FileAsset,
+    variant: FileAssetVariant,
+    *,
+    storage: ObjectStorage | None = None,
+) -> dict:
     return {
         "asset_id": asset.id,
         "variant_key": variant.variant_key,
-        "url": variant.url,
+        "url": storage.presign_get_object(variant.object_key) if storage else variant.url,
         "width": variant.width,
         "height": variant.height,
     }
@@ -531,6 +535,38 @@ def _find_variant(asset: FileAsset, variant_key: str) -> FileAssetVariant | None
         ),
         None,
     )
+
+
+def _select_variant(
+    *,
+    asset: FileAsset,
+    scene: str | None,
+    variant_key: str | None,
+) -> FileAssetVariant:
+    if not scene and not variant_key:
+        raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
+    if scene and scene not in SCENE_VARIANT_MAP and not variant_key:
+        raise APIError(
+            code=ErrorCode.FILE_SCENE_UNSUPPORTED,
+            message="图片访问场景不支持",
+            status_code=400,
+        )
+
+    selected_key = variant_key or SCENE_VARIANT_MAP[scene or ""]
+    variant = _find_variant(asset, selected_key)
+    if variant is None and variant_key is None:
+        variant = _find_variant(asset, asset.default_thumb_variant_key)
+    if variant is None:
+        variant = _find_variant(asset, asset.default_variant_key)
+    if variant is None:
+        variant = next((item for item in asset.variants if item.deleted_at is None), None)
+    if variant is None:
+        raise APIError(
+            code=ErrorCode.FILE_VARIANT_NOT_FOUND,
+            message="图片变体不存在",
+            status_code=400,
+        )
+    return variant
 
 
 def _cleanup_uploaded_objects(storage: ObjectStorage, object_keys: list[str]) -> None:

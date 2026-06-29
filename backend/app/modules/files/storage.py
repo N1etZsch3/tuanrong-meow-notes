@@ -8,6 +8,9 @@ class ObjectStorage(Protocol):
     def put_object(self, *, object_key: str, body: bytes, content_type: str) -> str:
         ...
 
+    def presign_get_object(self, object_key: str, *, expires: int = 3600) -> str:
+        ...
+
     def delete_object(self, object_key: str) -> None:
         ...
 
@@ -74,3 +77,18 @@ class TencentCosObjectStorage:
             self._client.delete_object(Bucket=self._bucket, Key=object_key)
         except Exception:
             return
+
+    def presign_get_object(self, object_key: str, *, expires: int = 3600) -> str:
+        try:
+            return self._client.get_presigned_url(
+                Method="GET",
+                Bucket=self._bucket,
+                Key=object_key,
+                Expired=expires,
+            )
+        except Exception as exc:
+            raise APIError(
+                code=ErrorCode.FILE_COS_UPLOAD_FAILED,
+                message="生成图片访问地址失败",
+                status_code=500,
+            ) from exc

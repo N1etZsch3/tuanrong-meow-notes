@@ -1,6 +1,7 @@
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -136,6 +137,7 @@ def get_asset_variant(
     scene: str | None = None,
     variant_key: str | None = None,
     db: Session = Depends(get_db),
+    storage: ObjectStorage = Depends(get_object_storage),
     current_user: User = Depends(require_password_changed),
 ):
     data = service.get_asset_variant(
@@ -144,8 +146,27 @@ def get_asset_variant(
         current_user=current_user,
         scene=scene,
         variant_key=variant_key,
+        storage=storage,
     )
     return api_success(data=data, trace_id=request.state.trace_id)
+
+
+@router.get("/assets/{asset_id}/content", summary="Redirect to displayable image content URL")
+def get_asset_content(
+    asset_id: UUID,
+    scene: str | None = None,
+    variant_key: str | None = None,
+    db: Session = Depends(get_db),
+    storage: ObjectStorage = Depends(get_object_storage),
+):
+    data = service.get_asset_content_url(
+        db=db,
+        asset_id=asset_id,
+        scene=scene,
+        variant_key=variant_key,
+        storage=storage,
+    )
+    return RedirectResponse(data["url"])
 
 
 @router.patch("/assets/{asset_id}/owner", summary="Bind image asset owner")

@@ -1,8 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { uploadImage } from "@/api/files";
+import { buildFileAssetContentUrl, uploadImage } from "@/api/files";
 
 describe("files api", () => {
+  it("builds a mini-program image-safe asset content url", () => {
+    expect(buildFileAssetContentUrl("asset-1", "task_list_cover")).toBe(
+      "http://localhost:8000/api/v1/files/assets/asset-1/content?scene=task_list_cover",
+    );
+  });
+
   it("uploads an image through uni.uploadFile with bearer token and form data", async () => {
     const uploadFile = vi.fn((options: UniNamespace.UploadFileOption) => {
       options.success?.({

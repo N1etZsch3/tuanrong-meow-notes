@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import drawerWxsSource from "../../src/pages/index/drawer.wxs?raw";
 import filterMenuWxsSource from "../../src/pages/index/filter-menu.wxs?raw";
 import indexPageSource from "../../src/pages/index/index.vue?raw";
 import mapPageSource from "../../src/pages/index/map-page.ts?raw";
@@ -112,11 +113,18 @@ describe("map page shell behavior", () => {
     ).toBe("preview");
   });
 
-  it("keeps drawer state native-map friendly without web map resize hooks", () => {
-    expect(indexPageSource).toContain("function onDrawerProgressChange(progress: number)");
-    expect(indexPageSource).toContain("currentDrawerProgress.value = progress");
+  it("keeps drawer state native-map friendly without missing WXS callbacks", () => {
+    expect(indexPageSource).not.toContain("function onDrawerProgressChange");
+    expect(indexPageSource).not.toContain("currentDrawerProgress");
+    expect(drawerWxsSource).not.toContain("callMethod('onDrawerProgressChange'");
     expect(indexPageSource).not.toContain("scheduleMapResizeAfterDrawerChange");
     expect(indexPageSource).not.toContain("amapInstance.resize");
+  });
+
+  it("caps the drawer expansion below the phone capsule area", () => {
+    expect(drawerWxsSource).toContain("MAX_DRAWER_PROGRESS");
+    expect(drawerWxsSource).toContain("clamp(progress, 0, MAX_DRAWER_PROGRESS)");
+    expect(drawerWxsSource).not.toContain("config.windowHeight / config.rpxRatio - 150");
   });
 
   it("keeps navigation in the mini program map APIs", () => {

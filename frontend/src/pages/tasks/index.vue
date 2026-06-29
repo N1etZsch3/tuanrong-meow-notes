@@ -11,14 +11,6 @@
             </view>
             <text class="title-subtitle">暑假投喂安排</text>
           </view>
-          <button
-            v-if="userStore.isAdmin"
-            class="publish-button"
-            hover-class="button-hover"
-            @tap="goPublish"
-          >
-            发布
-          </button>
         </view>
 
         <view class="toolbar">
@@ -32,6 +24,16 @@
           </button>
           <button class="filter-chip" hover-class="button-hover" @tap="loadTasks">
             刷新
+          </button>
+        </view>
+
+        <view v-if="userStore.isAdmin" class="publish-toolbar">
+          <button
+            class="publish-button"
+            hover-class="button-hover"
+            @tap="goPublish"
+          >
+            发布
           </button>
         </view>
 
@@ -67,7 +69,7 @@
             <view class="task-main">
               <view class="task-head">
                 <text class="task-title">{{ task.title }}</text>
-                <text class="task-status">{{ task.status_label }}</text>
+                <text class="task-status">{{ getTaskListStatusLabel(task) }}</text>
               </view>
               <text class="task-location">{{ task.map_point.location_name }}</text>
               <text class="task-desc">{{ task.description }}</text>
@@ -98,7 +100,7 @@ import AppTabBar from "@/components/AppTabBar.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
-import { formatTaskDate } from "@/pages/tasks/task-page";
+import { formatTaskDate, getTaskListStatusLabel } from "@/pages/tasks/task-page";
 
 import taskIcon from "../../../素材/icon/任务.png";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
@@ -240,7 +242,7 @@ onShow(() => {
 }
 
 .publish-button {
-  width: 116rpx;
+  width: 150rpx;
   height: 64rpx;
   margin: 0;
   padding: 0;
@@ -263,6 +265,12 @@ onShow(() => {
   margin-top: 40rpx;
   display: flex;
   gap: 18rpx;
+}
+
+.publish-toolbar {
+  margin-top: 20rpx;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .filter-chip {

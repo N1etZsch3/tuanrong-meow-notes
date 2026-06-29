@@ -22,13 +22,27 @@
 
         <view v-else-if="task" class="detail-content">
           <view class="hero-card">
-            <image
-              v-if="coverPhoto"
-              class="hero-image"
-              :src="coverPhoto"
-              mode="aspectFill"
-              @error="heroImageFailed = true"
-            />
+            <swiper
+              v-if="heroPhotos.length"
+              class="hero-swiper"
+              :autoplay="true"
+              :interval="5000"
+              :duration="400"
+              :circular="true"
+            >
+              <swiper-item
+                v-for="photo in heroPhotos"
+                :key="photo.photo_id"
+                class="hero-slide"
+              >
+                <image
+                  class="hero-image"
+                  :src="photo.url"
+                  mode="aspectFill"
+                  @error="markHeroPhotoFailed(photo.photo_id)"
+                />
+              </swiper-item>
+            </swiper>
             <view v-else class="hero-placeholder">
               <image class="hero-placeholder-icon" :src="taskIcon" mode="aspectFit" />
             </view>
@@ -144,6 +158,7 @@ import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
 import { buildUploadedTaskPhoto, formatTaskDate } from "@/pages/tasks/task-page";
+import { clearTaskListCache } from "@/pages/tasks/task-list-cache";
 
 import taskIcon from "../../../素材/icon/任务.png";
 import loadingBackground from "../../../素材/加载页素材/加载页背景.jpg";
@@ -158,15 +173,20 @@ const errorMessage = ref("");
 const isUploading = ref(false);
 const isSubmitting = ref(false);
 const checkinPhotos = ref<UploadedFileRef[]>([]);
-const heroImageFailed = ref(false);
+const failedHeroPhotoIds = ref<string[]>([]);
 
-const coverPhoto = computed(() => {
-  if (heroImageFailed.value || !task.value) {
-    return "";
+const heroPhotos = computed(() => {
+  if (!task.value) {
+    return [];
   }
 
-  const cover = task.value.photos.find((photo) => photo.is_cover);
-  return getTaskPhotoUrl(cover || task.value.photos[0], "task_detail_full");
+  const failed = new Set(failedHeroPhotoIds.value);
+  return task.value.photos
+    .map((photo) => ({
+      photo_id: photo.photo_id,
+      url: getTaskPhotoUrl(photo, "task_detail_full"),
+    }))
+    .filter((photo) => photo.url && !failed.has(photo.photo_id));
 });
 const currentExecution = computed(() => task.value?.current_execution || task.value?.next_execution || null);
 const currentDateText = computed(() => formatTaskDate(currentExecution.value?.execute_date));
@@ -199,6 +219,12 @@ function getTaskPhotoUrl(
     : photo.file_url;
 }
 
+function markHeroPhotoFailed(photoId: string) {
+  if (!failedHeroPhotoIds.value.includes(photoId)) {
+    failedHeroPhotoIds.value = [...failedHeroPhotoIds.value, photoId];
+  }
+}
+
 async function loadTaskDetail() {
   const token = await getAccessToken();
   if (!token || !taskId.value) {
@@ -208,7 +234,7 @@ async function loadTaskDetail() {
   loadState.value = "loading";
   try {
     task.value = await getTaskDetail(token, taskId.value);
-    heroImageFailed.value = false;
+    failedHeroPhotoIds.value = [];
     checkinPhotos.value = [];
     loadState.value = "ready";
   } catch (error) {
@@ -284,6 +310,7 @@ async function completeFeedingTask() {
       photos: checkinPhotos.value,
     });
     uni.showToast({ title: "投喂已完成", icon: "success" });
+    clearTaskListCache();
     await loadTaskDetail();
   } catch (error) {
     const message = error instanceof Error ? error.message : "提交失败";
@@ -401,6 +428,8 @@ onLoad((query) => {
 }
 
 .hero-card,
+.hero-swiper,
+.hero-slide,
 .hero-image,
 .hero-placeholder {
   width: 100%;

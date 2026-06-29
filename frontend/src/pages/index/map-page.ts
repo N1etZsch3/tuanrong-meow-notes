@@ -1,5 +1,6 @@
 import type {
   MapBottomContentItemDto,
+  MapFilterOptionDto,
   MapPointMarkerDto,
   MapPointQuery,
   MapSearchResultDto,
@@ -13,7 +14,7 @@ export type MapShellItemType =
   | "emergency_task"
   | "landmark";
 
-export type MapFilterKey = "all" | MapShellItemType;
+export type MapFilterKey = string;
 
 export interface LngLat {
   lng: number;
@@ -64,6 +65,9 @@ export interface MapFilterOption {
   key: MapFilterKey;
   label: string;
   description: string;
+  icon_key?: string | null;
+  point_types?: string[];
+  business_types?: string[];
 }
 
 export type MapMarkerDisplayMode = "icon" | "label" | "preview";
@@ -78,6 +82,8 @@ export interface MapMarkerDisplayModeInput {
 }
 
 export const ALL_MAP_FILTER_KEY: MapFilterKey = "all";
+export const NO_MAP_FILTER_KEY: MapFilterKey = "none";
+export const NO_MAP_FILTER_LABEL = "无标记";
 
 export const HBNU_CAMPUS_CORE_BOUNDS: LngLatBounds = {
   south_west: { lng: 115.0558, lat: 30.2248 },
@@ -115,7 +121,17 @@ export const HBNU_CAMPUS: CampusMapConfig = {
   limit_bounds: expandLngLatBounds(HBNU_CAMPUS_CORE_BOUNDS, 0.35),
 };
 
+export const NO_MAP_FILTER_OPTION: MapFilterOption = {
+  key: NO_MAP_FILTER_KEY,
+  label: NO_MAP_FILTER_LABEL,
+  description: "暂不显示地图点位",
+  icon_key: "filter_none",
+  point_types: [],
+  business_types: [],
+};
+
 export const MAP_FILTER_OPTIONS: MapFilterOption[] = [
+  NO_MAP_FILTER_OPTION,
   {
     key: "all",
     label: "全部标记",
@@ -146,19 +162,63 @@ export const MAP_FILTER_OPTIONS: MapFilterOption[] = [
     label: "地标",
     description: "校门、图书馆、食堂等位置",
   },
+  {
+    key: "feeding_pending",
+    label: "未完成任务",
+    description: "尚未完成的暑假投喂点",
+    icon_key: "feeding_pending",
+    point_types: ["task"],
+    business_types: ["feeding"],
+  },
+  {
+    key: "feeding_completed",
+    label: "完成任务",
+    description: "已完成投喂的任务点",
+    icon_key: "feeding_completed",
+    point_types: ["task"],
+    business_types: ["feeding"],
+  },
 ];
 
 export function getMapFilterLabel(filterKey: string): string {
   return (
     MAP_FILTER_OPTIONS.find((option) => option.key === filterKey)?.label ??
-    MAP_FILTER_OPTIONS[0].label
+    MAP_FILTER_OPTIONS.find((option) => option.key === ALL_MAP_FILTER_KEY)?.label ??
+    "全部标记"
   );
+}
+
+export function normalizeMapFilterOptions(
+  options: MapFilterOptionDto[] | undefined,
+): MapFilterOption[] {
+  const normalized = (options || [])
+    .filter((option) => option.key && option.label)
+    .map<MapFilterOption>((option) => ({
+      key: option.key,
+      label: option.label,
+      description: option.description || "",
+      icon_key: option.icon_key,
+      point_types: option.point_types || [],
+      business_types: option.business_types || [],
+    }));
+
+  if (!normalized.some((option) => option.key === NO_MAP_FILTER_KEY)) {
+    normalized.unshift(NO_MAP_FILTER_OPTION);
+  }
+
+  return normalized.length ? normalized : [NO_MAP_FILTER_OPTION];
 }
 
 export function isMapShellItemVisibleByFilter(
   item: MapShellItem,
   filterKey: MapFilterKey,
 ): boolean {
+  if (filterKey === NO_MAP_FILTER_KEY) {
+    return false;
+  }
+  if (filterKey === "feeding_pending" || filterKey === "feeding_completed") {
+    return item.type === "daily_task";
+  }
   return filterKey === ALL_MAP_FILTER_KEY || item.type === filterKey;
 }
 
@@ -323,12 +383,37 @@ export function mapBottomContentItemToShellItem(
     distance_meters: item.distance_meters,
     status_label: item.status_label || getDefaultStatusLabel(type),
     tag_label: item.tag_label || getMapFilterLabel(type),
+    lng: item.lng ?? undefined,
+    lat: item.lat ?? undefined,
   };
 }
 
 export function getMapPointQueryByFilter(
   filterKey: MapFilterKey,
-): Pick<MapPointQuery, "point_types" | "business_types"> {
+  option?: MapFilterOption | null,
+): Pick<MapPointQuery, "filter_key" | "point_types" | "business_types"> {
+  if (option) {
+    return {
+      ...(option.key !== NO_MAP_FILTER_KEY ? { filter_key: option.key } : {}),
+      ...(option.point_types?.length ? { point_types: option.point_types.join(",") } : {}),
+      ...(option.business_types?.length
+        ? { business_types: option.business_types.join(",") }
+        : {}),
+    };
+  }
+
+  if (filterKey === "feeding_pending" || filterKey === "feeding_completed") {
+    return {
+      point_types: "task",
+      business_types: "feeding",
+      filter_key: filterKey,
+    };
+  }
+
+  if (filterKey === NO_MAP_FILTER_KEY) {
+    return { filter_key: NO_MAP_FILTER_KEY };
+  }
+
   if (filterKey === "emergency_task") {
     return { point_types: "task", business_types: "emergency" };
   }

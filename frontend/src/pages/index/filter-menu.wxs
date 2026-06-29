@@ -1,7 +1,6 @@
 var config = {
   rpxRatio: 0.5
 };
-var currentOpen = false;
 
 function px(rpx) {
   return rpx * config.rpxRatio;
@@ -63,17 +62,9 @@ function apply(open, ownerInstance, transition) {
 
 function sync(newValue, oldValue, ownerInstance, instance) {
   updateConfig(newValue);
-  currentOpen = getOpenFromState(newValue);
-  apply(currentOpen, ownerInstance, 'all 0.22s cubic-bezier(0.25, 1, 0.5, 1)');
-}
-
-function toggle(event, ownerInstance) {
-  currentOpen = !currentOpen;
-  apply(currentOpen, ownerInstance, 'all 0.22s cubic-bezier(0.25, 1, 0.5, 1)');
-  ownerInstance.callMethod('setFilterMenuOpen', currentOpen);
+  apply(getOpenFromState(newValue), ownerInstance, 'all 0.22s cubic-bezier(0.25, 1, 0.5, 1)');
 }
 
 module.exports = {
-  sync: sync,
-  toggle: toggle
+  sync: sync
 };

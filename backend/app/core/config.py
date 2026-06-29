@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     tencent_cos_cdn_domain: str = ""
     tencent_cos_env_prefix: str = "dev"
     file_upload_max_mb: int = 10
-    file_image_max_pixels: int = 20_000_000
+    file_image_max_pixels: int = 50_000_000
 
     @property
     def required_database_url(self) -> str:

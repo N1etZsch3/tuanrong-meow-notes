@@ -159,6 +159,33 @@ def test_upload_admin_only_usage_rejects_member(api_client, db_session):
     assert response.json()["code"] == 40302
 
 
+def test_upload_task_point_photo_accepts_common_high_resolution_phone_image(api_client, db_session):
+    storage = install_fake_storage(api_client)
+    user = create_user(
+        db_session,
+        student_no="trmx0010",
+        password="trmx0010",
+        role="admin",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    token = create_token(user)
+
+    response = api_client.post(
+        "/api/v1/files/images",
+        headers=auth_headers(token),
+        data={"usage_type": "map_point_scene", "owner_type": "task"},
+        files={"file": ("task-point.jpg", image_bytes(size=(6000, 4000)), "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["source"]["source_width"] == 6000
+    assert data["source"]["source_height"] == 4000
+    assert data["variants"]["display"]["width"] == 1280
+    assert len(storage.objects) == 4
+
+
 def test_upload_rejects_corrupt_image(api_client, db_session):
     install_fake_storage(api_client)
     user = create_user(

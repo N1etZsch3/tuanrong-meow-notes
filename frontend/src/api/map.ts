@@ -46,10 +46,20 @@ export interface AmapConfigDto {
   map_style: string;
 }
 
+export interface MapFilterOptionDto {
+  key: string;
+  label: string;
+  description?: string | null;
+  icon_key?: string | null;
+  point_types?: string[];
+  business_types?: string[];
+}
+
 export interface MapInitResponse {
   campus: CampusDto;
   areas: CampusAreaDto[];
   marker_configs: MarkerConfigDto[];
+  filter_options?: MapFilterOptionDto[];
   default_filters: {
     point_types?: string[];
     include_hidden?: boolean;
@@ -136,6 +146,8 @@ export interface MapBottomContentItemDto {
   distance_meters: number | null;
   status_label: string | null;
   tag_label: string | null;
+  lng?: number | null;
+  lat?: number | null;
 }
 
 export interface MapBottomContentResponse {
@@ -210,6 +222,7 @@ export interface MapNavigationResponse {
 
 export interface MapPointQuery {
   campus_id?: string;
+  filter_key?: string;
   point_types?: string;
   business_types?: string;
   area_id?: string;

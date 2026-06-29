@@ -31,6 +31,22 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain("完成投喂");
   });
 
+  it("renders task detail photos in a five-second swipeable carousel", () => {
+    expect(taskDetailSource).toContain("<swiper");
+    expect(taskDetailSource).toContain("<swiper-item");
+    expect(taskDetailSource).toContain("heroPhotos");
+    expect(taskDetailSource).toContain(":autoplay=\"true\"");
+    expect(taskDetailSource).toContain(":interval=\"5000\"");
+    expect(taskDetailSource).toContain(":circular=\"true\"");
+  });
+
+  it("uses cached task list data on tab re-entry and invalidates after checkin", () => {
+    expect(taskIndexSource).toContain("getCachedTaskList");
+    expect(taskIndexSource).toContain("setCachedTaskList");
+    expect(taskIndexSource).toContain("silent: true");
+    expect(taskDetailSource).toContain("clearTaskListCache");
+  });
+
   it("keeps the publish form fields requested for summer feeding tasks", () => {
     for (const label of [
       "任务标题",

@@ -10,10 +10,11 @@ describe("admin entry pages", () => {
     expect(pagesJson).toContain("pages/admin/create-user");
   });
 
-  it("keeps admin home scoped to account creation for this slice", () => {
+  it("shows account creation and summer feeding publish actions", () => {
     expect(adminIndexSource).toContain("添加账户");
     expect(adminIndexSource).toContain("/pages/admin/create-user");
-    expect(adminIndexSource).not.toContain("发布任务");
+    expect(adminIndexSource).toContain("发布喂食任务");
+    expect(adminIndexSource).toContain("/pages/admin/tasks/create");
   });
 
   it("creates member accounts through the admin users api", () => {

@@ -50,6 +50,13 @@
 			}
 		},
 		{
+			"path": "pages/tasks/detail",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "任务详情"
+			}
+		},
+		{
 			"path": "pages/profile/index",
 			"style": {
 				"navigationStyle": "custom",
@@ -82,6 +89,20 @@
 			"style": {
 				"navigationStyle": "custom",
 				"navigationBarTitleText": "添加账户"
+			}
+		},
+		{
+			"path": "pages/admin/tasks/create",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "发布喂食任务"
+			}
+		},
+		{
+			"path": "pages/admin/tasks/location",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "选择任务位置"
 			}
 		}
 	],

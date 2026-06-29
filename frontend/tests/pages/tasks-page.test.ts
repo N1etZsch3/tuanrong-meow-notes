@@ -57,16 +57,11 @@ describe("summer feeding task pages", () => {
     expect(adminCreateTaskSource).toContain("calendarDraftDates");
   });
 
-  it("keeps the publish action out of the top-right capsule collision area", () => {
-    const toolbarIndex = taskIndexSource.indexOf('class="toolbar"');
-    const publishToolbarIndex = taskIndexSource.indexOf('class="publish-toolbar"');
-
-    expect(toolbarIndex).toBeGreaterThan(-1);
-    expect(publishToolbarIndex).toBeGreaterThan(toolbarIndex);
-    expect(taskIndexSource).toContain('class="publish-button"');
-    expect(taskIndexSource).not.toMatch(
-      /<view class="page-title">[\s\S]*class="publish-button"[\s\S]*<view class="toolbar">/,
-    );
+  it("does not expose task publishing from the task tab", () => {
+    expect(taskIndexSource).not.toContain('class="publish-toolbar"');
+    expect(taskIndexSource).not.toContain('class="publish-button"');
+    expect(taskIndexSource).not.toContain("function goPublish");
+    expect(taskIndexSource).not.toContain("/pages/admin/tasks/create");
   });
 
   it("uses a native mini program map for publish-time task point selection", () => {

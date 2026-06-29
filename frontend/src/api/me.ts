@@ -49,14 +49,13 @@ interface PageQuery {
 }
 
 function buildPageUrl(path: string, query: PageQuery = {}): string {
-  const params = new URLSearchParams();
-  if (query.page) {
-    params.set("page", String(query.page));
-  }
-  if (query.page_size) {
-    params.set("page_size", String(query.page_size));
-  }
-  const suffix = params.toString();
+  const suffix = Object.entries({
+    page: query.page ? String(query.page) : undefined,
+    page_size: query.page_size ? String(query.page_size) : undefined,
+  })
+    .filter(([, value]) => value !== undefined)
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value || "")}`)
+    .join("&");
   return suffix ? `${path}?${suffix}` : path;
 }
 

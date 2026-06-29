@@ -28,7 +28,7 @@
         :markers="nativeMapMarkers"
         :polyline="nativeMapPolylines"
         :include-points="nativeMapIncludePoints"
-        :show-location="true"
+        :show-location="Boolean(userLocation)"
         :enable-zoom="true"
         :enable-scroll="true"
         @markertap="handleNativeMarkerTap"
@@ -186,9 +186,6 @@
             <view class="item-main">
               <text class="item-title">{{ item.title }}</text>
               <view class="item-meta">
-                <text class="item-tag" :class="`tag-${item.type}`">
-                  {{ item.tag_label || getItemTypeLabel(item.type) }}
-                </text>
                 <text>· 距离 {{ formatDistance(item.distance_meters) }}</text>
               </view>
             </view>
@@ -473,10 +470,6 @@ function selectShellItem(item: MapShellItem) {
   }
 
   selectedSummary.value = null;
-}
-
-function getItemTypeLabel(type: MapShellItemType): string {
-  return getMapFilterLabel(type);
 }
 
 function getItemSymbol(type: MapShellItemType): string {
@@ -1504,8 +1497,9 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: 64rpx minmax(0, 1fr) auto;
   align-items: center;
-  gap: 18rpx;
+  gap: 12rpx;
   line-height: 1;
+  text-align: left;
 }
 
 .item-icon {
@@ -1564,37 +1558,6 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 8rpx;
-}
-
-.item-tag {
-  padding: 3rpx 7rpx;
-  border-radius: 8rpx;
-  font-size: 20rpx;
-}
-
-.tag-emergency_task {
-  color: #ef3038;
-  background: #ffe6e7;
-}
-
-.tag-daily_task {
-  color: #2276ff;
-  background: #e9f2ff;
-}
-
-.tag-cat {
-  color: #8754e8;
-  background: #efe7ff;
-}
-
-.tag-supply {
-  color: #ff8b22;
-  background: #fff0dc;
-}
-
-.tag-landmark {
-  color: #267b2f;
-  background: #e9f8ea;
 }
 
 .item-status {

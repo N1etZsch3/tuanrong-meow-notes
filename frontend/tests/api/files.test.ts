@@ -1,11 +1,23 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildFileAssetContentUrl, uploadImage } from "@/api/files";
 
 describe("files api", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it("builds a mini-program image-safe asset content url", () => {
     expect(buildFileAssetContentUrl("asset-1", "task_list_cover")).toBe(
       "http://localhost:8000/api/v1/files/assets/asset-1/content?scene=task_list_cover",
+    );
+  });
+
+  it("builds asset content urls without browser URLSearchParams", () => {
+    vi.stubGlobal("URLSearchParams", undefined);
+
+    expect(buildFileAssetContentUrl("asset-1", "task detail full")).toBe(
+      "http://localhost:8000/api/v1/files/assets/asset-1/content?scene=task%20detail%20full",
     );
   });
 

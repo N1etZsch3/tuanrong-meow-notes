@@ -31,17 +31,19 @@ export function buildFileAssetContentUrl(
   scene: string,
   variantKey?: string,
 ): string {
-  const params = new URLSearchParams();
-  if (scene) {
-    params.set("scene", scene);
-  }
-  if (variantKey) {
-    params.set("variant_key", variantKey);
-  }
-
-  const suffix = params.toString();
+  const suffix = buildQueryString({
+    scene,
+    variant_key: variantKey,
+  });
   const path = `/files/assets/${assetId}/content${suffix ? `?${suffix}` : ""}`;
   return buildRequestUrl(appEnv.apiBaseUrl, path);
+}
+
+function buildQueryString(params: Record<string, string | undefined>): string {
+  return Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== "")
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value || "")}`)
+    .join("&");
 }
 
 function compactFormData(data: UploadImageOptions): Record<string, string> {

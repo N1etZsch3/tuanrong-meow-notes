@@ -83,6 +83,14 @@ describe("map page shell behavior", () => {
     );
   });
 
+  it("uses backend-driven filter options with a no-marker default state", () => {
+    expect(indexPageSource).toContain("filterOptions");
+    expect(indexPageSource).toContain("applyMapFilterOptions");
+    expect(indexPageSource).toContain("NO_MAP_FILTER_LABEL");
+    expect(indexPageSource).not.toContain('v-for="option in MAP_FILTER_OPTIONS"');
+    expect(indexPageSource).toContain("getMapPointQueryByFilter(activeFilter.value");
+  });
+
   it("selects marker display modes by zoom and visible marker density", () => {
     expect(
       getMarkerDisplayMode({
@@ -121,6 +129,13 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).not.toContain("amapInstance.resize");
   });
 
+  it("does not call missing Vue methods from the filter menu WXS module", () => {
+    expect(indexPageSource).toContain('@tap="toggleFilterMenu"');
+    expect(indexPageSource).not.toContain('@tap="filterMenu.toggle"');
+    expect(filterMenuWxsSource).not.toContain("callMethod");
+    expect(filterMenuWxsSource).not.toContain("setFilterMenuOpen");
+  });
+
   it("lets the drawer expand near full screen while keeping a top gap", () => {
     expect(drawerWxsSource).toContain("MAX_DRAWER_PROGRESS");
     expect(drawerWxsSource).toContain("MAX_DRAWER_TOP_GAP_RPX");
@@ -150,7 +165,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("font-size: var(--catmap-page-title-subtitle-size, 24rpx)");
     expect(indexPageSource).toContain("top: 218rpx");
     expect(indexPageSource).toContain("bottom: 664rpx");
-    expect(indexPageSource).toContain("top: 252rpx");
+    expect(indexPageSource).toContain("top: 300rpx");
     expect(indexPageSource).toContain("height: 460rpx");
   });
 
@@ -175,13 +190,13 @@ describe("map page shell behavior", () => {
   it("uses completion and failure task svgs for feeding task map markers", () => {
     expect(indexPageSource).toContain("getFeedingMarkerIcon");
     expect(indexPageSource).toContain("marker.business_type === \"feeding\"");
-    expect(indexPageSource).toContain("marker.extra.today_status === \"completed\"");
+    expect(indexPageSource).toContain("marker.extra.feeding_status === \"completed\"");
   });
 
   it("keeps the filter menu in a native-map-safe cover layer", () => {
     expect(indexPageSource).toContain('<cover-view class="map-filter-layer"');
     expect(indexPageSource).toContain('class="filter-panel-hit-layer"');
-    expect(indexPageSource).toContain('@tap="filterMenu.toggle"');
+    expect(indexPageSource).toContain('@tap="toggleFilterMenu"');
     expect(indexPageSource).toContain(
       '<script module="filterMenu" lang="wxs" src="./filter-menu.wxs"></script>',
     );
@@ -203,6 +218,12 @@ describe("map page shell behavior", () => {
     expect(filterMenuWxsSource).toContain("rotate(180deg)");
     expect(filterMenuWxsSource).toContain("rotate(0deg)");
     expect(filterMenuWxsSource).toContain("width");
+  });
+
+  it("navigates summary card view-detail actions to the task detail page", () => {
+    expect(indexPageSource).toContain('action.key === "view_detail"');
+    expect(indexPageSource).toContain("uni.navigateTo({ url: action.path })");
+    expect(indexPageSource).toContain("/pages/tasks/detail?task_id=");
   });
 
   it("filters external poi search results to the campus bounds", () => {
@@ -246,6 +267,7 @@ describe("map page shell behavior", () => {
 
   it("keeps a readable label for each map filter", () => {
     expect(getMapFilterLabel(ALL_MAP_FILTER_KEY)).toBe("全部标记");
+    expect(getMapFilterLabel("none")).toBe("无标记");
     expect(getMapFilterLabel("cat")).toBe("猫咪点");
     expect(getMapFilterLabel("unknown")).toBe("全部标记");
   });
@@ -368,6 +390,16 @@ describe("map page shell behavior", () => {
     expect(getMapPointQueryByFilter("daily_task")).toEqual({
       point_types: "task",
       business_types: "daily,feeding",
+    });
+    expect(getMapPointQueryByFilter("feeding_pending")).toEqual({
+      point_types: "task",
+      business_types: "feeding",
+      filter_key: "feeding_pending",
+    });
+    expect(getMapPointQueryByFilter("feeding_completed")).toEqual({
+      point_types: "task",
+      business_types: "feeding",
+      filter_key: "feeding_completed",
     });
     expect(getMapPointQueryByFilter("cat")).toEqual({ point_types: "cat" });
     expect(getMapPointQueryByFilter("all")).toEqual({});

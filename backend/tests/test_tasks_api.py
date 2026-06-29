@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -228,6 +229,65 @@ def test_member_checkin_completes_one_execution_date_without_completing_parent_t
     assert detail["date_range"]["pending_count"] == 2
     assert detail["execution_dates"][0]["status"] == "completed"
     assert detail["activities"][0]["activity_type"] == "execution_completed"
+
+
+def test_map_init_and_points_use_dynamic_feeding_completion_filters(api_client, db_session):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    today = date.today().isoformat()
+    payload["execute_dates"] = [today]
+
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    init_response = api_client.get("/api/v1/map/init", headers=auth_headers(member))
+    assert init_response.status_code == 200
+    filter_options = init_response.json()["data"]["filter_options"]
+    assert [item["key"] for item in filter_options] == ["none", "feeding_pending"]
+
+    pending_response = api_client.get(
+        "/api/v1/map/points?filter_key=feeding_pending",
+        headers=auth_headers(member),
+    )
+    assert pending_response.status_code == 200
+    pending_marker = pending_response.json()["data"]["items"][0]
+    assert pending_marker["business_id"] == task_id
+    assert pending_marker["lng"] == 115.06321
+    assert pending_marker["lat"] == 30.23108
+    assert pending_marker["extra"]["feeding_status"] == "pending"
+
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{task_id}/checkins",
+        headers=auth_headers(member),
+        json={"execute_date": today, "is_completed": True},
+    )
+    assert checkin_response.status_code == 200
+
+    completed_init_response = api_client.get(
+        "/api/v1/map/init",
+        headers=auth_headers(member),
+    )
+    completed_filter_options = completed_init_response.json()["data"]["filter_options"]
+    assert [item["key"] for item in completed_filter_options] == [
+        "none",
+        "feeding_completed",
+    ]
+
+    completed_response = api_client.get(
+        "/api/v1/map/points?filter_key=feeding_completed",
+        headers=auth_headers(member),
+    )
+    assert completed_response.status_code == 200
+    completed_marker = completed_response.json()["data"]["items"][0]
+    assert completed_marker["business_id"] == task_id
+    assert completed_marker["extra"]["feeding_status"] == "completed"
 
 
 def test_member_cannot_publish_summer_feeding_task(api_client, db_session):

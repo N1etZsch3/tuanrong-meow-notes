@@ -22,7 +22,7 @@
           >
             今日任务
           </button>
-          <button class="filter-chip" hover-class="button-hover" @tap="loadTasks">
+          <button class="filter-chip" hover-class="button-hover" @tap="refreshTasks">
             刷新
           </button>
         </view>
@@ -85,12 +85,16 @@
 import { onShow } from "@dcloudio/uni-app";
 import { ref } from "vue";
 
-import { getTasks, type TaskListItemDto } from "@/api/tasks";
+import { getTasks, type TaskListItemDto, type TaskListQuery } from "@/api/tasks";
 import AppTabBar from "@/components/AppTabBar.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
 import { formatTaskDate, getTaskListStatusLabel } from "@/pages/tasks/task-page";
+import {
+  getCachedTaskList,
+  setCachedTaskList,
+} from "@/pages/tasks/task-list-cache";
 
 import taskIcon from "../../../素材/icon/任务.png";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
@@ -124,30 +128,63 @@ function executionText(task: TaskListItemDto): string {
   return `${formatTaskDate(current.execute_date)} · ${label}`;
 }
 
-async function loadTasks() {
-  const token = await getAccessToken();
-  if (!token) {
-    return;
-  }
+function buildTaskListQuery(): TaskListQuery {
+  return {
+    task_type: "feeding",
+    status: "in_progress,completed",
+    only_today: onlyToday.value || undefined,
+    page: 1,
+    page_size: 50,
+  };
+}
 
-  loadState.value = "loading";
+async function fetchTasks(
+  token: string,
+  query: TaskListQuery,
+  options: { silent?: boolean } = {},
+) {
+  if (!options.silent) {
+    loadState.value = "loading";
+  }
   try {
-    const data = await getTasks(token, {
-      task_type: "feeding",
-      status: "in_progress,completed",
-      only_today: onlyToday.value || undefined,
-      page: 1,
-      page_size: 50,
-    });
+    const data = await getTasks(token, query);
     tasks.value = data.items;
+    setCachedTaskList(query, data);
     loadState.value = "ready";
   } catch (error) {
+    if (options.silent) {
+      return;
+    }
     loadState.value = "error";
     errorMessage.value =
       error instanceof ApiBusinessError || error instanceof Error
         ? error.message
         : "请稍后重试";
   }
+}
+
+async function loadTasks(options: { force?: boolean } = {}) {
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+
+  const query = buildTaskListQuery();
+  if (!options.force) {
+    const cached = getCachedTaskList(query);
+    if (cached) {
+      tasks.value = cached.items;
+      loadState.value = "ready";
+      void fetchTasks(token, query, { silent: true });
+      return;
+    }
+  }
+
+  await fetchTasks(token, query);
+}
+
+function refreshTasks() {
+  void loadTasks({ force: true });
 }
 
 function toggleToday() {

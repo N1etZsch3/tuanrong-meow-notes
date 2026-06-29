@@ -24,6 +24,7 @@ describe("map api", () => {
       campus: { name: "湖北师范大学" },
       areas: [],
       marker_configs: [],
+      filter_options: [{ key: "none", label: "无标记" }],
       default_filters: {},
       ui_config: {},
       amap_config: { web_key: "web-key", security_js_code: "security" },
@@ -56,6 +57,7 @@ describe("map api", () => {
       min_lat: 30,
       max_lng: 116,
       max_lat: 31,
+      filter_key: "feeding_pending",
       user_lng: undefined,
     });
 
@@ -70,6 +72,7 @@ describe("map api", () => {
           min_lat: 30,
           max_lng: 116,
           max_lat: 31,
+          filter_key: "feeding_pending",
         },
       }),
     );

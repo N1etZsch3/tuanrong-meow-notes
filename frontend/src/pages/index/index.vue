@@ -54,7 +54,7 @@
         <cover-view
           class="filter-chip"
           hover-class="filter-chip-hover"
-          @tap="filterMenu.toggle"
+          @tap="toggleFilterMenu"
         >
           <cover-image class="filter-chip-icon" :src="activeFilterIcon" />
           <cover-view class="filter-label">{{ activeFilterLabel }}</cover-view>
@@ -64,15 +64,15 @@
         </cover-view>
         <cover-view class="filter-menu">
           <cover-view
-            v-for="option in MAP_FILTER_OPTIONS"
+            v-for="option in filterOptions"
             :key="option.key"
             class="filter-option"
             :class="{ 'is-active': option.key === activeFilter }"
-            @tap="selectFilter(option.key)"
+            @tap="selectFilter(option)"
           >
             <cover-image
               class="filter-option-icon"
-              :src="getFilterOptionIcon(option.key)"
+              :src="getFilterOptionIcon(option)"
             />
             <cover-view class="filter-option-copy">
               <cover-view class="filter-option-title">{{ option.label }}</cover-view>
@@ -250,14 +250,19 @@ import {
   ALL_MAP_FILTER_KEY,
   HBNU_CAMPUS,
   HBNU_CAMPUS_CORE_BOUNDS,
-  MAP_FILTER_OPTIONS,
+  NO_MAP_FILTER_KEY,
+  NO_MAP_FILTER_LABEL,
+  NO_MAP_FILTER_OPTION,
   expandLngLatBounds,
   formatDistance,
   getMapFilterLabel,
   getMapPointQueryByFilter,
+  isMapShellItemVisibleByFilter,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
   mapSearchResultToShellItem,
+  normalizeMapFilterOptions,
+  type MapFilterOption,
   resolveMapShellItemType,
   type MapFilterKey,
   type CampusMapConfig,
@@ -276,6 +281,7 @@ const drawerConfig = ref({
   windowHeight: sysInfo.windowHeight,
 });
 const filterMenuOpen = ref(false);
+const filterOptions = ref<MapFilterOption[]>([NO_MAP_FILTER_OPTION]);
 const activeFilter = ref<MapFilterKey | null>(null);
 const searchKeyword = ref("");
 const mapLoadState = ref<MapLoadState>("idle");
@@ -289,13 +295,17 @@ const nativeRoutePoints = ref<Array<{ longitude: number; latitude: number }>>([]
 const bottomContentItems = ref<MapShellItem[]>([]);
 const searchResultItems = ref<MapShellItem[]>([]);
 const selectedSummary = ref<MapPointSummaryResponse | null>(null);
-const MAP_FILTER_ICON_SRC: Record<MapFilterKey, string> = {
+const MAP_FILTER_ICON_SRC: Record<string, string> = {
+  none: filterDefaultIcon,
   all: allMarkerPointIcon,
   emergency_task: emergencyTaskPointIcon,
   daily_task: dailyTaskPointIcon,
   cat: catPointMarkerIcon,
   supply: supplyPointMarkerIcon,
   landmark: landmarkPointIcon,
+  feeding_pending: failedTaskMarkerIcon,
+  feeding_completed: completedTaskMarkerIcon,
+  filter_none: filterDefaultIcon,
 };
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
@@ -303,11 +313,19 @@ let mapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 
 const isPageVisible = ref(true);
 const isSearchMode = computed(() => searchKeyword.value.trim().length > 0);
+const activeFilterOption = computed(() =>
+  activeFilter.value
+    ? filterOptions.value.find((option) => option.key === activeFilter.value) || null
+    : null,
+);
 const activeFilterLabel = computed(() =>
-  activeFilter.value ? getMapFilterLabel(activeFilter.value) : "选择标记",
+  activeFilterOption.value?.label ||
+  (activeFilter.value ? getMapFilterLabel(activeFilter.value) : NO_MAP_FILTER_LABEL),
 );
 const activeFilterIcon = computed(() =>
-  activeFilter.value ? MAP_FILTER_ICON_SRC[activeFilter.value] : filterDefaultIcon,
+  activeFilterOption.value
+    ? getFilterOptionIcon(activeFilterOption.value)
+    : filterDefaultIcon,
 );
 const filterMenuState = computed(() => ({
   open: filterMenuOpen.value,
@@ -322,7 +340,7 @@ const visibleItems = computed(() => {
     return (
       !activeFilter.value ||
       activeFilter.value === ALL_MAP_FILTER_KEY ||
-      item.type === activeFilter.value
+      isMapShellItemVisibleByFilter(item, activeFilter.value)
     );
   });
 });
@@ -415,19 +433,28 @@ const nativeMapPolylines = computed(() => {
     },
   ];
 });
-const nativeMapIncludePoints = computed(() => nativeRoutePoints.value);
+const nativeMapIncludePoints = computed(() => {
+  if (nativeRoutePoints.value.length) {
+    return nativeRoutePoints.value;
+  }
 
-function selectFilter(filterKey: MapFilterKey) {
-  activeFilter.value = filterKey;
+  return mapPointMarkers.value.map((marker) => ({
+    longitude: marker.lng,
+    latitude: marker.lat,
+  }));
+});
+
+function selectFilter(option: MapFilterOption) {
+  activeFilter.value = option.key === NO_MAP_FILTER_KEY ? null : option.key;
   filterMenuOpen.value = false;
 }
 
-function setFilterMenuOpen(open: boolean) {
-  filterMenuOpen.value = open;
+function toggleFilterMenu() {
+  filterMenuOpen.value = !filterMenuOpen.value;
 }
 
-function getFilterOptionIcon(filterKey: MapFilterKey): string {
-  return MAP_FILTER_ICON_SRC[filterKey];
+function getFilterOptionIcon(option: MapFilterOption): string {
+  return MAP_FILTER_ICON_SRC[option.icon_key || option.key] || filterDefaultIcon;
 }
 
 
@@ -485,7 +512,7 @@ function getItemSymbol(type: MapShellItemType): string {
 }
 
 function getFeedingMarkerIcon(marker: MapPointMarkerDto): string {
-  return marker.extra.today_status === "completed"
+  return marker.extra.feeding_status === "completed"
     ? completedTaskMarkerIcon
     : failedTaskMarkerIcon;
 }
@@ -646,6 +673,18 @@ function applyMapInit(data: MapInitResponse) {
     limit_bounds: expandLngLatBounds(coreBounds, 0.35),
   };
   mapCenter.value = { ...campusMapConfig.value.center };
+  applyMapFilterOptions(data);
+}
+
+function applyMapFilterOptions(data: MapInitResponse) {
+  filterOptions.value = normalizeMapFilterOptions(data.filter_options);
+  if (
+    activeFilter.value &&
+    !filterOptions.value.some((option) => option.key === activeFilter.value)
+  ) {
+    activeFilter.value = null;
+    mapPointMarkers.value = [];
+  }
 }
 
 function getViewportQuery() {
@@ -675,7 +714,7 @@ async function refreshMapPoints() {
   try {
     const data = await getMapPoints(token, {
       campus_id: campusMapConfig.value.id,
-      ...getMapPointQueryByFilter(activeFilter.value),
+      ...getMapPointQueryByFilter(activeFilter.value, activeFilterOption.value),
       ...getViewportQuery(),
     });
     mapPointMarkers.value = data.items;
@@ -729,7 +768,7 @@ async function runSearch(keyword: string) {
   selectedSummary.value = null;
   try {
     const filterQuery = activeFilter.value
-      ? getMapPointQueryByFilter(activeFilter.value)
+      ? getMapPointQueryByFilter(activeFilter.value, activeFilterOption.value)
       : {};
     const data = await searchMap(token, {
       keyword: normalizedKeyword,
@@ -742,7 +781,7 @@ async function runSearch(keyword: string) {
       return (
         !activeFilter.value ||
         activeFilter.value === ALL_MAP_FILTER_KEY ||
-        item.type === activeFilter.value
+        isMapShellItemVisibleByFilter(item, activeFilter.value)
       );
     });
     searchResultItems.value = items;
@@ -782,6 +821,20 @@ async function loadPointSummary(pointId: string) {
 async function handleSummaryAction(action: CardActionDto) {
   if (!action.enabled || !selectedSummary.value) {
     return;
+  }
+
+  if (action.key === "view_detail") {
+    if (action.target_type === "page" && action.path) {
+      uni.navigateTo({ url: action.path });
+      return;
+    }
+
+    if (selectedSummary.value.business_type === "feeding" && selectedSummary.value.business_id) {
+      uni.navigateTo({
+        url: `/pages/tasks/detail?task_id=${selectedSummary.value.business_id}`,
+      });
+      return;
+    }
   }
 
   if (action.key !== "navigate") {
@@ -834,6 +887,23 @@ async function loadInitialMapData() {
     mapLoadState.value = "error";
     contentLoadState.value = "error";
     handleMapError(error, "地图初始化失败，请稍后重试。");
+  }
+}
+
+async function refreshMapFilterOptions() {
+  if (!isPageVisible.value || mapLoadState.value !== "ready") {
+    return;
+  }
+
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+
+  try {
+    applyMapFilterOptions(await getMapInit(token));
+  } catch (error) {
+    handleMapError(error, "地图筛选加载失败");
   }
 }
 
@@ -933,7 +1003,7 @@ onMounted(() => {
 
 onShow(() => {
   isPageVisible.value = true;
-  void refreshMapPoints();
+  void refreshMapFilterOptions().then(() => refreshMapPoints());
 });
 
 onHide(() => {
@@ -1058,7 +1128,7 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 7;
   left: 52rpx;
-  top: 252rpx;
+  top: 300rpx;
   width: 360rpx;
   pointer-events: none;
 }

@@ -171,14 +171,35 @@ def today_task_execution_status(task: Task) -> str | None:
     return execution.status if execution else None
 
 
+def active_task_execution_dates(task: Task):
+    return [item for item in task.execution_dates if item.deleted_at is None]
+
+
+def feeding_task_marker_status(task: Task | None) -> str | None:
+    if task is None or task.task_type != "feeding":
+        return None
+    today_status = today_task_execution_status(task)
+    if today_status == "completed":
+        return "completed"
+
+    active_dates = active_task_execution_dates(task)
+    if active_dates and all(item.status == "completed" for item in active_dates):
+        return "completed"
+    return "pending"
+
+
 def task_marker_extra(task: Task | None) -> dict:
     if task is None:
         return {}
-    return {
+    extra = {
         "task_status": task.status,
         "next_execute_date": next_task_execution_date(task),
         "today_status": today_task_execution_status(task),
     }
+    feeding_status = feeding_task_marker_status(task)
+    if feeding_status:
+        extra["feeding_status"] = feeding_status
+    return extra
 
 
 def point_label(point: MapPoint, configs: dict[str, MapMarkerConfig]) -> str:
@@ -247,10 +268,12 @@ def map_init(db: Session, campus_id: UUID | None = None) -> dict:
         .where(MapMarkerConfig.default_visible.is_(True))
         .order_by(MapMarkerConfig.sort_order.asc(), MapMarkerConfig.z_index.desc())
     ).all()
+    configs_by_key = {config.marker_key: config for config in marker_configs}
     return {
         "campus": campus_payload(campus),
         "areas": [area_payload(area) for area in areas],
         "marker_configs": [marker_config_payload(config) for config in marker_configs],
+        "filter_options": map_filter_options(db, campus=campus, configs=configs_by_key),
         "default_filters": {
             "point_types": ["task", "cat", "supply", "landmark"],
             "include_hidden": False,
@@ -269,6 +292,56 @@ def map_init(db: Session, campus_id: UUID | None = None) -> dict:
     }
 
 
+def map_filter_options(
+    db: Session,
+    *,
+    campus: Campus,
+    configs: dict[str, MapMarkerConfig],
+) -> list[dict]:
+    points = db.scalars(visible_points_statement().where(MapPoint.campus_id == campus.id)).all()
+    task_lookup = task_by_map_point_ids(db, points)
+    feeding_statuses = {
+        status
+        for point in points
+        if point.point_type == "task" and point_business_type(point, configs) == "feeding"
+        for status in [feeding_task_marker_status(task_lookup.get(point.id))]
+        if status
+    }
+    options = [
+        {
+            "key": "none",
+            "label": "无标记",
+            "description": "暂不显示地图点位",
+            "icon_key": "filter_none",
+            "point_types": [],
+            "business_types": [],
+        }
+    ]
+    if "pending" in feeding_statuses:
+        options.append(
+            {
+                "key": "feeding_pending",
+                "label": "未完成任务",
+                "description": "尚未完成的暑假投喂点",
+                "icon_key": "feeding_pending",
+                "point_types": ["task"],
+                "business_types": ["feeding"],
+            }
+        )
+    if "completed" in feeding_statuses:
+        options.append(
+            {
+                "key": "feeding_completed",
+                "label": "完成任务",
+                "description": "已完成投喂的任务点",
+                "icon_key": "feeding_completed",
+                "point_types": ["task"],
+                "business_types": ["feeding"],
+            }
+        )
+    return options
+
+
 def visible_points_statement():
     return (
         select(MapPoint)
@@ -285,6 +358,7 @@ def map_points(
     db: Session,
     *,
     campus_id: UUID | None = None,
+    filter_key: str | None = None,
     point_types: str | None = None,
     business_types: str | None = None,
     area_id: UUID | None = None,
@@ -297,6 +371,20 @@ def map_points(
 ) -> dict:
     campus = get_default_campus(db, campus_id)
     configs = marker_configs_by_key(db)
+    normalized_filter_key = (filter_key or "").strip()
+    if normalized_filter_key == "none":
+        return {
+            "items": [],
+            "total": 0,
+            "map_strategy": {
+                "cluster_enabled": False,
+                "label_collision": "frontend",
+                "max_marker_count": 200,
+            },
+        }
+    if normalized_filter_key in {"feeding_pending", "feeding_completed"}:
+        point_types = "task"
+        business_types = "feeding"
     type_filter = parse_csv_filter(point_types)
     business_filter = parse_csv_filter(business_types)
     statement = visible_points_statement().where(MapPoint.campus_id == campus.id)
@@ -319,6 +407,13 @@ def map_points(
             if point_business_type(point, configs) in business_filter
         ]
     task_lookup = task_by_map_point_ids(db, points)
+    if normalized_filter_key in {"feeding_pending", "feeding_completed"}:
+        target_status = normalized_filter_key.replace("feeding_", "")
+        points = [
+            point
+            for point in points
+            if feeding_task_marker_status(task_lookup.get(point.id)) == target_status
+        ]
     return {
         "items": [
             point_marker_payload(
@@ -621,6 +716,8 @@ def bottom_content(db: Session, *, mode: str = "auto", limit: int = 10) -> dict:
                 ),
                 "tag_label": point_label(point, configs),
                 "map_point_id": point.id,
+                "lng": as_float(point.lng),
+                "lat": as_float(point.lat),
             }
             for point in points
         ],

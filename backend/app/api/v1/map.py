@@ -27,6 +27,7 @@ def init_map(
 def list_points(
     request: Request,
     campus_id: UUID | None = None,
+    filter_key: str | None = None,
     point_types: str | None = None,
     business_types: str | None = None,
     area_id: UUID | None = None,
@@ -42,6 +43,7 @@ def list_points(
     data = service.map_points(
         db,
         campus_id=campus_id,
+        filter_key=filter_key,
         point_types=point_types,
         business_types=business_types,
         area_id=area_id,

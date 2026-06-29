@@ -1,3 +1,4 @@
+from datetime import date
 from math import asin, cos, radians, sin, sqrt
 from urllib.parse import quote
 from uuid import UUID
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.config import get_settings
 from app.core.errors import APIError, ErrorCode
 from app.modules.map.models import Campus, CampusArea, MapMarkerConfig, MapPoint, MapPointPhoto
+from app.modules.tasks.models import Task
 
 EARTH_RADIUS_METERS = 6_371_000
 
@@ -127,6 +129,58 @@ def point_marker_key(point: MapPoint) -> str | None:
     return point.icon_key
 
 
+def task_by_map_point_ids(db: Session, points: list[MapPoint]) -> dict[UUID, Task]:
+    point_ids = [point.id for point in points if point.point_type == "task"]
+    if not point_ids:
+        return {}
+    tasks = db.scalars(
+        select(Task)
+        .options(selectinload(Task.execution_dates))
+        .where(Task.map_point_id.in_(point_ids), Task.deleted_at.is_(None))
+    ).all()
+    return {task.map_point_id: task for task in tasks}
+
+
+def next_task_execution_date(task: Task) -> str | None:
+    today = date.today()
+    active_dates = sorted(
+        (item for item in task.execution_dates if item.deleted_at is None),
+        key=lambda item: item.execute_date,
+    )
+    pending = [
+        item
+        for item in active_dates
+        if item.status == "pending" and item.execute_date >= today
+    ]
+    if pending:
+        return pending[0].execute_date.isoformat()
+    fallback = next((item for item in active_dates if item.status == "pending"), None)
+    return fallback.execute_date.isoformat() if fallback else None
+
+
+def today_task_execution_status(task: Task) -> str | None:
+    today = date.today()
+    execution = next(
+        (
+            item
+            for item in task.execution_dates
+            if item.deleted_at is None and item.execute_date == today
+        ),
+        None,
+    )
+    return execution.status if execution else None
+
+
+def task_marker_extra(task: Task | None) -> dict:
+    if task is None:
+        return {}
+    return {
+        "task_status": task.status,
+        "next_execute_date": next_task_execution_date(task),
+        "today_status": today_task_execution_status(task),
+    }
+
+
 def point_label(point: MapPoint, configs: dict[str, MapMarkerConfig]) -> str:
     if point.icon_key and point.icon_key in configs:
         return configs[point.icon_key].label
@@ -145,6 +199,7 @@ def point_marker_payload(
     *,
     user_lng: float | None = None,
     user_lat: float | None = None,
+    task: Task | None = None,
 ) -> dict:
     lng = as_float(point.lng)
     lat = as_float(point.lat)
@@ -153,7 +208,7 @@ def point_marker_payload(
         "point_type": point.point_type,
         "point_scope": point.point_scope,
         "business_type": point_business_type(point, configs),
-        "business_id": point.id,
+        "business_id": task.id if task else point.id,
         "name": point.name,
         "subtitle": point.subtitle,
         "lng": lng,
@@ -175,7 +230,7 @@ def point_marker_payload(
             to_lng=lng,
             to_lat=lat,
         ),
-        "extra": {},
+        "extra": task_marker_extra(task),
     }
 
 
@@ -263,9 +318,16 @@ def map_points(
             for point in points
             if point_business_type(point, configs) in business_filter
         ]
+    task_lookup = task_by_map_point_ids(db, points)
     return {
         "items": [
-            point_marker_payload(point, configs, user_lng=user_lng, user_lat=user_lat)
+            point_marker_payload(
+                point,
+                configs,
+                user_lng=user_lng,
+                user_lat=user_lat,
+                task=task_lookup.get(point.id),
+            )
             for point in points
         ],
         "total": len(points),
@@ -327,11 +389,18 @@ def search(
         statement = statement.where(MapPoint.point_type.in_(type_filter))
     points = db.scalars(statement).all()
     points_by_id = {point.id: point for point in points}
+    task_lookup = task_by_map_point_ids(db, points)
     for point in points:
         text = normalized_search_text(point)
         if keyword_lower not in text:
             continue
-        payload = point_marker_payload(point, configs, user_lng=user_lng, user_lat=user_lat)
+        payload = point_marker_payload(
+            point,
+            configs,
+            user_lng=user_lng,
+            user_lat=user_lat,
+            task=task_lookup.get(point.id),
+        )
         exact_title_bonus = 1000 if keyword_lower == point.name.lower() else 0
         title_bonus = 100 if keyword_lower in point.name.lower() else 0
         payload["sort_score"] = point.display_level + exact_title_bonus + title_bonus
@@ -375,6 +444,8 @@ def search(
 def point_label_for_type(point_type: str, business_type: str | None) -> str:
     if point_type == "task" and business_type == "emergency":
         return "紧急任务"
+    if point_type == "task" and business_type == "feeding":
+        return "喂食任务"
     if point_type == "task":
         return "日常任务"
     if point_type == "cat":
@@ -418,6 +489,7 @@ def summary(
 ) -> dict:
     point = get_visible_point(db, point_id)
     configs = marker_configs_by_key(db)
+    task = task_by_map_point_ids(db, [point]).get(point.id)
     lng = as_float(point.lng)
     lat = as_float(point.lat)
     business_type = point_business_type(point, configs)
@@ -426,7 +498,7 @@ def summary(
         "point_id": point.id,
         "point_type": point.point_type,
         "business_type": business_type,
-        "business_id": point.id,
+        "business_id": task.id if task else point.id,
         "title": point.name,
         "subtitle": point.subtitle,
         "cover_photo_url": point_cover_photo(point),
@@ -450,7 +522,7 @@ def summary(
             for photo in sorted(point.photos, key=lambda item: item.sort_order)
             if photo.deleted_at is None
         ],
-        "business_summary": {},
+        "business_summary": task_marker_extra(task),
         "actions": [
             {
                 "key": "navigate",
@@ -467,15 +539,17 @@ def summary(
                 "enabled": True,
                 "disabled_reason": None,
                 "method": None,
-                "path": detail_path(point),
+                "path": detail_path(point, task),
                 "target_type": "page",
             },
         ],
     }
 
 
-def detail_path(point: MapPoint) -> str:
+def detail_path(point: MapPoint, task: Task | None = None) -> str:
     if point.point_type == "task":
+        if task:
+            return f"/pages/tasks/detail?task_id={task.id}"
         return f"/pages/tasks/detail?map_point_id={point.id}"
     if point.point_type == "cat":
         return f"/pages/cats/detail?map_point_id={point.id}"
@@ -525,18 +599,21 @@ def bottom_content(db: Session, *, mode: str = "auto", limit: int = 10) -> dict:
         .limit(limit)
     )
     points = db.scalars(statement).all()
+    task_lookup = task_by_map_point_ids(db, points)
     return {
         "content_type": "latest_tasks" if mode == "auto" else mode,
         "title": "最新任务",
         "items": [
             {
-                "id": point.id,
+                "id": task_lookup[point.id].id if point.id in task_lookup else point.id,
                 "type": "emergency_task"
                 if point_business_type(point, configs) == "emergency"
                 else "daily_task",
-                "title": point.name,
+                "title": task_lookup[point.id].title if point.id in task_lookup else point.name,
                 "subtitle": point.subtitle,
-                "description": point.description,
+                "description": task_lookup[point.id].description
+                if point.id in task_lookup
+                else point.description,
                 "distance_meters": None,
                 "status_label": point_label_for_type(
                     point.point_type,

@@ -17,6 +17,7 @@ def db_session() -> Generator[Session, None, None]:
     import app.modules.cats.models  # noqa: F401
     import app.modules.files.models  # noqa: F401
     import app.modules.map.models  # noqa: F401
+    import app.modules.tasks.models  # noqa: F401
 
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",

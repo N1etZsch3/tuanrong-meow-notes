@@ -150,8 +150,16 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("../../../素材/svg/地图点/物资点.svg");
     expect(indexPageSource).toContain("../../../素材/svg/地图点/地标.svg");
     expect(indexPageSource).toContain("../../../素材/svg/地图点/箭头.svg");
+    expect(indexPageSource).toContain("../../../素材/svg/地图点/完成任务.svg");
+    expect(indexPageSource).toContain("../../../素材/svg/地图点/失败任务.svg");
     expect(indexPageSource).not.toContain("filter-chevron-mark");
     expect(indexPageSource).not.toContain("⌄");
+  });
+
+  it("uses completion and failure task svgs for feeding task map markers", () => {
+    expect(indexPageSource).toContain("getFeedingMarkerIcon");
+    expect(indexPageSource).toContain("marker.business_type === \"feeding\"");
+    expect(indexPageSource).toContain("marker.extra.today_status === \"completed\"");
   });
 
   it("keeps the filter menu in a native-map-safe cover layer", () => {
@@ -343,7 +351,7 @@ describe("map page shell behavior", () => {
     });
     expect(getMapPointQueryByFilter("daily_task")).toEqual({
       point_types: "task",
-      business_types: "daily",
+      business_types: "daily,feeding",
     });
     expect(getMapPointQueryByFilter("cat")).toEqual({ point_types: "cat" });
     expect(getMapPointQueryByFilter("all")).toEqual({});

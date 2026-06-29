@@ -5,7 +5,7 @@
         <button class="back-button" @tap="goBack">‹</button>
         <view>
           <text class="nav-title">管理员入口</text>
-          <text class="nav-subtitle">成员账号管理</text>
+          <text class="nav-subtitle">成员账号与喂食任务</text>
         </view>
       </view>
 
@@ -14,14 +14,25 @@
         <text class="permission-copy">该入口仅管理员可见。</text>
       </view>
 
-      <button v-else class="admin-action" @tap="goCreateUser">
-        <view class="action-icon">＋</view>
-        <view class="action-copy">
-          <text class="action-title">添加账户</text>
-          <text class="action-subtitle">创建成员喵喵号并要求首次登录改密</text>
-        </view>
-        <text class="action-chevron">›</text>
-      </button>
+      <view v-else class="admin-actions">
+        <button class="admin-action" @tap="goCreateUser">
+          <view class="action-icon">＋</view>
+          <view class="action-copy">
+            <text class="action-title">添加账户</text>
+            <text class="action-subtitle">创建成员喵喵号并要求首次登录改密</text>
+          </view>
+          <text class="action-chevron">›</text>
+        </button>
+
+        <button class="admin-action" @tap="goPublishTask">
+          <view class="action-icon action-icon-task">食</view>
+          <view class="action-copy">
+            <text class="action-title">发布喂食任务</text>
+            <text class="action-subtitle">创建暑假投喂点、日期、物资和图片</text>
+          </view>
+          <text class="action-chevron">›</text>
+        </button>
+      </view>
     </view>
   </view>
 </template>
@@ -33,6 +44,10 @@ const userStore = useUserStore();
 
 function goCreateUser() {
   uni.navigateTo({ url: "/pages/admin/create-user" });
+}
+
+function goPublishTask() {
+  uni.navigateTo({ url: "/pages/admin/tasks/create" });
 }
 
 function goBack() {
@@ -95,11 +110,17 @@ function goBack() {
   font-size: 25rpx;
 }
 
+.admin-actions {
+  margin-top: 44rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
 .admin-action,
 .permission-card {
   box-sizing: border-box;
   width: 100%;
-  margin-top: 44rpx;
   border-radius: 30rpx;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 16rpx 42rpx rgba(42, 63, 43, 0.1);
@@ -123,6 +144,10 @@ function goBack() {
   font-size: 48rpx;
   line-height: 66rpx;
   text-align: center;
+}
+
+.action-icon-task {
+  background: #ff8b22;
 }
 
 .action-copy {
@@ -156,6 +181,7 @@ function goBack() {
 }
 
 .permission-card {
+  margin-top: 44rpx;
   padding: 42rpx 34rpx;
 }
 

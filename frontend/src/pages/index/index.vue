@@ -234,8 +234,10 @@ import { useUserStore } from "@/stores/user";
 
 import allMarkerPointIcon from "../../../素材/svg/地图点/全部.svg";
 import catPointMarkerIcon from "../../../素材/svg/地图点/猫咪点.svg";
+import completedTaskMarkerIcon from "../../../素材/svg/地图点/完成任务.svg";
 import dailyTaskPointIcon from "../../../素材/svg/地图点/日常任务.svg";
 import emergencyTaskPointIcon from "../../../素材/svg/地图点/紧急任务.svg";
+import failedTaskMarkerIcon from "../../../素材/svg/地图点/失败任务.svg";
 import filterArrowIcon from "../../../素材/svg/地图点/箭头.svg";
 import filterDefaultIcon from "../../../素材/svg/地图点/筛选.svg";
 import landmarkPointIcon from "../../../素材/svg/地图点/地标.svg";
@@ -389,7 +391,7 @@ const nativeMapMarkers = computed(() => {
       id: index + 1,
       longitude: marker.lng,
       latitude: marker.lat,
-      iconPath: getNativeMarkerIcon(type),
+      iconPath: getNativeMarkerIcon(type, marker),
       width: 34,
       height: 34,
       callout: {
@@ -494,7 +496,20 @@ function getItemSymbol(type: MapShellItemType): string {
   return symbols[type];
 }
 
-function getNativeMarkerIcon(type: MapShellItemType): string {
+function getFeedingMarkerIcon(marker: MapPointMarkerDto): string {
+  return marker.extra.today_status === "completed"
+    ? completedTaskMarkerIcon
+    : failedTaskMarkerIcon;
+}
+
+function getNativeMarkerIcon(
+  type: MapShellItemType,
+  marker?: MapPointMarkerDto,
+): string {
+  if (marker && marker.business_type === "feeding") {
+    return getFeedingMarkerIcon(marker);
+  }
+
   const icons: Record<MapShellItemType, string> = {
     emergency_task: emergencyMarkerIcon,
     daily_task: taskMarkerIcon,

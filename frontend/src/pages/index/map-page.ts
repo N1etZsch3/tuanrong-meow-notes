@@ -334,7 +334,7 @@ export function getMapPointQueryByFilter(
   }
 
   if (filterKey === "daily_task") {
-    return { point_types: "task", business_types: "daily" };
+    return { point_types: "task", business_types: "daily,feeding" };
   }
 
   if (filterKey === "cat" || filterKey === "supply" || filterKey === "landmark") {

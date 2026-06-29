@@ -1,0 +1,124 @@
+import { describe, expect, it } from "vitest";
+
+import adminCreateTaskSource from "../../src/pages/admin/tasks/create.vue?raw";
+import adminTaskLocationSource from "../../src/pages/admin/tasks/location.vue?raw";
+import taskDetailSource from "../../src/pages/tasks/detail.vue?raw";
+import taskIndexSource from "../../src/pages/tasks/index.vue?raw";
+import pagesJson from "../../src/pages.json?raw";
+import {
+  DEFAULT_REQUIRED_ITEMS,
+  buildSummerFeedingTaskPayload,
+  buildUploadedTaskPhoto,
+  createDefaultFeedingTaskDraft,
+  formatExecutionDateSummary,
+  validatePublishDraft,
+} from "@/pages/tasks/task-page";
+
+describe("summer feeding task pages", () => {
+  it("registers task list, task detail, publish and map location pages", () => {
+    expect(pagesJson).toContain("pages/tasks/index");
+    expect(pagesJson).toContain("pages/tasks/detail");
+    expect(pagesJson).toContain("pages/admin/tasks/create");
+    expect(pagesJson).toContain("pages/admin/tasks/location");
+  });
+
+  it("uses real task list and detail pages instead of the development placeholder", () => {
+    expect(taskIndexSource).toContain("getTasks");
+    expect(taskIndexSource).toContain("/pages/tasks/detail?task_id=");
+    expect(taskIndexSource).not.toContain("任务模块建设中");
+    expect(taskDetailSource).toContain("getTaskDetail");
+    expect(taskDetailSource).toContain("完成投喂");
+  });
+
+  it("keeps the publish form fields requested for summer feeding tasks", () => {
+    for (const label of [
+      "任务标题",
+      "任务说明",
+      "时间",
+      "位置",
+      "所需物资",
+      "任务点图片",
+      "路线说明",
+    ]) {
+      expect(adminCreateTaskSource).toContain(label);
+    }
+    expect(adminCreateTaskSource).toContain("publishSummerFeedingTask");
+    expect(adminCreateTaskSource).toContain("uploadImage");
+    expect(adminCreateTaskSource).toContain("map_point_scene");
+  });
+
+  it("uses a native mini program map for publish-time task point selection", () => {
+    expect(adminTaskLocationSource).toContain("<map");
+    expect(adminTaskLocationSource).toContain("@tap=\"selectLocationFromMap\"");
+    expect(adminTaskLocationSource).toContain("uni.setStorageSync");
+    expect(adminTaskLocationSource).toContain("确认此位置");
+  });
+
+  it("defaults materials to cat food and water and builds the publish payload", () => {
+    const draft = createDefaultFeedingTaskDraft();
+    draft.title = "学生宿舍区北侧喂食点";
+    draft.description = "补粮、换水并观察食盆状态";
+    draft.execute_dates = ["2026-07-02", "2026-07-05"];
+    draft.location = {
+      location_name: "学生宿舍区北侧喂食点",
+      location_detail: "靠近教学楼B",
+      lng: 115.061742,
+      lat: 30.22532684,
+      route_instruction: "",
+    };
+    draft.photos = [
+      {
+        file_id: "asset-1",
+        file_url: "/uploads/task/asset-1.jpg",
+        thumbnail_url: "/uploads/task/asset-1-thumb.jpg",
+      },
+    ];
+
+    expect(DEFAULT_REQUIRED_ITEMS).toBe("猫粮、水");
+    expect(validatePublishDraft(draft)).toEqual({ valid: true });
+    expect(buildSummerFeedingTaskPayload(draft)).toMatchObject({
+      title: "学生宿舍区北侧喂食点",
+      required_items: "猫粮、水",
+      execute_dates: ["2026-07-02", "2026-07-05"],
+      map_point: {
+        location_name: "学生宿舍区北侧喂食点",
+        route_instruction: "",
+      },
+      photos: [
+        {
+          file_id: "asset-1",
+          photo_type: "cover",
+          is_cover: true,
+        },
+      ],
+    });
+  });
+
+  it("validates missing publish fields before submit", () => {
+    expect(validatePublishDraft(createDefaultFeedingTaskDraft())).toEqual({
+      valid: false,
+      message: "请输入任务标题",
+    });
+  });
+
+  it("formats execution date summaries for the publish card", () => {
+    expect(formatExecutionDateSummary([])).toBe("请选择日期");
+    expect(formatExecutionDateSummary(["2026-07-02", "2026-07-05"])).toBe(
+      "已选 2 个日期 | 7月2日、7月5日",
+    );
+  });
+
+  it("maps uploaded assets into task photo refs", () => {
+    expect(
+      buildUploadedTaskPhoto({
+        asset_id: "asset-1",
+        default_url: "/uploads/task/asset-1.jpg",
+        default_thumb_url: "/uploads/task/asset-1-thumb.jpg",
+      }),
+    ).toEqual({
+      file_id: "asset-1",
+      file_url: "/uploads/task/asset-1.jpg",
+      thumbnail_url: "/uploads/task/asset-1-thumb.jpg",
+    });
+  });
+});

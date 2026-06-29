@@ -2,7 +2,8 @@ var config = {
   rpxRatio: 0.5,
   windowHeight: 800
 };
-var MAX_DRAWER_PROGRESS = 2;
+var MAX_DRAWER_PROGRESS = 3;
+var MAX_DRAWER_TOP_GAP_RPX = 210;
 var currentProgress = 1; // 1 = Normal
 var startProgress = 1;
 var startY = 0;
@@ -31,8 +32,9 @@ function interpolate(p, p0, p1, v0, v1) {
 
 function applyProgress(progress, ownerInstance, transition) {
   progress = clamp(progress, 0, MAX_DRAWER_PROGRESS);
+  var maxDrawerH = config.windowHeight / config.rpxRatio - MAX_DRAWER_TOP_GAP_RPX;
   var drawerH, mapB, mapT, titleOp, titleTrans, mapOp;
-  var mapL, mapRad, drawerL, drawerRad;
+  var mapL, mapRad, drawerL, drawerRad, drawerBottom;
   
   if (progress < 1) {
     drawerH = interpolate(progress, 0, 1, 132, 500);
@@ -42,6 +44,7 @@ function applyProgress(progress, ownerInstance, transition) {
     mapRad = interpolate(progress, 0, 1, 0, 28);
     drawerL = 24;
     drawerRad = 34;
+    drawerBottom = 150;
     titleOp = interpolate(progress, 0, 1, 0, 1);
     titleTrans = interpolate(progress, 0, 1, -28, 0);
     mapOp = 1;
@@ -53,18 +56,20 @@ function applyProgress(progress, ownerInstance, transition) {
     mapRad = 28;
     drawerL = interpolate(progress, 1, 2, 24, 0);
     drawerRad = interpolate(progress, 1, 2, 34, 0);
+    drawerBottom = 150;
     titleOp = interpolate(progress, 1, 2, 1, 0);
     titleTrans = interpolate(progress, 1, 2, 0, -28);
     mapOp = 1;
   } else {
-    drawerH = 654;
-    mapB = 800;
-    mapT = 40;
+    drawerH = interpolate(progress, 2, 3, 654, maxDrawerH);
+    mapB = interpolate(progress, 2, 3, 800, maxDrawerH + MAX_DRAWER_TOP_GAP_RPX);
+    mapT = interpolate(progress, 2, 3, 40, MAX_DRAWER_TOP_GAP_RPX);
     mapL = 24;
     mapRad = 28;
     drawerL = 0;
     drawerRad = 0;
-    mapOp = 1;
+    drawerBottom = interpolate(progress, 2, 3, 150, 0);
+    mapOp = interpolate(progress, 2.5, 3, 1, 0);
     titleOp = 0;
     titleTrans = -28;
   }
@@ -77,6 +82,7 @@ function applyProgress(progress, ownerInstance, transition) {
       height: px(drawerH) + 'px', 
       left: px(drawerL) + 'px',
       right: px(drawerL) + 'px',
+      bottom: px(drawerBottom) + 'px',
       borderRadius: px(drawerRad) + 'px',
       transition: trans 
     });

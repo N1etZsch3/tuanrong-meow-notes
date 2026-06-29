@@ -60,7 +60,7 @@ describe("map page shell behavior", () => {
   it("uses the WeChat mini program native map path only", () => {
     expect(indexPageSource).toContain('<map');
     expect(indexPageSource).toContain('class="native-map"');
-    expect(indexPageSource).toContain(':show-location="true"');
+    expect(indexPageSource).toContain(':show-location="Boolean(userLocation)"');
     expect(indexPageSource).toContain("uni.getLocation");
     expect(indexPageSource).toContain("uni.openLocation");
     expect(indexPageSource).not.toContain("supportsAmapWeb");
@@ -121,10 +121,18 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).not.toContain("amapInstance.resize");
   });
 
-  it("caps the drawer expansion below the phone capsule area", () => {
+  it("lets the drawer expand near full screen while keeping a top gap", () => {
     expect(drawerWxsSource).toContain("MAX_DRAWER_PROGRESS");
+    expect(drawerWxsSource).toContain("MAX_DRAWER_TOP_GAP_RPX");
+    expect(drawerWxsSource).toContain("config.windowHeight / config.rpxRatio - MAX_DRAWER_TOP_GAP_RPX");
     expect(drawerWxsSource).toContain("clamp(progress, 0, MAX_DRAWER_PROGRESS)");
-    expect(drawerWxsSource).not.toContain("config.windowHeight / config.rpxRatio - 150");
+  });
+
+  it("keeps map task rows compact without duplicate middle tags", () => {
+    expect(indexPageSource).not.toContain('class="item-tag"');
+    expect(indexPageSource).toContain('class="item-status"');
+    expect(indexPageSource).toMatch(/\.content-row\s*{[^}]*text-align: left;[^}]*}/s);
+    expect(indexPageSource).toMatch(/\.content-row\s*{[^}]*gap: 12rpx;[^}]*}/s);
   });
 
   it("keeps navigation in the mini program map APIs", () => {

@@ -27,16 +27,6 @@
           </button>
         </view>
 
-        <view v-if="userStore.isAdmin" class="publish-toolbar">
-          <button
-            class="publish-button"
-            hover-class="button-hover"
-            @tap="goPublish"
-          >
-            发布
-          </button>
-        </view>
-
         <view v-if="loadState === 'loading'" class="state-box">
           <text class="state-title">正在加载投喂任务</text>
           <text class="state-copy">稍等一下，任务列表马上就好。</text>
@@ -169,10 +159,6 @@ function goDetail(taskId: string) {
   uni.navigateTo({ url: `/pages/tasks/detail?task_id=${taskId}` });
 }
 
-function goPublish() {
-  uni.navigateTo({ url: "/pages/admin/tasks/create" });
-}
-
 onShow(() => {
   void loadTasks();
 });
@@ -241,21 +227,6 @@ onShow(() => {
   font-weight: 700;
 }
 
-.publish-button {
-  width: 150rpx;
-  height: 64rpx;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 22rpx;
-  background: #287c31;
-  color: #ffffff;
-  font-size: 26rpx;
-  font-weight: 900;
-  line-height: 64rpx;
-}
-
-.publish-button::after,
 .filter-chip::after,
 .task-card::after {
   border: 0;
@@ -265,12 +236,6 @@ onShow(() => {
   margin-top: 40rpx;
   display: flex;
   gap: 18rpx;
-}
-
-.publish-toolbar {
-  margin-top: 20rpx;
-  display: flex;
-  justify-content: flex-end;
 }
 
 .filter-chip {

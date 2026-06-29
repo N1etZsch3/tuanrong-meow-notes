@@ -20,6 +20,12 @@ describe("profile center pages", () => {
     expect(profileIndexSource).not.toContain("个人中心建设中");
   });
 
+  it("avoids duplicate dashboard requests when switching tabs quickly", () => {
+    expect(profileIndexSource).toContain("PROFILE_DASHBOARD_CACHE_MS");
+    expect(profileIndexSource).toContain("lastDashboardLoadedAt");
+    expect(profileIndexSource).toContain("if (isLoading.value)");
+  });
+
   it("keeps the profile title aligned with the shared page title treatment", () => {
     expect(profileIndexSource).toContain("hero-title-row");
     expect(profileIndexSource).toContain('<image class="hero-cat"');

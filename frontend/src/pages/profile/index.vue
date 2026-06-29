@@ -108,6 +108,8 @@ const userStore = useUserStore();
 const dashboard = ref<MeDashboardResponse | null>(null);
 const isLoading = ref(false);
 const errorMessage = ref("");
+const PROFILE_DASHBOARD_CACHE_MS = 10_000;
+const lastDashboardLoadedAt = ref(0);
 
 const profileAvatar = computed(
   () => dashboard.value?.profile.avatar_url || userStore.currentUser?.avatar_url || defaultAvatar,
@@ -115,6 +117,17 @@ const profileAvatar = computed(
 const roleLabel = computed(() => getRoleLabel(dashboard.value?.profile.role || userStore.currentUser?.role));
 
 async function loadDashboard() {
+  if (isLoading.value) {
+    return;
+  }
+
+  if (
+    dashboard.value &&
+    Date.now() - lastDashboardLoadedAt.value < PROFILE_DASHBOARD_CACHE_MS
+  ) {
+    return;
+  }
+
   const accessToken = await userStore.ensureFreshAccessToken();
   if (!accessToken) {
     uni.reLaunch({ url: LOGIN_ROUTE });
@@ -125,6 +138,7 @@ async function loadDashboard() {
   errorMessage.value = "";
   try {
     dashboard.value = await getMeDashboard(accessToken);
+    lastDashboardLoadedAt.value = Date.now();
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : "个人中心加载失败";
   } finally {

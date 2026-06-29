@@ -17,6 +17,9 @@ class FakeObjectStorage:
         self.objects[object_key] = body
         return f"https://cos.test/{object_key}"
 
+    def presign_get_object(self, object_key: str, *, expires: int = 3600) -> str:
+        return f"https://signed.test/{object_key}?expires={expires}"
+
     def delete_object(self, object_key: str) -> None:
         self.deleted_keys.append(object_key)
         self.objects.pop(object_key, None)
@@ -205,7 +208,37 @@ def test_get_asset_variant_uses_scene_mapping(api_client, db_session):
     data = response.json()["data"]
     assert data["asset_id"] == asset_id
     assert data["variant_key"] == "thumb_sm"
-    assert data["url"].endswith("/thumb_sm.jpg")
+    assert data["url"].startswith("https://signed.test/")
+    assert "/thumb_sm.jpg" in data["url"]
+
+
+def test_get_asset_content_redirects_to_signed_variant_without_auth(api_client, db_session):
+    install_fake_storage(api_client)
+    user = create_user(
+        db_session,
+        student_no="trmx0009",
+        password="trmx0009",
+        role="admin",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    token = create_token(user)
+    upload_response = api_client.post(
+        "/api/v1/files/images",
+        headers=auth_headers(token),
+        data={"usage_type": "map_point_scene", "owner_type": "task"},
+        files={"file": ("task-point.jpg", image_bytes(), "image/jpeg")},
+    )
+    asset_id = upload_response.json()["data"]["asset_id"]
+
+    response = api_client.get(
+        f"/api/v1/files/assets/{asset_id}/content?scene=task_list_cover",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"].startswith("https://signed.test/")
+    assert "/thumb_md.jpg" in response.headers["location"]
 
 
 def test_bind_temporary_asset_to_owner(api_client, db_session):

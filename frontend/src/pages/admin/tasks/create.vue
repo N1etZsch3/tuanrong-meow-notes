@@ -55,9 +55,9 @@
             <view class="date-summary">
               <text>{{ dateSummary }}</text>
             </view>
-            <picker mode="date" start="2026-07-01" end="2026-09-01" @change="onDateChange">
-              <view class="date-picker-button">选择日期</view>
-            </picker>
+            <button class="date-picker-button" hover-class="button-hover" @tap="openCalendar">
+              选择日期
+            </button>
           </view>
           <view v-if="form.execute_dates.length" class="date-tags">
             <button
@@ -161,6 +161,56 @@
         发布任务
       </button>
     </view>
+
+    <view v-if="calendarVisible" class="calendar-overlay" @tap="cancelCalendar">
+      <view class="calendar-panel" @tap.stop>
+        <view class="calendar-head">
+          <button
+            class="calendar-nav"
+            hover-class="button-hover"
+            @tap="changeCalendarMonth(-1)"
+          >
+            ‹
+          </button>
+          <text class="calendar-title">{{ calendarTitle }}</text>
+          <button
+            class="calendar-nav"
+            hover-class="button-hover"
+            @tap="changeCalendarMonth(1)"
+          >
+            ›
+          </button>
+        </view>
+        <view class="calendar-week-row">
+          <text v-for="week in calendarWeeks" :key="week">{{ week }}</text>
+        </view>
+        <view class="calendar-grid">
+          <button
+            v-for="day in calendarDays"
+            :key="day.key"
+            class="calendar-day"
+            :class="{
+              'is-blank': day.is_blank,
+              'is-disabled': day.is_disabled,
+              'is-selected': isCalendarDateSelected(day.date_value),
+            }"
+            :disabled="day.is_blank || day.is_disabled"
+            hover-class="button-hover"
+            @tap="toggleCalendarDate(day.date_value)"
+          >
+            {{ day.label }}
+          </button>
+        </view>
+        <view class="calendar-actions">
+          <button class="calendar-cancel" hover-class="button-hover" @tap="cancelCalendar">
+            取消
+          </button>
+          <button class="calendar-confirm" hover-class="button-hover" @tap="confirmCalendarDates">
+            确定
+          </button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -194,6 +244,57 @@ const isUploading = ref(false);
 const isSubmitting = ref(false);
 const selectedLocation = computed(() => form.location);
 const dateSummary = computed(() => formatExecutionDateSummary(form.execute_dates));
+const calendarVisible = ref(false);
+const calendarDraftDates = ref<string[]>([]);
+const calendarMonth = ref(new Date(2026, 6, 1));
+const calendarWeeks = ["日", "一", "二", "三", "四", "五", "六"];
+const CALENDAR_START_DATE = "2026-07-01";
+const CALENDAR_END_DATE = "2026-09-01";
+
+interface CalendarDay {
+  key: string;
+  label: string;
+  date_value: string;
+  is_blank: boolean;
+  is_disabled: boolean;
+}
+
+const calendarTitle = computed(() => {
+  const year = calendarMonth.value.getFullYear();
+  const month = calendarMonth.value.getMonth() + 1;
+  return `${year}年${month}月`;
+});
+
+const calendarDays = computed<CalendarDay[]>(() => {
+  const year = calendarMonth.value.getFullYear();
+  const month = calendarMonth.value.getMonth();
+  const firstDay = new Date(year, month, 1);
+  const totalDays = new Date(year, month + 1, 0).getDate();
+  const cells: CalendarDay[] = [];
+
+  for (let index = 0; index < firstDay.getDay(); index += 1) {
+    cells.push({
+      key: `blank-${year}-${month}-${index}`,
+      label: "",
+      date_value: "",
+      is_blank: true,
+      is_disabled: true,
+    });
+  }
+
+  for (let day = 1; day <= totalDays; day += 1) {
+    const dateValue = toYmd(year, month + 1, day);
+    cells.push({
+      key: dateValue,
+      label: String(day),
+      date_value: dateValue,
+      is_blank: false,
+      is_disabled: dateValue < CALENDAR_START_DATE || dateValue > CALENDAR_END_DATE,
+    });
+  }
+
+  return cells;
+});
 
 async function getAccessToken(): Promise<string | null> {
   const accessToken = await userStore.ensureFreshAccessToken();
@@ -205,9 +306,57 @@ async function getAccessToken(): Promise<string | null> {
   return null;
 }
 
-function onDateChange(event: any) {
-  const value = String(event.detail.value || "");
-  form.execute_dates = sortUniqueDates([...form.execute_dates, value]);
+function toYmd(year: number, month: number, day: number): string {
+  return [year, month, day]
+    .map((item, index) => (index === 0 ? String(item) : String(item).padStart(2, "0")))
+    .join("-");
+}
+
+function monthFromDateValue(value: string): Date {
+  const [year, month] = value.split("-").map(Number);
+  return new Date(year, month - 1, 1);
+}
+
+function openCalendar() {
+  calendarDraftDates.value = [...form.execute_dates];
+  calendarMonth.value = monthFromDateValue(form.execute_dates[0] || CALENDAR_START_DATE);
+  calendarVisible.value = true;
+}
+
+function cancelCalendar() {
+  calendarVisible.value = false;
+}
+
+function changeCalendarMonth(delta: number) {
+  const current = calendarMonth.value;
+  const next = new Date(current.getFullYear(), current.getMonth() + delta, 1);
+  const nextValue = toYmd(next.getFullYear(), next.getMonth() + 1, 1);
+  if (nextValue < "2026-07-01" || nextValue > "2026-09-01") {
+    return;
+  }
+  calendarMonth.value = next;
+}
+
+function isCalendarDateSelected(value: string): boolean {
+  return Boolean(value && calendarDraftDates.value.includes(value));
+}
+
+function toggleCalendarDate(value: string) {
+  if (!value || value < CALENDAR_START_DATE || value > CALENDAR_END_DATE) {
+    return;
+  }
+
+  if (calendarDraftDates.value.includes(value)) {
+    calendarDraftDates.value = calendarDraftDates.value.filter((item) => item !== value);
+    return;
+  }
+
+  calendarDraftDates.value = sortUniqueDates([...calendarDraftDates.value, value]);
+}
+
+function confirmCalendarDates() {
+  form.execute_dates = sortUniqueDates(calendarDraftDates.value);
+  calendarVisible.value = false;
 }
 
 function removeDate(value: string) {
@@ -358,7 +507,12 @@ onShow(() => {
 .back-button::after,
 .outline-button::after,
 .photo-upload::after,
+.date-picker-button::after,
 .date-tag::after,
+.calendar-nav::after,
+.calendar-day::after,
+.calendar-cancel::after,
+.calendar-confirm::after,
 .cancel-button::after,
 .submit-button::after {
   border: 0;
@@ -512,10 +666,13 @@ onShow(() => {
 }
 
 .date-picker-button {
+  margin: 0;
+  padding: 0 22rpx;
   justify-content: center;
   border: 2rpx solid #287c31;
   color: #287c31;
   background: #ffffff;
+  line-height: 70rpx;
 }
 
 .date-tags {
@@ -655,6 +812,130 @@ onShow(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 22rpx;
+}
+
+.calendar-overlay {
+  position: fixed;
+  z-index: 12;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.42);
+  display: flex;
+  align-items: flex-end;
+}
+
+.calendar-panel {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 78vh;
+  padding: 30rpx 30rpx calc(env(safe-area-inset-bottom) + 28rpx);
+  border-radius: 34rpx 34rpx 0 0;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 -18rpx 46rpx rgba(17, 24, 39, 0.18);
+}
+
+.calendar-head {
+  display: grid;
+  grid-template-columns: 72rpx minmax(0, 1fr) 72rpx;
+  align-items: center;
+}
+
+.calendar-nav {
+  width: 72rpx;
+  height: 72rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #e8f5e6;
+  color: #287c31;
+  font-size: 44rpx;
+  font-weight: 900;
+  line-height: 68rpx;
+}
+
+.calendar-title {
+  color: #111827;
+  font-size: 32rpx;
+  font-weight: 900;
+  text-align: center;
+}
+
+.calendar-week-row,
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.calendar-week-row {
+  margin-top: 24rpx;
+  color: #6b7280;
+  font-size: 22rpx;
+  font-weight: 900;
+  text-align: center;
+}
+
+.calendar-grid {
+  margin-top: 18rpx;
+  gap: 10rpx;
+}
+
+.calendar-day {
+  width: 100%;
+  height: 70rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 18rpx;
+  background: #f5faf3;
+  color: #243042;
+  font-size: 26rpx;
+  font-weight: 900;
+  line-height: 70rpx;
+}
+
+.calendar-day.is-blank {
+  background: transparent;
+}
+
+.calendar-day.is-disabled {
+  background: #f4f5f4;
+  color: #b8beb7;
+}
+
+.calendar-day.is-selected {
+  background: #287c31;
+  color: #ffffff;
+  box-shadow: 0 10rpx 22rpx rgba(40, 124, 49, 0.2);
+}
+
+.calendar-actions {
+  margin-top: 28rpx;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18rpx;
+}
+
+.calendar-cancel,
+.calendar-confirm {
+  height: 78rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 24rpx;
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 78rpx;
+}
+
+.calendar-cancel {
+  border: 2rpx solid rgba(40, 124, 49, 0.35);
+  background: #ffffff;
+  color: #287c31;
+}
+
+.calendar-confirm {
+  border: 0;
+  background: #287c31;
+  color: #ffffff;
 }
 
 .cancel-button,

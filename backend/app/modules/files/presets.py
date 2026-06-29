@@ -164,6 +164,7 @@ SCENE_VARIANT_MAP: dict[str, str] = {
     "route_photo_detail": "route_display",
     "health_photo_detail": "display",
     "task_list_cover": "thumb_md",
+    "task_detail_full": "display",
     "task_checkin_list": "thumb_md",
     "task_checkin_detail": "display",
 }

@@ -7,15 +7,18 @@ import mapPageSource from "../../src/pages/index/map-page.ts?raw";
 import {
   ALL_MAP_FILTER_KEY,
   HBNU_CAMPUS,
+  clampLngLatToBounds,
   expandLngLatBounds,
   filterCampusExternalPoiResults,
   getMapPointQueryByFilter,
   getMarkerDisplayMode,
   getMapFilterLabel,
+  isFiniteLngLat,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
   mapSearchResultToShellItem,
   searchMapShellItems,
+  toNativeMapPoint,
   type MapShellItem,
 } from "@/pages/index/map-page";
 
@@ -61,7 +64,8 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain('<map');
     expect(indexPageSource).toContain('class="native-map"');
     expect(indexPageSource).toContain(':show-location="Boolean(userLocation)"');
-    expect(indexPageSource).toContain("uni.getLocation");
+    expect(indexPageSource).toContain("getWechatMiniProgramLocation");
+    expect(indexPageSource).toContain("wx.getLocation");
     expect(indexPageSource).not.toContain("uni.openLocation");
     expect(indexPageSource).not.toContain("supportsAmapWeb");
     expect(indexPageSource).not.toContain("window.AMap");
@@ -164,10 +168,12 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain('class="navigation-route-card"');
     expect(indexPageSource).toContain("navigationRoute");
     expect(indexPageSource).toContain("navigationRouteDistance");
-    expect(indexPageSource).toContain("startSimulatedNavigation");
-    expect(indexPageSource).toContain("stopSimulatedNavigation");
+    expect(indexPageSource).toContain("startNavigationTracking");
+    expect(indexPageSource).toContain("stopNavigationTracking");
     expect(indexPageSource).toContain("simulatedNavigationMarker");
     expect(indexPageSource).toContain("navigationSimulationTimer");
+    expect(indexPageSource).not.toContain("模拟导航");
+    expect(indexPageSource).not.toContain("停止模拟");
   });
 
   it("requests backend merged internal and amap poi search results", () => {
@@ -196,7 +202,9 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("requestUserLocation");
     expect(indexPageSource).toContain("scope.userLocation");
     expect(indexPageSource).toContain("getLocationWithFallback");
-    expect(indexPageSource).toContain("使用校园中心作为当前位置");
+    expect(indexPageSource).toContain("getWechatMiniProgramLocation");
+    expect(indexPageSource).not.toContain("当前位置 ${point.lat");
+    expect(indexPageSource).not.toContain("当前位置信息");
   });
 
   it("lowers and compacts the map title, map viewport, filter, and content drawer", () => {
@@ -289,6 +297,34 @@ describe("map page shell behavior", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].id).toBe("inside");
+  });
+
+  it("validates coordinates before passing poi or route points to the native map", () => {
+    expect(isFiniteLngLat({ lng: 115.0612, lat: 30.2301 })).toBe(true);
+    expect(isFiniteLngLat({ lng: Number.NaN, lat: 30.2301 })).toBe(false);
+    expect(toNativeMapPoint({ lng: 115.0612, lat: 30.2301 })).toEqual({
+      longitude: 115.0612,
+      latitude: 30.2301,
+    });
+    expect(toNativeMapPoint({ lng: Number.NaN, lat: 30.2301 })).toBeNull();
+
+    const clamped = clampLngLatToBounds(
+      { lng: 115.2, lat: 30.5 },
+      HBNU_CAMPUS.limit_bounds,
+    );
+    expect(clamped.lng).toBeLessThanOrEqual(HBNU_CAMPUS.limit_bounds.north_east.lng);
+    expect(clamped.lat).toBeLessThanOrEqual(HBNU_CAMPUS.limit_bounds.north_east.lat);
+
+    expect(indexPageSource).toContain("toNativeMapPoint");
+    expect(indexPageSource).toContain("clampLngLatToBounds");
+    expect(indexPageSource).toContain("nativeMapIncludePoints");
+  });
+
+  it("consumes pending task-detail navigation on the map tab", () => {
+    expect(indexPageSource).toContain("MAP_PENDING_NAVIGATION_STORAGE_KEY");
+    expect(indexPageSource).toContain("consumePendingNavigation");
+    expect(indexPageSource).toContain("buildPendingNavigationSummary");
+    expect(indexPageSource).toContain("void handleSummaryAction");
   });
 
   it("does not retain amap web sdk or rest poi search paths in the mini program page", () => {

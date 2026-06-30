@@ -83,12 +83,42 @@ export interface MapMarkerDisplayModeInput {
 
 export const ALL_MAP_FILTER_KEY: MapFilterKey = "all";
 export const NO_MAP_FILTER_KEY: MapFilterKey = "none";
+export const MAP_PENDING_NAVIGATION_STORAGE_KEY = "catmap_pending_navigation";
 export const NO_MAP_FILTER_LABEL = "无标记";
 
 export const HBNU_CAMPUS_CORE_BOUNDS: LngLatBounds = {
   south_west: { lng: 115.0558, lat: 30.2248 },
   north_east: { lng: 115.0693, lat: 30.2342 },
 };
+
+export function isFiniteLngLat(
+  point: Partial<LngLat> | null | undefined,
+): point is LngLat {
+  return (
+    typeof point?.lng === "number" &&
+    typeof point?.lat === "number" &&
+    Number.isFinite(point.lng) &&
+    Number.isFinite(point.lat)
+  );
+}
+
+export function clampLngLatToBounds(point: LngLat, bounds: LngLatBounds): LngLat {
+  return {
+    lng: Math.min(Math.max(point.lng, bounds.south_west.lng), bounds.north_east.lng),
+    lat: Math.min(Math.max(point.lat, bounds.south_west.lat), bounds.north_east.lat),
+  };
+}
+
+export function toNativeMapPoint(
+  point: Partial<LngLat> | null | undefined,
+): { longitude: number; latitude: number } | null {
+  return isFiniteLngLat(point)
+    ? {
+        longitude: point.lng,
+        latitude: point.lat,
+      }
+    : null;
+}
 
 export function expandLngLatBounds(
   bounds: LngLatBounds,

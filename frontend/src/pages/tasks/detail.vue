@@ -139,7 +139,7 @@
     </scroll-view>
 
     <view v-if="task" class="bottom-actions">
-      <button class="ghost-action" hover-class="button-hover" @tap="showNavigationTodo">
+      <button class="ghost-action" hover-class="button-hover" @tap="goNavigateToTaskPoint">
         导航前往
       </button>
       <button
@@ -172,6 +172,7 @@ import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
 import { buildUploadedTaskPhoto, formatTaskDate } from "@/pages/tasks/task-page";
 import { clearTaskListCache } from "@/pages/tasks/task-list-cache";
+import { MAP_PENDING_NAVIGATION_STORAGE_KEY } from "@/pages/index/map-page";
 
 import taskIcon from "../../../素材/icon/任务.png";
 import loadingBackground from "../../../素材/加载页素材/加载页背景.jpg";
@@ -350,8 +351,23 @@ async function completeFeedingTask() {
   }
 }
 
-function showNavigationTodo() {
-  uni.showToast({ title: "导航后续接入", icon: "none" });
+function goNavigateToTaskPoint() {
+  if (!task.value) {
+    return;
+  }
+  uni.setStorageSync(MAP_PENDING_NAVIGATION_STORAGE_KEY, {
+    source: "task_detail",
+    task_id: task.value.task_id,
+    title: task.value.title,
+    map_point: {
+      ...task.value.map_point,
+      point_type: "task",
+      business_type: "feeding",
+      business_id: task.value.task_id,
+    },
+    route_instruction: task.value.map_point.route_instruction,
+  });
+  uni.switchTab({ url: "/pages/index/index" });
 }
 
 function goEditTask() {

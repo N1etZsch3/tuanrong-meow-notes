@@ -35,6 +35,7 @@ export interface FeedingTaskDraft {
   description: string;
   required_items: string;
   execute_dates: string[];
+  status: "in_progress" | "completed" | "cancelled" | "archived";
   location: SelectedTaskLocation | null;
   photos: UploadedFileRef[];
   route_instruction: string;
@@ -51,6 +52,7 @@ export function createDefaultFeedingTaskDraft(): FeedingTaskDraft {
     description: "",
     required_items: DEFAULT_REQUIRED_ITEMS,
     execute_dates: [],
+    status: "in_progress",
     location: null,
     photos: [],
     route_instruction: DEFAULT_ROUTE_INSTRUCTION,

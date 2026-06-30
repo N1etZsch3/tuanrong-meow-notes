@@ -190,6 +190,17 @@ export interface SummerFeedingTaskUpdateResponse {
   updated_at: string;
 }
 
+export interface TaskStatusUpdatePayload {
+  status: "in_progress" | "completed" | "cancelled" | "archived";
+  reason?: string | null;
+}
+
+export interface TaskStatusUpdateResponse {
+  task_id: string;
+  status: string;
+  updated_at: string;
+}
+
 function compactQuery<T extends object>(query: T): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(query as Record<string, unknown>).filter(
@@ -257,6 +268,22 @@ export function updateSummerFeedingTask(
     SummerFeedingTaskCreatePayload & Record<string, unknown>
   >({
     url: `/admin/tasks/${taskId}`,
+    method: "PATCH",
+    data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function updateSummerFeedingTaskStatus(
+  accessToken: string,
+  taskId: string,
+  payload: TaskStatusUpdatePayload,
+): Promise<TaskStatusUpdateResponse> {
+  return request<
+    TaskStatusUpdateResponse,
+    TaskStatusUpdatePayload & Record<string, unknown>
+  >({
+    url: `/admin/tasks/${taskId}/status`,
     method: "PATCH",
     data: { ...payload },
     token: accessToken,

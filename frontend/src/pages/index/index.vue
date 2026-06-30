@@ -29,6 +29,8 @@
         :markers="nativeMapMarkers"
         :polyline="nativeMapPolylines"
         :include-points="nativeMapIncludePoints"
+        :min-scale="Math.round(campusMapConfig.min_zoom)"
+        :max-scale="Math.round(campusMapConfig.max_zoom)"
         :show-location="Boolean(userLocation)"
         :enable-zoom="true"
         :enable-scroll="true"
@@ -167,24 +169,6 @@
           <text class="navigation-route-step">
             {{ navigationRouteFirstStep }}
           </text>
-          <view class="navigation-route-actions">
-            <button
-              v-if="!navigationSimulationRunning"
-              class="navigation-control"
-              hover-class="summary-action-hover"
-              @tap="startSimulatedNavigation"
-            >
-              模拟导航
-            </button>
-            <button
-              v-else
-              class="navigation-control is-secondary"
-              hover-class="summary-action-hover"
-              @tap="stopSimulatedNavigation"
-            >
-              停止模拟
-            </button>
-          </view>
         </view>
 
         <view v-else-if="selectedSummary" class="summary-card">
@@ -318,13 +302,17 @@ import {
   ALL_MAP_FILTER_KEY,
   HBNU_CAMPUS,
   HBNU_CAMPUS_CORE_BOUNDS,
+  MAP_PENDING_NAVIGATION_STORAGE_KEY,
   NO_MAP_FILTER_KEY,
   NO_MAP_FILTER_LABEL,
   NO_MAP_FILTER_OPTION,
+  clampLngLatToBounds,
   expandLngLatBounds,
   formatDistance,
   getMapFilterLabel,
   getMapPointQueryByFilter,
+  isFiniteLngLat,
+  isLngLatInsideBounds,
   isMapShellItemVisibleByFilter,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
@@ -337,6 +325,7 @@ import {
   type LngLat,
   type MapShellItem,
   type MapShellItemType,
+  toNativeMapPoint,
 } from "./map-page";
 
 type MapLoadState = "idle" | "loading" | "ready" | "error";
@@ -348,6 +337,48 @@ interface NavigationRouteState {
   points: LngLat[];
   steps: MapNavigationResponse["route"]["steps"];
 }
+
+interface PendingMapNavigation {
+  source?: string;
+  task_id?: string;
+  title?: string;
+  map_point?: {
+    map_point_id?: string | null;
+    point_type?: string | null;
+    business_type?: string | null;
+    business_id?: string | null;
+    location_name?: string | null;
+    location_detail?: string | null;
+    route_instruction?: string | null;
+    lng?: number | null;
+    lat?: number | null;
+  };
+  route_instruction?: string | null;
+}
+
+type WxLocationResult = {
+  longitude: number;
+  latitude: number;
+};
+
+type WxLike = {
+  getSetting?: (options: {
+    success?: (settings: { authSetting: Record<string, boolean | undefined> }) => void;
+    fail?: () => void;
+  }) => void;
+  authorize?: (options: {
+    scope: string;
+    success?: () => void;
+    fail?: () => void;
+  }) => void;
+  getLocation?: (options: {
+    type?: string;
+    isHighAccuracy?: boolean;
+    highAccuracyExpireTime?: number;
+    success?: (location: WxLocationResult) => void;
+    fail?: () => void;
+  }) => void;
+};
 
 const userStore = useUserStore();
 const sysInfo = uni.getSystemInfoSync();
@@ -519,8 +550,13 @@ const emptyDescription = computed(() => {
     ? "可以换个关键词，例如“北门”“小橘”“猫粮”。"
     : "后端暂时没有返回最新任务。";
 });
+const nativeMarkerSourceMarkers = computed(() =>
+  mapPointMarkers.value.filter((marker) =>
+    isFiniteLngLat({ lng: marker.lng, lat: marker.lat }),
+  ),
+);
 const nativeMapMarkers = computed(() => {
-  const markers = mapPointMarkers.value.map((marker, index) => {
+  const markers = nativeMarkerSourceMarkers.value.map((marker, index) => {
     const type = resolveMapShellItemType(marker.point_type, marker.business_type);
 
     return {
@@ -556,7 +592,7 @@ const nativeMapMarkers = computed(() => {
         borderRadius: 8,
         bgColor: "#ffffff",
         padding: 8,
-        display: "ALWAYS",
+        display: "BYCLICK",
       },
     });
   }
@@ -575,7 +611,7 @@ const nativeMapMarkers = computed(() => {
         borderRadius: 8,
         bgColor: "#ffffff",
         padding: 8,
-        display: "ALWAYS",
+        display: "BYCLICK",
       },
     });
   }
@@ -600,13 +636,18 @@ const nativeMapPolylines = computed(() => {
 });
 const nativeMapIncludePoints = computed(() => {
   if (nativeRoutePoints.value.length) {
-    return nativeRoutePoints.value;
+    return nativeRoutePoints.value.filter(
+      (point) =>
+        Number.isFinite(point.longitude) && Number.isFinite(point.latitude),
+    );
   }
 
-  return mapPointMarkers.value.map((marker) => ({
-    longitude: marker.lng,
-    latitude: marker.lat,
-  }));
+  return nativeMarkerSourceMarkers.value
+    .map((marker) => toNativeMapPoint(marker))
+    .filter(
+      (point): point is { longitude: number; latitude: number } =>
+        Boolean(point),
+    );
 });
 
 function selectFilter(option: MapFilterOption) {
@@ -652,8 +693,8 @@ function selectFirstSearchResult() {
 }
 
 function selectShellItem(item: MapShellItem) {
-  if (item.lng !== undefined && item.lat !== undefined) {
-    centerMapToPoint({ lng: item.lng, lat: item.lat });
+  if (isFiniteLngLat(item)) {
+    centerMapToPoint(item);
   }
 
   if (item.map_point_id) {
@@ -730,26 +771,51 @@ function handleMapError(error: unknown, fallbackMessage: string) {
 }
 
 function centerMapToPoint(point: LngLat) {
-  mapCenter.value = { ...point };
+  mapCenter.value = clampLngLatToBounds(point, campusMapConfig.value.limit_bounds);
 }
 
 function centerMapToCampus() {
-  mapCenter.value = { ...campusMapConfig.value.center };
+  centerMapToPoint(campusMapConfig.value.center);
 }
 
 function setUserLocation(point: LngLat) {
   userLocation.value = point;
 }
 
+function getWxApi(): WxLike | null {
+  return (globalThis as unknown as { wx?: WxLike }).wx || null;
+}
+
 function requestUserLocation(): Promise<boolean> {
   return new Promise((resolve) => {
-    uni.getSetting({
+    const wx = getWxApi();
+    const getSetting = wx?.getSetting;
+    const authorize = wx?.authorize;
+    if (!getSetting || !authorize) {
+      uni.getSetting({
+        success: (settings) => {
+          if (settings.authSetting["scope.userLocation"]) {
+            resolve(true);
+            return;
+          }
+          uni.authorize({
+            scope: "scope.userLocation",
+            success: () => resolve(true),
+            fail: () => resolve(false),
+          });
+        },
+        fail: () => resolve(true),
+      });
+      return;
+    }
+
+    getSetting({
       success: (settings) => {
         if (settings.authSetting["scope.userLocation"]) {
           resolve(true);
           return;
         }
-        uni.authorize({
+        authorize({
           scope: "scope.userLocation",
           success: () => resolve(true),
           fail: () => resolve(false),
@@ -764,94 +830,122 @@ function getCampusFallbackLocation(): LngLat {
   return { ...campusMapConfig.value.center };
 }
 
-async function getLocationWithFallback(options: { silent?: boolean } = {}): Promise<LngLat> {
-  if (userLocation.value) {
-    return userLocation.value;
-  }
-
-  const authorized = await requestUserLocation();
-  if (!authorized) {
-    const fallback = getCampusFallbackLocation();
-    setUserLocation(fallback);
-    if (!options.silent) {
-      uni.showToast({ title: "使用校园中心作为当前位置", icon: "none" });
-    }
-    return fallback;
-  }
-
+function getWechatMiniProgramLocation(): Promise<LngLat | null> {
+  const wx = getWxApi();
   return new Promise((resolve) => {
-    uni.getLocation({
+    const handleSuccess = (location: WxLocationResult) => {
+      const point = {
+        lng: location.longitude,
+        lat: location.latitude,
+      };
+      resolve(isFiniteLngLat(point) ? point : null);
+    };
+
+    const locationOptions = {
       type: "gcj02",
       isHighAccuracy: true,
       highAccuracyExpireTime: 4000,
-      success: (location) => {
-        const point = {
-          lng: location.longitude,
-          lat: location.latitude,
-        };
-        setUserLocation(point);
-        resolve(point);
-      },
-      fail: () => {
-        const fallback = getCampusFallbackLocation();
-        setUserLocation(fallback);
-        if (!options.silent) {
-          uni.showToast({ title: "使用校园中心作为当前位置", icon: "none" });
-        }
-        resolve(fallback);
-      },
-    } as UniNamespace.GetLocationOptions & {
+      success: handleSuccess,
+      fail: () => resolve(null),
+    };
+
+    if (wx?.getLocation) {
+      wx.getLocation(locationOptions);
+      return;
+    }
+
+    uni.getLocation(locationOptions as UniNamespace.GetLocationOptions & {
       isHighAccuracy?: boolean;
       highAccuracyExpireTime?: number;
     });
   });
 }
 
-function getCurrentLocationForNavigation(): Promise<LngLat> {
-  return getLocationWithFallback({ silent: true });
+async function getLocationWithFallback(
+  options: { silent?: boolean; allowFallback?: boolean } = {},
+): Promise<LngLat | null> {
+  if (userLocation.value) {
+    return userLocation.value;
+  }
+
+  const authorized = await requestUserLocation();
+  if (!authorized) {
+    if (options.allowFallback === false) {
+      return null;
+    }
+    const fallback = getCampusFallbackLocation();
+    setUserLocation(fallback);
+    if (!options.silent) {
+      uni.showToast({ title: "无法获取当前位置", icon: "none" });
+    }
+    return fallback;
+  }
+
+  const point = await getWechatMiniProgramLocation();
+  if (point) {
+    setUserLocation(point);
+    return point;
+  }
+
+  if (options.allowFallback === false) {
+    return null;
+  }
+
+  const fallback = getCampusFallbackLocation();
+  setUserLocation(fallback);
+  if (!options.silent) {
+    uni.showToast({ title: "无法获取当前位置", icon: "none" });
+  }
+  return fallback;
+}
+
+function getCurrentLocationForNavigation(): Promise<LngLat | null> {
+  return getLocationWithFallback({ silent: true, allowFallback: false });
 }
 
 function clearNativeRoute() {
   nativeRoutePoints.value = [];
   navigationRoute.value = null;
   simulatedNavigationMarker.value = null;
-  stopSimulatedNavigation();
+  stopNavigationTracking();
 }
 
 function renderNativeRoute(from: LngLat, destination: LngLat, routePoints?: LngLat[]) {
   clearNativeRoute();
-  const points = routePoints && routePoints.length >= 2 ? routePoints : [from, destination];
-  nativeRoutePoints.value = points.map((point) => ({
-    longitude: point.lng,
-    latitude: point.lat,
-  }));
+  const points = (routePoints && routePoints.length >= 2 ? routePoints : [from, destination])
+    .filter(isFiniteLngLat)
+    .map((point) => clampLngLatToBounds(point, campusMapConfig.value.limit_bounds));
+  nativeRoutePoints.value = points
+    .map((point) => toNativeMapPoint(point))
+    .filter(
+      (point): point is { longitude: number; latitude: number } =>
+        Boolean(point),
+    );
   simulatedNavigationMarker.value = points[0] || from;
-  mapCenter.value = {
+  centerMapToPoint({
     lng: (from.lng + destination.lng) / 2,
     lat: (from.lat + destination.lat) / 2,
-  };
+  });
 }
 
-function startSimulatedNavigation() {
+function startNavigationTracking() {
   if (!navigationRoute.value || navigationRoute.value.points.length < 2) {
-    uni.showToast({ title: "暂无可模拟的路线", icon: "none" });
     return;
   }
 
-  stopSimulatedNavigation();
+  stopNavigationTracking();
   navigationSimulationRunning.value = true;
   navigationSimulationIndex = 0;
   simulatedNavigationMarker.value = navigationRoute.value.points[0];
   navigationSimulationTimer = setInterval(() => {
     if (!navigationRoute.value) {
-      stopSimulatedNavigation();
+      stopNavigationTracking();
       return;
     }
     navigationSimulationIndex += 1;
     const point = navigationRoute.value.points[navigationSimulationIndex];
     if (!point) {
-      stopSimulatedNavigation();
-      uni.showToast({ title: "已到达目标点附近", icon: "none" });
+      stopNavigationTracking();
       return;
     }
     simulatedNavigationMarker.value = point;
@@ -859,7 +953,7 @@ function startSimulatedNavigation() {
   }, 1000);
 }
 
-function stopSimulatedNavigation() {
+function stopNavigationTracking() {
   if (navigationSimulationTimer) {
     clearInterval(navigationSimulationTimer);
     navigationSimulationTimer = null;
@@ -868,7 +962,10 @@ function stopSimulatedNavigation() {
 }
 
 function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | null {
-  if (item.lng === undefined || item.lat === undefined) {
+  if (!isFiniteLngLat(item)) {
+    return null;
+  }
+  if (!isLngLatInsideBounds(item, campusMapConfig.value.limit_bounds)) {
     return null;
   }
 
@@ -911,7 +1008,10 @@ function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | nul
 }
 
 function buildExternalSummaryFromItem(item: MapShellItem): MapPointSummaryResponse | null {
-  if (!item.lng || !item.lat) {
+  if (
+    !isFiniteLngLat(item) ||
+    !isLngLatInsideBounds(item, campusMapConfig.value.limit_bounds)
+  ) {
     return null;
   }
   return {
@@ -998,7 +1098,7 @@ function applyMapInit(data: MapInitResponse) {
     core_bounds: coreBounds,
     limit_bounds: expandLngLatBounds(coreBounds, 0.35),
   };
-  mapCenter.value = { ...campusMapConfig.value.center };
+  centerMapToPoint(campusMapConfig.value.center);
   applyMapFilterOptions(data);
 }
 
@@ -1043,7 +1143,11 @@ async function refreshMapPoints() {
       ...getMapPointQueryByFilter(activeFilter.value, activeFilterOption.value),
       ...getViewportQuery(),
     });
-    mapPointMarkers.value = data.items;
+    mapPointMarkers.value = data.items.filter(
+      (marker) =>
+        isFiniteLngLat({ lng: marker.lng, lat: marker.lat }) &&
+        isLngLatInsideBounds(marker, campusMapConfig.value.limit_bounds),
+    );
   } catch (error) {
     handleMapError(error, "地图点位加载失败");
   }
@@ -1108,9 +1212,11 @@ async function runSearch(keyword: string) {
     });
     const items = data.items.map(mapSearchResultToShellItem).filter((item) => {
       return (
-        !activeFilter.value ||
-        activeFilter.value === ALL_MAP_FILTER_KEY ||
-        isMapShellItemVisibleByFilter(item, activeFilter.value)
+        isFiniteLngLat(item) &&
+        isLngLatInsideBounds(item, campusMapConfig.value.limit_bounds) &&
+        (!activeFilter.value ||
+          activeFilter.value === ALL_MAP_FILTER_KEY ||
+          isMapShellItemVisibleByFilter(item, activeFilter.value))
       );
     });
     searchResultItems.value = items;
@@ -1135,10 +1241,13 @@ async function loadPointSummary(pointId: string) {
   contentLoadState.value = "loading";
   try {
     selectedSummary.value = await getMapPointSummary(token, pointId);
-    centerMapToPoint({
+    const summaryPoint = {
       lng: selectedSummary.value.lng,
       lat: selectedSummary.value.lat,
-    });
+    };
+    if (isFiniteLngLat(summaryPoint)) {
+      centerMapToPoint(summaryPoint);
+    }
     contentLoadState.value = "ready";
   } catch (error) {
     selectedSummary.value = null;
@@ -1177,7 +1286,11 @@ async function handleSummaryAction(action: CardActionDto) {
   }
 
   try {
-    const from = (await getCurrentLocationForNavigation()) || mapCenter.value;
+    const from = await getCurrentLocationForNavigation();
+    if (!from) {
+      uni.showToast({ title: "无法获取当前位置", icon: "none" });
+      return;
+    }
     if (selectedSummary.value.business_type === "amap_poi") {
       renderInAppRoute(from, {
         point_id: selectedSummary.value.point_id,
@@ -1218,6 +1331,75 @@ async function handleSummaryAction(action: CardActionDto) {
   } catch (error) {
     handleMapError(error, "导航信息加载失败");
     uni.showToast({ title: contentErrorMessage.value, icon: "none" });
+  }
+}
+
+function buildPendingNavigationSummary(
+  pending: PendingMapNavigation,
+): MapPointSummaryResponse | null {
+  const mapPoint = pending.map_point;
+  const rawPoint = {
+    lng: mapPoint?.lng ?? Number.NaN,
+    lat: mapPoint?.lat ?? Number.NaN,
+  };
+  if (!mapPoint || !isFiniteLngLat(rawPoint)) {
+    return null;
+  }
+  const point = clampLngLatToBounds(rawPoint, campusMapConfig.value.limit_bounds);
+  const pointId = mapPoint.map_point_id || pending.task_id || `pending-${point.lng}-${point.lat}`;
+
+  return {
+    point_id: pointId,
+    point_type: mapPoint.point_type || "task",
+    business_type: mapPoint.business_type || "feeding",
+    business_id: mapPoint.business_id || pending.task_id || null,
+    title: pending.title || mapPoint.location_name || "任务点位",
+    subtitle: mapPoint.location_name || mapPoint.location_detail || null,
+    cover_photo_url: null,
+    tags: ["投喂任务"],
+    description: mapPoint.location_detail || null,
+    location_name: mapPoint.location_name || pending.title || "任务点位",
+    location_detail: mapPoint.location_detail || null,
+    route_instruction: pending.route_instruction || mapPoint.route_instruction || null,
+    landmark_hint: null,
+    entrance_hint: null,
+    lng: point.lng,
+    lat: point.lat,
+    distance_meters: null,
+    photos: [],
+    business_summary: {},
+    actions: [
+      {
+        key: "navigate",
+        label: "导航",
+        enabled: true,
+        disabled_reason: null,
+        method: null,
+        path: null,
+        target_type: "page",
+      },
+    ],
+  };
+}
+
+function consumePendingNavigation() {
+  const pending = uni.getStorageSync(MAP_PENDING_NAVIGATION_STORAGE_KEY) as
+    | PendingMapNavigation
+    | "";
+  if (!pending || typeof pending !== "object") {
+    return;
+  }
+  uni.removeStorageSync(MAP_PENDING_NAVIGATION_STORAGE_KEY);
+  const summary = buildPendingNavigationSummary(pending);
+  if (!summary) {
+    return;
+  }
+
+  selectedSummary.value = summary;
+  centerMapToPoint({ lng: summary.lng, lat: summary.lat });
+  const action = summary.actions.find((item) => item.key === "navigate");
+  if (action) {
+    void handleSummaryAction(action);
   }
 }
 
@@ -1265,7 +1447,7 @@ function handleNativeMarkerTap(event: Event) {
     return;
   }
 
-  const marker = mapPointMarkers.value[markerId - 1];
+  const marker = nativeMarkerSourceMarkers.value[markerId - 1];
   if (!marker) {
     return;
   }
@@ -1280,7 +1462,7 @@ function handleNativeMarkerLongPress(event: Event) {
     return;
   }
 
-  const marker = mapPointMarkers.value[markerId - 1];
+  const marker = nativeMarkerSourceMarkers.value[markerId - 1];
   if (marker) {
     void enterMapPointEditMode(marker);
   }
@@ -1301,7 +1483,11 @@ function distanceMetersBetween(from: LngLat, to: LngLat): number {
 
 function findNearestEditableMarker(point: LngLat): MapPointMarkerDto | null {
   const nearest = mapPointMarkers.value
-    .filter((marker) => marker.business_type !== "amap_poi")
+    .filter(
+      (marker) =>
+        marker.business_type !== "amap_poi" &&
+        isFiniteLngLat({ lng: marker.lng, lat: marker.lat }),
+    )
     .map((marker) => ({
       marker,
       distance: distanceMetersBetween(point, { lng: marker.lng, lat: marker.lat }),
@@ -1330,7 +1516,10 @@ async function enterMapPointEditMode(marker: MapPointMarkerDto, location?: LngLa
       selectedSummary.value?.point_id === marker.point_id
         ? selectedSummary.value
         : await getMapPointSummary(token, marker.point_id);
-    editedPointLocation.value = location || { lng: marker.lng, lat: marker.lat };
+    editedPointLocation.value = clampLngLatToBounds(
+      location || { lng: marker.lng, lat: marker.lat },
+      campusMapConfig.value.limit_bounds,
+    );
     editableMarkerScreenPosition.value = null;
     mapPointEditMode.value = true;
     centerMapToPoint(editedPointLocation.value);
@@ -1349,7 +1538,10 @@ function handleMarkerLongPress(event: Event) {
   if (typeof detail?.longitude !== "number" || typeof detail?.latitude !== "number") {
     return;
   }
-  const pressPoint = { lng: detail.longitude, lat: detail.latitude };
+  const pressPoint = clampLngLatToBounds(
+    { lng: detail.longitude, lat: detail.latitude },
+    campusMapConfig.value.limit_bounds,
+  );
   const marker = findNearestEditableMarker(pressPoint);
   if (!marker) {
     return;
@@ -1358,9 +1550,6 @@ function handleMarkerLongPress(event: Event) {
 }
 
 function handleMapRegionChange(event: Event) {
-  if (!mapPointEditMode.value || editableMarkerScreenPosition.value) {
-    return;
-  }
   const detail = (event as CustomEvent<{
     type?: string;
     centerLocation?: { longitude?: number; latitude?: number };
@@ -1369,12 +1558,22 @@ function handleMapRegionChange(event: Event) {
     return;
   }
   const center = detail?.centerLocation;
-  if (typeof center?.longitude === "number" && typeof center?.latitude === "number") {
-    editedPointLocation.value = {
-      lng: center.longitude,
-      lat: center.latitude,
-    };
+  if (typeof center?.longitude !== "number" || typeof center?.latitude !== "number") {
+    return;
   }
+
+  const nextCenter = clampLngLatToBounds(
+    { lng: center.longitude, lat: center.latitude },
+    campusMapConfig.value.limit_bounds,
+  );
+  if (nextCenter.lng !== center.longitude || nextCenter.lat !== center.latitude) {
+    centerMapToPoint(nextCenter);
+  }
+
+  if (!mapPointEditMode.value || editableMarkerScreenPosition.value) {
+    return;
+  }
+  editedPointLocation.value = nextCenter;
 }
 
 function getMapViewportOffset() {
@@ -1410,7 +1609,10 @@ function updateEditedPointFromScreenPosition(position: { x: number; y: number })
   };
 
   if (typeof mapContext.fromScreenLocation !== "function") {
-    editedPointLocation.value = { ...mapCenter.value };
+    editedPointLocation.value = clampLngLatToBounds(
+      mapCenter.value,
+      campusMapConfig.value.limit_bounds,
+    );
     return;
   }
 
@@ -1419,14 +1621,20 @@ function updateEditedPointFromScreenPosition(position: { x: number; y: number })
     y: position.y,
     success: (result) => {
       if (typeof result.longitude === "number" && typeof result.latitude === "number") {
-        editedPointLocation.value = {
-          lng: result.longitude,
-          lat: result.latitude,
-        };
+        editedPointLocation.value = clampLngLatToBounds(
+          {
+            lng: result.longitude,
+            lat: result.latitude,
+          },
+          campusMapConfig.value.limit_bounds,
+        );
       }
     },
     fail: () => {
-      editedPointLocation.value = { ...mapCenter.value };
+      editedPointLocation.value = clampLngLatToBounds(
+        mapCenter.value,
+        campusMapConfig.value.limit_bounds,
+      );
     },
   });
 }
@@ -1475,10 +1683,14 @@ async function saveEditedPointLocation() {
     return;
   }
   try {
+    const nextLocation = clampLngLatToBounds(
+      editedPointLocation.value,
+      campusMapConfig.value.limit_bounds,
+    );
     const updated = await updateAdminMapPointLocation(
       token,
       selectedSummary.value.point_id,
-      editedPointLocation.value,
+      nextLocation,
     );
     selectedSummary.value = {
       ...selectedSummary.value,
@@ -1495,7 +1707,7 @@ async function saveEditedPointLocation() {
         ? { ...marker, lng: updated.lng, lat: updated.lat, name: updated.name }
         : marker,
     );
-    mapCenter.value = { lng: updated.lng, lat: updated.lat };
+    centerMapToPoint({ lng: updated.lng, lat: updated.lat });
     cancelMapPointEditMode();
     uni.showToast({ title: "点位位置已更新", icon: "none" });
   } catch (error) {
@@ -1515,26 +1727,31 @@ function renderInAppRoute(
   const routePoints = navigation.route.points.length
     ? navigation.route.points
     : [from, destination];
-  renderNativeRoute(from, destination, routePoints);
+  const safeRoutePoints = routePoints
+    .filter(isFiniteLngLat)
+    .map((point) => clampLngLatToBounds(point, campusMapConfig.value.limit_bounds));
+  renderNativeRoute(from, destination, safeRoutePoints);
   navigationRoute.value = {
     title: navigation.title,
     distance_meters: navigation.route.distance_meters,
     duration_seconds: navigation.route.duration_seconds,
-    points: routePoints,
+    points: safeRoutePoints,
     steps: navigation.route.steps,
   };
-  uni.showToast({ title: "已在当前地图规划路线", icon: "none" });
+  startNavigationTracking();
 }
 
 async function locateMe() {
-  const point = await getLocationWithFallback();
-  mapCenter.value = point;
+  userLocation.value = null;
+  const point = await getLocationWithFallback({ silent: true, allowFallback: false });
+  if (!point) {
+    uni.showToast({ title: "无法获取当前位置", icon: "none" });
+    return;
+  }
+  centerMapToPoint(point);
   setUserLocation(point);
+  simulatedNavigationMarker.value = point;
   void refreshMapPoints();
-  uni.showToast({
-    title: `当前位置 ${point.lat.toFixed(4)}`,
-    icon: "none",
-  });
 }
 
 watch(activeFilter, () => {
@@ -1573,7 +1790,9 @@ onMounted(() => {
 
 onShow(() => {
   isPageVisible.value = true;
-  void refreshMapFilterOptions().then(() => refreshMapPoints());
+  void refreshMapFilterOptions()
+    .then(() => refreshMapPoints())
+    .then(() => consumePendingNavigation());
 });
 
 onHide(() => {
@@ -2151,12 +2370,6 @@ onBeforeUnmount(() => {
   padding: 16rpx 18rpx;
   border-radius: 18rpx;
   background: rgba(255, 255, 255, 0.76);
-}
-
-.navigation-route-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 12rpx;
 }
 
 .summary-card-head {

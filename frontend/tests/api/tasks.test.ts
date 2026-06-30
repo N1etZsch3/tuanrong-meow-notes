@@ -6,6 +6,7 @@ import {
   getTaskDetail,
   getTasks,
   publishSummerFeedingTask,
+  updateSummerFeedingTaskStatus,
   updateSummerFeedingTask,
 } from "@/api/tasks";
 
@@ -187,6 +188,31 @@ describe("tasks api", () => {
           execute_dates: ["2026-07-02", "2026-07-09"],
           photos: [expect.objectContaining({ file_id: "asset-1" })],
         }),
+      }),
+    );
+  });
+
+  it("updates a summer feeding task status from the admin edit flow", async () => {
+    const requestMock = mockSuccess({
+      task_id: "task-1",
+      status: "completed",
+      updated_at: "2026-07-02T12:30:00+08:00",
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await updateSummerFeedingTaskStatus("admin-token", "task-1", {
+      status: "completed",
+      reason: "管理员在任务编辑页手动调整完成状态",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "PATCH",
+        url: expect.stringContaining("/admin/tasks/task-1/status"),
+        data: {
+          status: "completed",
+          reason: "管理员在任务编辑页手动调整完成状态",
+        },
       }),
     );
   });

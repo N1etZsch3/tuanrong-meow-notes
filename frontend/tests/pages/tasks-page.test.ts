@@ -89,6 +89,22 @@ describe("summer feeding task pages", () => {
     expect(adminCreateTaskSource).toContain("mode=edit");
   });
 
+  it("lets admins update task completion status from the reused edit form", () => {
+    expect(adminCreateTaskSource).toContain("任务完成状态");
+    expect(adminCreateTaskSource).toContain("statusOptions");
+    expect(adminCreateTaskSource).toContain("form.status");
+    expect(adminCreateTaskSource).toContain("updateSummerFeedingTaskStatus");
+    expect(adminCreateTaskSource).toContain("submitStatusChangeIfNeeded");
+  });
+
+  it("starts map-page navigation from the task detail navigation button", () => {
+    expect(taskDetailSource).toContain("goNavigateToTaskPoint");
+    expect(taskDetailSource).toContain("MAP_PENDING_NAVIGATION_STORAGE_KEY");
+    expect(taskDetailSource).toContain("uni.setStorageSync");
+    expect(taskDetailSource).toContain('uni.switchTab({ url: "/pages/index/index" })');
+    expect(taskDetailSource).not.toContain("导航后续接入");
+  });
+
   it("uses a custom multi-select calendar instead of the native date picker", () => {
     expect(adminCreateTaskSource).not.toContain('<picker mode="date"');
     expect(adminCreateTaskSource).toContain('class="calendar-overlay"');

@@ -162,6 +162,26 @@
             placeholder-class="placeholder"
           />
         </view>
+
+        <view v-if="isEditMode" class="form-section">
+          <view class="section-title-row">
+            <text class="step-badge">8</text>
+            <text class="section-title">任务完成状态</text>
+          </view>
+          <text class="section-hint">用于管理员手动调整整个暑假投喂任务的状态</text>
+          <picker
+            mode="selector"
+            :range="statusOptions"
+            range-key="label"
+            :value="selectedStatusIndex"
+            @change="changeTaskStatus"
+          >
+            <view class="status-picker">
+              <text>{{ selectedStatusLabel }}</text>
+              <text class="status-picker-arrow">⌄</text>
+            </view>
+          </picker>
+        </view>
       </view>
     </scroll-view>
 
@@ -239,8 +259,10 @@ import {
   getAdminTaskDetail,
   publishSummerFeedingTask,
   updateSummerFeedingTask,
+  updateSummerFeedingTaskStatus,
   type TaskDetailDto,
   type TaskPhotoDto,
+  type TaskStatusUpdatePayload,
   type UploadedFileRef,
 } from "@/api/tasks";
 import { LOGIN_ROUTE } from "@/services/app-startup";
@@ -267,6 +289,7 @@ const editTaskId = ref("");
 const isUploading = ref(false);
 const isLoadingDetail = ref(false);
 const isSubmitting = ref(false);
+const initialTaskStatus = ref<FeedingTaskDraft["status"]>("in_progress");
 const isEditMode = computed(() => Boolean(editTaskId.value));
 const pageTitle = computed(() => (isEditMode.value ? "编辑喂食任务" : "发布喂食任务"));
 const pageSubtitle = computed(() =>
@@ -281,6 +304,24 @@ const calendarMonth = ref(new Date(2026, 6, 1));
 const calendarWeeks = ["日", "一", "二", "三", "四", "五", "六"];
 const CALENDAR_START_DATE = "2026-07-01";
 const CALENDAR_END_DATE = "2026-09-01";
+const statusOptions: Array<{
+  value: FeedingTaskDraft["status"];
+  label: string;
+}> = [
+  { value: "in_progress", label: "进行中" },
+  { value: "completed", label: "已完成" },
+  { value: "cancelled", label: "已取消" },
+  { value: "archived", label: "已归档" },
+];
+const selectedStatusIndex = computed(() =>
+  Math.max(
+    0,
+    statusOptions.findIndex((option) => option.value === form.status),
+  ),
+);
+const selectedStatusLabel = computed(
+  () => statusOptions[selectedStatusIndex.value]?.label || "进行中",
+);
 
 interface CalendarDay {
   key: string;
@@ -398,6 +439,15 @@ function removeTaskPhoto(photo: UploadedFileRef) {
   form.photos = form.photos.filter((item) => item !== photo);
 }
 
+function changeTaskStatus(event: Event) {
+  const value = (event as CustomEvent<{ value?: string | number }>).detail?.value;
+  const index = Number(value);
+  const option = Number.isFinite(index) ? statusOptions[index] : null;
+  if (option) {
+    form.status = option.value;
+  }
+}
+
 function chooseTaskPhoto() {
   uni.chooseImage({
     count: 3,
@@ -438,6 +488,20 @@ async function uploadTaskPointPhotos(paths: string[]) {
   }
 }
 
+async function submitStatusChangeIfNeeded(token: string) {
+  if (!isEditMode.value || form.status === initialTaskStatus.value) {
+    return;
+  }
+
+  const statusLabel = selectedStatusLabel.value;
+  const payload: TaskStatusUpdatePayload = {
+    status: form.status,
+    reason: `管理员在编辑页将任务状态调整为${statusLabel}`,
+  };
+  await updateSummerFeedingTaskStatus(token, editTaskId.value, payload);
+  initialTaskStatus.value = form.status;
+}
+
 async function submitTask() {
   const validation = validatePublishDraft(form);
   if (!validation.valid) {
@@ -456,6 +520,7 @@ async function submitTask() {
     const response = isEditMode.value
       ? await updateSummerFeedingTask(token, editTaskId.value, payload)
       : await publishSummerFeedingTask(payload, token);
+    await submitStatusChangeIfNeeded(token);
     uni.removeStorageSync(TASK_PUBLISH_LOCATION_STORAGE_KEY);
     uni.showToast({ title: isEditMode.value ? "任务已保存" : "任务已发布", icon: "success" });
     uni.redirectTo({ url: `/pages/tasks/detail?task_id=${response.task_id}` });
@@ -480,6 +545,9 @@ function applyTaskDetailToForm(task: TaskDetailDto) {
   form.title = task.title || "";
   form.description = task.description || "";
   form.required_items = task.required_items || "猫粮、水";
+  form.status =
+    statusOptions.find((option) => option.value === task.status)?.value || "in_progress";
+  initialTaskStatus.value = form.status;
   form.execute_dates = sortUniqueDates(
     task.execution_dates.map((item) => item.execute_date).filter(Boolean),
   );
@@ -930,6 +998,29 @@ onLoad((query) => {
   font-size: 58rpx;
   font-weight: 700;
   line-height: 138rpx;
+}
+
+.status-picker {
+  margin-top: 24rpx;
+  height: 76rpx;
+  box-sizing: border-box;
+  padding: 0 24rpx;
+  border: 2rpx solid rgba(40, 124, 49, 0.3);
+  border-radius: 22rpx;
+  background: #f6fbf2;
+  color: #287c31;
+  font-size: 27rpx;
+  font-weight: 900;
+  line-height: 72rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.status-picker-arrow {
+  color: #6b8a6a;
+  font-size: 28rpx;
+  font-weight: 900;
 }
 
 .bottom-actions {

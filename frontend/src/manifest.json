@@ -54,6 +54,11 @@
         "setting" : {
             "urlCheck" : false
         },
+        "permission" : {
+            "scope.userLocation" : {
+                "desc" : "用于在猫协地图中显示当前位置并规划到任务点的路线"
+            }
+        },
         "usingComponents" : true
     },
     "mp-alipay" : {

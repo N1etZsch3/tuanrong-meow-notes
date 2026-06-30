@@ -1,7 +1,7 @@
 import { request } from "@/services/request";
 
 export interface UploadedFileRef {
-  file_id: string;
+  file_id: string | null;
   file_url: string;
   thumbnail_url?: string | null;
   cos_object_key?: string | null;
@@ -117,9 +117,10 @@ export interface TaskListQuery {
 
 export interface TaskPhotoDto {
   photo_id: string;
-  file_id: string;
+  file_id: string | null;
   file_url: string;
   thumbnail_url: string | null;
+  cos_object_key?: string | null;
   photo_type: string;
   caption: string | null;
   sort_order: number;
@@ -184,6 +185,11 @@ export interface TaskCheckinResponse {
   };
 }
 
+export interface SummerFeedingTaskUpdateResponse {
+  task_id: string;
+  updated_at: string;
+}
+
 function compactQuery<T extends object>(query: T): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(query as Record<string, unknown>).filter(
@@ -215,6 +221,17 @@ export function getTaskDetail(
   });
 }
 
+export function getAdminTaskDetail(
+  accessToken: string,
+  taskId: string,
+): Promise<TaskDetailDto> {
+  return request<TaskDetailDto>({
+    url: `/admin/tasks/${taskId}`,
+    method: "GET",
+    token: accessToken,
+  });
+}
+
 export function publishSummerFeedingTask(
   payload: SummerFeedingTaskCreatePayload,
   accessToken: string,
@@ -225,6 +242,22 @@ export function publishSummerFeedingTask(
   >({
     url: "/admin/tasks/summer-feeding",
     method: "POST",
+    data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function updateSummerFeedingTask(
+  accessToken: string,
+  taskId: string,
+  payload: SummerFeedingTaskCreatePayload,
+): Promise<SummerFeedingTaskUpdateResponse> {
+  return request<
+    SummerFeedingTaskUpdateResponse,
+    SummerFeedingTaskCreatePayload & Record<string, unknown>
+  >({
+    url: `/admin/tasks/${taskId}`,
+    method: "PATCH",
     data: { ...payload },
     token: accessToken,
   });

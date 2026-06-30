@@ -189,6 +189,35 @@ def test_member_list_and_detail_include_dates_photos_location_materials_and_acti
     ]
     assert detail["activities"][0]["activity_type"] == "created"
     assert detail["actions"]["can_navigate"] is True
+    assert detail["actions"]["can_admin_edit"] is False
+
+
+def test_admin_can_get_editable_task_detail_with_dates_point_and_photos(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    campus = seed_campus(db_session)
+    published = publish_task(api_client, admin, campus)
+
+    response = api_client.get(
+        f"/api/v1/admin/tasks/{published['task_id']}",
+        headers=auth_headers(admin),
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["task_id"] == published["task_id"]
+    assert data["title"] == "学生宿舍区北侧喂食点"
+    assert data["actions"]["can_admin_edit"] is True
+    assert data["map_point"]["map_point_id"] == published["map_point_id"]
+    assert data["map_point"]["lng"] == 115.06321
+    assert [item["execute_date"] for item in data["execution_dates"]] == [
+        "2026-07-02",
+        "2026-07-09",
+        "2026-07-16",
+    ]
+    assert data["photos"][0]["file_url"] == "https://img.example.com/task-feeding.jpg"
 
 
 def test_member_checkin_completes_one_execution_date_without_completing_parent_task(

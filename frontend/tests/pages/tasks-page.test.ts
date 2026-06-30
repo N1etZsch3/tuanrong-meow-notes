@@ -40,6 +40,19 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain(":circular=\"true\"");
   });
 
+  it("shows an admin edit shortcut beside the task detail title", () => {
+    expect(taskDetailSource).toContain("canAdminEditTask");
+    expect(taskDetailSource).toContain('class="task-edit-button"');
+    expect(taskDetailSource).toContain("goEditTask");
+    expect(taskDetailSource).toContain("/pages/admin/tasks/create?mode=edit&task_id=");
+  });
+
+  it("retries transient task detail loading failures and exposes manual retry", () => {
+    expect(taskDetailSource).toContain("loadTaskDetail({ retry: true })");
+    expect(taskDetailSource).toContain("retryTaskDetail");
+    expect(taskDetailSource).toContain("重新加载");
+  });
+
   it("uses cached task list data on tab re-entry and invalidates after checkin", () => {
     expect(taskIndexSource).toContain("getCachedTaskList");
     expect(taskIndexSource).toContain("setCachedTaskList");
@@ -60,8 +73,20 @@ describe("summer feeding task pages", () => {
       expect(adminCreateTaskSource).toContain(label);
     }
     expect(adminCreateTaskSource).toContain("publishSummerFeedingTask");
+    expect(adminCreateTaskSource).toContain("updateSummerFeedingTask");
+    expect(adminCreateTaskSource).toContain("getAdminTaskDetail");
+    expect(adminCreateTaskSource).toContain("编辑喂食任务");
     expect(adminCreateTaskSource).toContain("uploadImage");
     expect(adminCreateTaskSource).toContain("map_point_scene");
+  });
+
+  it("reuses the publish form as an admin edit form with existing task data", () => {
+    expect(adminCreateTaskSource).toContain("editTaskId");
+    expect(adminCreateTaskSource).toContain("applyTaskDetailToForm");
+    expect(adminCreateTaskSource).toContain("task.execution_dates.map");
+    expect(adminCreateTaskSource).toContain("task.photos.map");
+    expect(adminCreateTaskSource).toContain("removeTaskPhoto");
+    expect(adminCreateTaskSource).toContain("mode=edit");
   });
 
   it("uses a custom multi-select calendar instead of the native date picker", () => {

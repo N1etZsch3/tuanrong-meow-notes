@@ -54,6 +54,7 @@ def task_detail(
         task_id=task_id,
         current_date=current_date,
         activity_limit=activity_limit,
+        can_admin_edit=current_user.role in {"admin", "super_admin"},
     )
     return api_success(data=data, trace_id=request.state.trace_id)
 

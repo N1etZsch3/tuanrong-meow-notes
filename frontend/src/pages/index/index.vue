@@ -21,6 +21,7 @@
 
     <view class="map-viewport">
       <map
+        id="campus-map"
         class="native-map"
         :longitude="mapCenter.lng"
         :latitude="mapCenter.lat"
@@ -32,6 +33,7 @@
         :enable-zoom="true"
         :enable-scroll="true"
         @markertap="handleNativeMarkerTap"
+        @markerlongpress="handleNativeMarkerLongPress"
         @longpress="handleMarkerLongPress"
         @regionchange="handleMapRegionChange"
       />
@@ -50,35 +52,20 @@
         <text>我的位置</text>
       </button>
 
-      <view v-if="navigationRoute" class="navigation-panel">
-        <view class="navigation-copy">
-          <text class="navigation-title">{{ navigationRoute.title }}</text>
-          <text class="navigation-meta">
-            {{ navigationRouteDistance }} · {{ navigationRouteDuration }}
-          </text>
-        </view>
-        <button
-          v-if="!navigationSimulationRunning"
-          class="navigation-control"
-          hover-class="summary-action-hover"
-          @tap="startSimulatedNavigation"
-        >
-          模拟导航
-        </button>
-        <button
-          v-else
-          class="navigation-control is-secondary"
-          hover-class="summary-action-hover"
-          @tap="stopSimulatedNavigation"
-        >
-          停止
-        </button>
-      </view>
+      <cover-view
+        v-if="mapPointEditMode"
+        class="editable-marker-handle"
+        :style="editableMarkerStyle"
+        @touchmove.stop="dragEditedPoint"
+        @touchend.stop="finishDraggingEditedPoint"
+      >
+        <cover-image class="editable-marker-icon" :src="locationIcon" />
+      </cover-view>
 
       <view v-if="mapPointEditMode" class="map-edit-panel">
         <text class="map-edit-title">点位编辑模式</text>
         <text class="map-edit-desc">
-          移动地图后保存中心点：{{ editedPointLocationText }}
+          拖动地图上的点位，保存坐标：{{ editedPointLocationText }}
         </text>
         <view class="map-edit-actions">
           <button class="map-edit-button" @tap="saveEditedPointLocation">保存位置</button>
@@ -161,7 +148,46 @@
           <text class="section-action">{{ contentSectionAction }}</text>
         </view>
 
-        <view v-if="selectedSummary" class="summary-card">
+        <view v-if="navigationRoute" class="navigation-route-card">
+          <view class="navigation-route-head">
+            <view>
+              <text class="navigation-route-title">{{ navigationRoute.title }}</text>
+              <text class="navigation-route-meta">
+                {{ navigationRouteDistance }} · {{ navigationRouteDuration }}
+              </text>
+            </view>
+            <button
+              class="navigation-end-button"
+              hover-class="summary-action-hover"
+              @tap="clearNativeRoute"
+            >
+              结束
+            </button>
+          </view>
+          <text class="navigation-route-step">
+            {{ navigationRouteFirstStep }}
+          </text>
+          <view class="navigation-route-actions">
+            <button
+              v-if="!navigationSimulationRunning"
+              class="navigation-control"
+              hover-class="summary-action-hover"
+              @tap="startSimulatedNavigation"
+            >
+              模拟导航
+            </button>
+            <button
+              v-else
+              class="navigation-control is-secondary"
+              hover-class="summary-action-hover"
+              @tap="stopSimulatedNavigation"
+            >
+              停止模拟
+            </button>
+          </view>
+        </view>
+
+        <view v-else-if="selectedSummary" class="summary-card">
           <view class="summary-card-head">
             <view class="summary-icon" :class="`item-icon-${summaryType}`">
               <text>{{ getItemSymbol(summaryType) }}</text>
@@ -349,6 +375,7 @@ const searchResultItems = ref<MapShellItem[]>([]);
 const selectedSummary = ref<MapPointSummaryResponse | null>(null);
 const mapPointEditMode = ref(false);
 const editedPointLocation = ref<LngLat | null>(null);
+const editableMarkerScreenPosition = ref<{ x: number; y: number } | null>(null);
 const MAP_FILTER_ICON_SRC: Record<string, string> = {
   none: filterDefaultIcon,
   all: allMarkerPointIcon,
@@ -361,6 +388,7 @@ const MAP_FILTER_ICON_SRC: Record<string, string> = {
   feeding_completed: completedTaskMarkerIcon,
   filter_none: filterDefaultIcon,
 };
+const MARKER_LONG_PRESS_HIT_METERS = 60;
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let mapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
@@ -411,23 +439,7 @@ const summaryActions = computed<CardActionDto[]>(() => {
   if (!selectedSummary.value) {
     return [];
   }
-  const actions = [...selectedSummary.value.actions];
-  if (
-    userStore.isAdmin &&
-    selectedSummary.value.business_type !== "amap_poi" &&
-    !actions.some((action) => action.key === "edit_point")
-  ) {
-    actions.push({
-      key: "edit_point",
-      label: "编辑点位",
-      enabled: true,
-      disabled_reason: null,
-      method: null,
-      path: `/pages/admin/map-point/edit?point_id=${selectedSummary.value.point_id}`,
-      target_type: "page",
-    });
-  }
-  return actions;
+  return selectedSummary.value.actions;
 });
 const navigationRouteDistance = computed(() =>
   navigationRoute.value ? formatDistance(navigationRoute.value.distance_meters) : "未知",
@@ -439,6 +451,10 @@ const navigationRouteDuration = computed(() => {
   }
   return `约 ${Math.max(1, Math.round(seconds / 60))} 分钟`;
 });
+const navigationRouteFirstStep = computed(() => {
+  const step = navigationRoute.value?.steps[0];
+  return step?.instruction || "路线已规划，可在地图上查看绿色路线。";
+});
 const editedPointLocationText = computed(() => {
   const point = editedPointLocation.value || selectedSummary.value;
   if (!point) {
@@ -446,7 +462,18 @@ const editedPointLocationText = computed(() => {
   }
   return `${point.lng.toFixed(6)}, ${point.lat.toFixed(6)}`;
 });
+const editableMarkerStyle = computed(() => {
+  const position = editableMarkerScreenPosition.value;
+  if (!position) {
+    return "left: 50%; top: 50%;";
+  }
+  return `left: ${position.x}px; top: ${position.y}px;`;
+});
 const contentSectionTitle = computed(() => {
+  if (navigationRoute.value) {
+    return "路线导航";
+  }
+
   if (selectedSummary.value) {
     return "点位详情";
   }
@@ -458,6 +485,10 @@ const contentSectionTitle = computed(() => {
   return "最新任务";
 });
 const contentSectionAction = computed(() => {
+  if (navigationRoute.value) {
+    return `${navigationRouteDistance.value} · ${navigationRouteDuration.value}`;
+  }
+
   if (selectedSummary.value) {
     return "后端卡片数据";
   }
@@ -710,14 +741,49 @@ function setUserLocation(point: LngLat) {
   userLocation.value = point;
 }
 
-function getCurrentLocationForNavigation(): Promise<LngLat | null> {
+function requestUserLocation(): Promise<boolean> {
+  return new Promise((resolve) => {
+    uni.getSetting({
+      success: (settings) => {
+        if (settings.authSetting["scope.userLocation"]) {
+          resolve(true);
+          return;
+        }
+        uni.authorize({
+          scope: "scope.userLocation",
+          success: () => resolve(true),
+          fail: () => resolve(false),
+        });
+      },
+      fail: () => resolve(true),
+    });
+  });
+}
+
+function getCampusFallbackLocation(): LngLat {
+  return { ...campusMapConfig.value.center };
+}
+
+async function getLocationWithFallback(options: { silent?: boolean } = {}): Promise<LngLat> {
   if (userLocation.value) {
-    return Promise.resolve(userLocation.value);
+    return userLocation.value;
+  }
+
+  const authorized = await requestUserLocation();
+  if (!authorized) {
+    const fallback = getCampusFallbackLocation();
+    setUserLocation(fallback);
+    if (!options.silent) {
+      uni.showToast({ title: "使用校园中心作为当前位置", icon: "none" });
+    }
+    return fallback;
   }
 
   return new Promise((resolve) => {
     uni.getLocation({
       type: "gcj02",
+      isHighAccuracy: true,
+      highAccuracyExpireTime: 4000,
       success: (location) => {
         const point = {
           lng: location.longitude,
@@ -727,10 +793,22 @@ function getCurrentLocationForNavigation(): Promise<LngLat | null> {
         resolve(point);
       },
       fail: () => {
-        resolve(null);
+        const fallback = getCampusFallbackLocation();
+        setUserLocation(fallback);
+        if (!options.silent) {
+          uni.showToast({ title: "使用校园中心作为当前位置", icon: "none" });
+        }
+        resolve(fallback);
       },
+    } as UniNamespace.GetLocationOptions & {
+      isHighAccuracy?: boolean;
+      highAccuracyExpireTime?: number;
     });
   });
+}
+
+function getCurrentLocationForNavigation(): Promise<LngLat> {
+  return getLocationWithFallback({ silent: true });
 }
 
 function clearNativeRoute() {
@@ -1074,17 +1152,6 @@ async function handleSummaryAction(action: CardActionDto) {
     return;
   }
 
-  if (action.key === "edit_point") {
-    if (!userStore.isAdmin) {
-      uni.showToast({ title: "仅管理员可编辑点位", icon: "none" });
-      return;
-    }
-    uni.navigateTo({
-      url: action.path || `/pages/admin/map-point/edit?point_id=${selectedSummary.value.point_id}`,
-    });
-    return;
-  }
-
   if (action.key === "view_detail") {
     if (action.target_type === "page" && action.path) {
       uni.navigateTo({ url: action.path });
@@ -1207,25 +1274,91 @@ function handleNativeMarkerTap(event: Event) {
   handleMapMarkerSelected(marker);
 }
 
-function handleMarkerLongPress(event: Event) {
-  if (!userStore.isAdmin || !selectedSummary.value) {
+function handleNativeMarkerLongPress(event: Event) {
+  const markerId = (event as CustomEvent<{ markerId?: number }>).detail?.markerId;
+  if (!markerId) {
     return;
   }
-  if (selectedSummary.value.business_type === "amap_poi") {
+
+  const marker = mapPointMarkers.value[markerId - 1];
+  if (marker) {
+    void enterMapPointEditMode(marker);
+  }
+}
+
+function distanceMetersBetween(from: LngLat, to: LngLat): number {
+  const earthRadiusMeters = 6371000;
+  const lat1 = (from.lat * Math.PI) / 180;
+  const lat2 = (to.lat * Math.PI) / 180;
+  const deltaLat = ((to.lat - from.lat) * Math.PI) / 180;
+  const deltaLng = ((to.lng - from.lng) * Math.PI) / 180;
+  const a =
+    Math.sin(deltaLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(deltaLng / 2) ** 2;
+
+  return earthRadiusMeters * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function findNearestEditableMarker(point: LngLat): MapPointMarkerDto | null {
+  const nearest = mapPointMarkers.value
+    .filter((marker) => marker.business_type !== "amap_poi")
+    .map((marker) => ({
+      marker,
+      distance: distanceMetersBetween(point, { lng: marker.lng, lat: marker.lat }),
+    }))
+    .sort((a, b) => a.distance - b.distance)[0];
+
+  return nearest && nearest.distance <= MARKER_LONG_PRESS_HIT_METERS
+    ? nearest.marker
+    : null;
+}
+
+async function enterMapPointEditMode(marker: MapPointMarkerDto, location?: LngLat) {
+  if (!userStore.isAdmin) {
+    return;
+  }
+  if (marker.point_scope === "search_result" && marker.extra.is_external_poi) {
     uni.showToast({ title: "外部地图点位不能编辑", icon: "none" });
     return;
   }
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  try {
+    selectedSummary.value =
+      selectedSummary.value?.point_id === marker.point_id
+        ? selectedSummary.value
+        : await getMapPointSummary(token, marker.point_id);
+    editedPointLocation.value = location || { lng: marker.lng, lat: marker.lat };
+    editableMarkerScreenPosition.value = null;
+    mapPointEditMode.value = true;
+    centerMapToPoint(editedPointLocation.value);
+    uni.showToast({ title: "已进入点位编辑模式", icon: "none" });
+  } catch (error) {
+    handleMapError(error, "点位详情加载失败");
+    uni.showToast({ title: contentErrorMessage.value, icon: "none" });
+  }
+}
+
+function handleMarkerLongPress(event: Event) {
+  if (!userStore.isAdmin) {
+    return;
+  }
   const detail = (event as CustomEvent<{ longitude?: number; latitude?: number }>).detail;
-  editedPointLocation.value = {
-    lng: detail?.longitude ?? selectedSummary.value.lng,
-    lat: detail?.latitude ?? selectedSummary.value.lat,
-  };
-  mapPointEditMode.value = true;
-  uni.showToast({ title: "已进入点位编辑模式", icon: "none" });
+  if (typeof detail?.longitude !== "number" || typeof detail?.latitude !== "number") {
+    return;
+  }
+  const pressPoint = { lng: detail.longitude, lat: detail.latitude };
+  const marker = findNearestEditableMarker(pressPoint);
+  if (!marker) {
+    return;
+  }
+  void enterMapPointEditMode(marker, pressPoint);
 }
 
 function handleMapRegionChange(event: Event) {
-  if (!mapPointEditMode.value) {
+  if (!mapPointEditMode.value || editableMarkerScreenPosition.value) {
     return;
   }
   const detail = (event as CustomEvent<{
@@ -1244,6 +1377,81 @@ function handleMapRegionChange(event: Event) {
   }
 }
 
+function getMapViewportOffset() {
+  const ratio = drawerConfig.value.rpxRatio;
+  return {
+    left: 24 * ratio,
+    top: 218 * ratio,
+  };
+}
+
+function getTouchClientPosition(event: Event): { clientX: number; clientY: number } | null {
+  const touchEvent = event as unknown as {
+    touches?: Array<{ clientX?: number; clientY?: number; x?: number; y?: number }>;
+    changedTouches?: Array<{ clientX?: number; clientY?: number; x?: number; y?: number }>;
+  };
+  const touch = touchEvent.touches?.[0] || touchEvent.changedTouches?.[0];
+  const clientX = touch?.clientX ?? touch?.x;
+  const clientY = touch?.clientY ?? touch?.y;
+
+  return typeof clientX === "number" && typeof clientY === "number"
+    ? { clientX, clientY }
+    : null;
+}
+
+function updateEditedPointFromScreenPosition(position: { x: number; y: number }) {
+  const mapContext = uni.createMapContext("campus-map") as unknown as {
+    fromScreenLocation?: (options: {
+      x: number;
+      y: number;
+      success?: (result: { longitude?: number; latitude?: number }) => void;
+      fail?: () => void;
+    }) => void;
+  };
+
+  if (typeof mapContext.fromScreenLocation !== "function") {
+    editedPointLocation.value = { ...mapCenter.value };
+    return;
+  }
+
+  mapContext.fromScreenLocation({
+    x: position.x,
+    y: position.y,
+    success: (result) => {
+      if (typeof result.longitude === "number" && typeof result.latitude === "number") {
+        editedPointLocation.value = {
+          lng: result.longitude,
+          lat: result.latitude,
+        };
+      }
+    },
+    fail: () => {
+      editedPointLocation.value = { ...mapCenter.value };
+    },
+  });
+}
+
+function dragEditedPoint(event: Event) {
+  if (!mapPointEditMode.value) {
+    return;
+  }
+  const touch = getTouchClientPosition(event);
+  if (!touch) {
+    return;
+  }
+  const offset = getMapViewportOffset();
+  const position = {
+    x: Math.max(0, touch.clientX - offset.left),
+    y: Math.max(0, touch.clientY - offset.top),
+  };
+  editableMarkerScreenPosition.value = position;
+  updateEditedPointFromScreenPosition(position);
+}
+
+function finishDraggingEditedPoint(event: Event) {
+  dragEditedPoint(event);
+}
+
 function handleMapMarkerSelected(marker: MapPointMarkerDto) {
   if (marker.point_scope === "search_result" && marker.extra.is_external_poi) {
     selectedSummary.value = buildExternalSummaryFromMarker(marker);
@@ -1255,6 +1463,7 @@ function handleMapMarkerSelected(marker: MapPointMarkerDto) {
 function cancelMapPointEditMode() {
   mapPointEditMode.value = false;
   editedPointLocation.value = null;
+  editableMarkerScreenPosition.value = null;
 }
 
 async function saveEditedPointLocation() {
@@ -1317,26 +1526,14 @@ function renderInAppRoute(
   uni.showToast({ title: "已在当前地图规划路线", icon: "none" });
 }
 
-function locateMe() {
-  uni.getLocation({
-    type: "gcj02",
-    success: (location) => {
-      const point = {
-        lng: location.longitude,
-        lat: location.latitude,
-      };
-      mapCenter.value = point;
-      setUserLocation(point);
-      void refreshMapPoints();
-      uni.showToast({
-        title: `已获取位置 ${location.latitude.toFixed(4)}`,
-        icon: "none",
-      });
-    },
-    fail: () => {
-      centerMapToCampus();
-      uni.showToast({ title: "无法获取当前位置", icon: "none" });
-    },
+async function locateMe() {
+  const point = await getLocationWithFallback();
+  mapCenter.value = point;
+  setUserLocation(point);
+  void refreshMapPoints();
+  uni.showToast({
+    title: `当前位置 ${point.lat.toFixed(4)}`,
+    icon: "none",
   });
 }
 
@@ -1533,6 +1730,7 @@ onBeforeUnmount(() => {
 .content-row::after,
 .my-location-btn::after,
 .clear-search::after,
+.navigation-end-button::after,
 .navigation-control::after,
 .map-edit-button::after {
   border: 0;
@@ -1672,7 +1870,23 @@ onBeforeUnmount(() => {
   height: 42rpx;
 }
 
-.navigation-panel,
+.editable-marker-handle {
+  position: absolute;
+  z-index: 6;
+  width: 64rpx;
+  height: 64rpx;
+  margin-left: -32rpx;
+  margin-top: -64rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14rpx 34rpx rgba(20, 28, 40, 0.16);
+}
+
+.editable-marker-icon {
+  width: 64rpx;
+  height: 64rpx;
+}
+
 .map-edit-panel {
   position: absolute;
   z-index: 6;
@@ -1686,21 +1900,6 @@ onBeforeUnmount(() => {
   box-shadow: 0 14rpx 34rpx rgba(20, 28, 40, 0.12);
 }
 
-.navigation-panel {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 136rpx;
-  align-items: center;
-  gap: 16rpx;
-}
-
-.navigation-copy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.navigation-title,
 .map-edit-title {
   color: #111827;
   font-size: 25rpx;
@@ -1708,7 +1907,6 @@ onBeforeUnmount(() => {
   line-height: 1.15;
 }
 
-.navigation-meta,
 .map-edit-desc {
   color: #6b7280;
   font-size: 21rpx;
@@ -1717,6 +1915,7 @@ onBeforeUnmount(() => {
 }
 
 .navigation-control,
+.navigation-end-button,
 .map-edit-button {
   height: 58rpx;
   margin: 0;
@@ -1728,6 +1927,10 @@ onBeforeUnmount(() => {
   font-size: 22rpx;
   font-weight: 900;
   line-height: 58rpx;
+}
+
+.navigation-end-button {
+  width: 96rpx;
 }
 
 .navigation-control.is-secondary,
@@ -1903,6 +2106,57 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 16rpx;
+}
+
+.navigation-route-card {
+  box-sizing: border-box;
+  padding: 22rpx;
+  border: 2rpx solid rgba(38, 123, 47, 0.16);
+  border-radius: 26rpx;
+  background: rgba(244, 251, 239, 0.96);
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.navigation-route-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96rpx;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.navigation-route-title {
+  display: block;
+  color: #111827;
+  font-size: 29rpx;
+  font-weight: 900;
+  line-height: 1.18;
+}
+
+.navigation-route-meta,
+.navigation-route-step {
+  display: block;
+  color: #6b7280;
+  font-size: 23rpx;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.navigation-route-meta {
+  margin-top: 8rpx;
+}
+
+.navigation-route-step {
+  padding: 16rpx 18rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.76);
+}
+
+.navigation-route-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12rpx;
 }
 
 .summary-card-head {

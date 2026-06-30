@@ -2,9 +2,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   checkinTask,
+  getAdminTaskDetail,
   getTaskDetail,
   getTasks,
   publishSummerFeedingTask,
+  updateSummerFeedingTask,
 } from "@/api/tasks";
 
 function mockSuccess(data: unknown) {
@@ -69,6 +71,25 @@ describe("tasks api", () => {
     );
   });
 
+  it("requests admin editable task detail by task id", async () => {
+    const requestMock = mockSuccess({ task_id: "task-1", title: "北区投喂" });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await expect(getAdminTaskDetail("admin-token", "task-1")).resolves.toMatchObject({
+      task_id: "task-1",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        url: expect.stringContaining("/admin/tasks/task-1"),
+        header: expect.objectContaining({
+          Authorization: "Bearer admin-token",
+        }),
+      }),
+    );
+  });
+
   it("publishes a summer feeding task with materials, route and task point photo", async () => {
     const requestMock = mockSuccess({
       task_id: "task-1",
@@ -120,6 +141,51 @@ describe("tasks api", () => {
               is_cover: true,
             }),
           ],
+        }),
+      }),
+    );
+  });
+
+  it("updates a summer feeding task with edited dates, location and photos", async () => {
+    const requestMock = mockSuccess({
+      task_id: "task-1",
+      updated_at: "2026-07-02T12:00:00+08:00",
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await updateSummerFeedingTask(
+      "admin-token",
+      "task-1",
+      {
+        title: "学生宿舍区北侧喂食点",
+        description: "补粮、换水并观察食盆状态",
+        required_items: "猫粮、水",
+        execute_dates: ["2026-07-02", "2026-07-09"],
+        map_point: {
+          location_name: "学生宿舍区北侧喂食点",
+          location_detail: "靠近教学楼B",
+          lng: 115.061742,
+          lat: 30.22532684,
+          route_instruction: "从教学楼B后方小路进入",
+        },
+        photos: [
+          {
+            file_id: "asset-1",
+            file_url: "/uploads/task/asset-1.jpg",
+            thumbnail_url: "/uploads/task/asset-1-thumb.jpg",
+            is_cover: true,
+          },
+        ],
+      },
+    );
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "PATCH",
+        url: expect.stringContaining("/admin/tasks/task-1"),
+        data: expect.objectContaining({
+          execute_dates: ["2026-07-02", "2026-07-09"],
+          photos: [expect.objectContaining({ file_id: "asset-1" })],
         }),
       }),
     );

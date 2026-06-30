@@ -1,3 +1,4 @@
+from datetime import date
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request
@@ -36,6 +37,26 @@ def list_admin_tasks(
         page=page,
         page_size=page_size,
         include_private=True,
+    )
+    return api_success(data=data, trace_id=request.state.trace_id)
+
+
+@router.get("/{task_id}", summary="Admin get editable summer feeding task detail")
+def get_admin_task_detail(
+    task_id: UUID,
+    request: Request,
+    current_date: date | None = None,
+    activity_limit: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    data = service.get_task_detail(
+        db,
+        task_id=task_id,
+        current_date=current_date,
+        include_private=True,
+        activity_limit=activity_limit,
+        can_admin_edit=True,
     )
     return api_success(data=data, trace_id=request.state.trace_id)
 

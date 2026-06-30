@@ -305,6 +305,7 @@ def task_detail_payload(
     *,
     current_date: date | None = None,
     activity_limit: int = 20,
+    can_admin_edit: bool = False,
 ) -> dict:
     current_execution = _current_execution(task.execution_dates, current_date=current_date)
     next_execution = _next_execution(task.execution_dates, today=current_date)
@@ -348,7 +349,7 @@ def task_detail_payload(
             "checkin_disabled_reason": None
             if task.status == "in_progress"
             else "任务当前状态不可完成",
-            "can_admin_edit": False,
+            "can_admin_edit": can_admin_edit,
         },
         "published_at": task.published_at,
         "created_at": task.created_at,
@@ -593,9 +594,15 @@ def get_task_detail(
     current_date: date | None = None,
     include_private: bool = False,
     activity_limit: int = 20,
+    can_admin_edit: bool = False,
 ) -> dict:
     task = get_task_or_raise(db, task_id, include_private=include_private)
-    return task_detail_payload(task, current_date=current_date, activity_limit=activity_limit)
+    return task_detail_payload(
+        task,
+        current_date=current_date,
+        activity_limit=activity_limit,
+        can_admin_edit=can_admin_edit,
+    )
 
 
 def _checkin_photo(

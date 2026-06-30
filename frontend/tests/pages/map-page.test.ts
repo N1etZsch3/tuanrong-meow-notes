@@ -159,8 +159,9 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).not.toContain("renderAmapWalkingRoute");
   });
 
-  it("renders in-page navigation route controls and simulated movement", () => {
-    expect(indexPageSource).toContain('class="navigation-panel"');
+  it("renders navigation route controls inside the bottom drawer", () => {
+    expect(indexPageSource).not.toContain('class="navigation-panel"');
+    expect(indexPageSource).toContain('class="navigation-route-card"');
     expect(indexPageSource).toContain("navigationRoute");
     expect(indexPageSource).toContain("navigationRouteDistance");
     expect(indexPageSource).toContain("startSimulatedNavigation");
@@ -175,14 +176,27 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).not.toContain("https://restapi.amap.com/v3/place/text");
   });
 
-  it("exposes admin point editing and long-press location editing controls", () => {
+  it("starts admin point editing from a long-pressed marker instead of drawer buttons", () => {
     expect(indexPageSource).toContain("userStore.isAdmin");
-    expect(indexPageSource).toContain('action.key === "edit_point"');
+    expect(indexPageSource).not.toContain('action.key === "edit_point"');
+    expect(indexPageSource).not.toContain("/pages/admin/map-point/edit?point_id=");
     expect(indexPageSource).toContain("@longpress");
     expect(indexPageSource).toContain("handleMarkerLongPress");
+    expect(indexPageSource).toContain("findNearestEditableMarker");
+    expect(indexPageSource).toContain('id="campus-map"');
+    expect(indexPageSource).toContain('class="editable-marker-handle"');
+    expect(indexPageSource).toContain("dragEditedPoint");
+    expect(indexPageSource).toContain("fromScreenLocation");
     expect(indexPageSource).toContain("mapPointEditMode");
     expect(indexPageSource).toContain("saveEditedPointLocation");
     expect(indexPageSource).toContain("updateAdminMapPointLocation");
+  });
+
+  it("requests user location with mini program permission and a campus fallback", () => {
+    expect(indexPageSource).toContain("requestUserLocation");
+    expect(indexPageSource).toContain("scope.userLocation");
+    expect(indexPageSource).toContain("getLocationWithFallback");
+    expect(indexPageSource).toContain("使用校园中心作为当前位置");
   });
 
   it("lowers and compacts the map title, map viewport, filter, and content drawer", () => {

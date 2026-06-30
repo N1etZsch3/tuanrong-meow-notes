@@ -6,9 +6,13 @@
         <view class="nav-row">
           <button class="back-button" hover-class="button-hover" @tap="goBack">‹</button>
           <view>
-            <text class="nav-title">发布喂食任务</text>
-            <text class="nav-subtitle">创建暑假投喂任务</text>
+            <text class="nav-title">{{ pageTitle }}</text>
+            <text class="nav-subtitle">{{ pageSubtitle }}</text>
           </view>
+        </view>
+
+        <view v-if="isLoadingDetail" class="form-section loading-section">
+          <text class="loading-title">正在加载任务数据...</text>
         </view>
 
         <view class="task-type-chip">
@@ -116,13 +120,24 @@
             <text class="section-title">任务点图片</text>
           </view>
           <view class="photo-grid">
-            <image
+            <view
               v-for="photo in form.photos"
-              :key="photo.file_id"
-              class="photo-thumb"
-              :src="photo.thumbnail_url || photo.file_url"
-              mode="aspectFill"
-            />
+              :key="photo.file_id || photo.file_url"
+              class="photo-item"
+            >
+              <image
+                class="photo-thumb"
+                :src="photo.thumbnail_url || photo.file_url"
+                mode="aspectFill"
+              />
+              <button
+                class="photo-remove"
+                hover-class="button-hover"
+                @tap="removeTaskPhoto(photo)"
+              >
+                ×
+              </button>
+            </view>
             <button
               class="photo-upload"
               :loading="isUploading"
@@ -155,10 +170,11 @@
       <button
         class="submit-button"
         :loading="isSubmitting"
+        :disabled="isLoadingDetail"
         hover-class="button-hover"
         @tap="submitTask"
       >
-        发布任务
+        {{ submitButtonText }}
       </button>
     </view>
 
@@ -215,11 +231,18 @@
 </template>
 
 <script setup lang="ts">
-import { onShow } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, reactive, ref } from "vue";
 
 import { uploadImage } from "@/api/files";
-import { publishSummerFeedingTask } from "@/api/tasks";
+import {
+  getAdminTaskDetail,
+  publishSummerFeedingTask,
+  updateSummerFeedingTask,
+  type TaskDetailDto,
+  type TaskPhotoDto,
+  type UploadedFileRef,
+} from "@/api/tasks";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import {
@@ -240,8 +263,16 @@ import loadingBackground from "../../../../素材/加载页素材/加载页背�
 
 const userStore = useUserStore();
 const form = reactive<FeedingTaskDraft>(createDefaultFeedingTaskDraft());
+const editTaskId = ref("");
 const isUploading = ref(false);
+const isLoadingDetail = ref(false);
 const isSubmitting = ref(false);
+const isEditMode = computed(() => Boolean(editTaskId.value));
+const pageTitle = computed(() => (isEditMode.value ? "编辑喂食任务" : "发布喂食任务"));
+const pageSubtitle = computed(() =>
+  isEditMode.value ? "修改暑假投喂任务" : "创建暑假投喂任务",
+);
+const submitButtonText = computed(() => (isEditMode.value ? "保存修改" : "发布任务"));
 const selectedLocation = computed(() => form.location);
 const dateSummary = computed(() => formatExecutionDateSummary(form.execute_dates));
 const calendarVisible = ref(false);
@@ -363,6 +394,10 @@ function removeDate(value: string) {
   form.execute_dates = form.execute_dates.filter((item) => item !== value);
 }
 
+function removeTaskPhoto(photo: UploadedFileRef) {
+  form.photos = form.photos.filter((item) => item !== photo);
+}
+
 function chooseTaskPhoto() {
   uni.chooseImage({
     count: 3,
@@ -417,18 +452,69 @@ async function submitTask() {
 
   isSubmitting.value = true;
   try {
-    const response = await publishSummerFeedingTask(
-      buildSummerFeedingTaskPayload(form),
-      token,
-    );
+    const payload = buildSummerFeedingTaskPayload(form);
+    const response = isEditMode.value
+      ? await updateSummerFeedingTask(token, editTaskId.value, payload)
+      : await publishSummerFeedingTask(payload, token);
     uni.removeStorageSync(TASK_PUBLISH_LOCATION_STORAGE_KEY);
-    uni.showToast({ title: "任务已发布", icon: "success" });
+    uni.showToast({ title: isEditMode.value ? "任务已保存" : "任务已发布", icon: "success" });
     uni.redirectTo({ url: `/pages/tasks/detail?task_id=${response.task_id}` });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "发布失败";
+    const message = error instanceof Error ? error.message : isEditMode.value ? "保存失败" : "发布失败";
     uni.showToast({ title: message, icon: "none" });
   } finally {
     isSubmitting.value = false;
+  }
+}
+
+function taskPhotoToUploadedRef(photo: TaskPhotoDto): UploadedFileRef {
+  return {
+    file_id: photo.file_id,
+    file_url: photo.file_url,
+    thumbnail_url: photo.thumbnail_url,
+    cos_object_key: photo.cos_object_key,
+  };
+}
+
+function applyTaskDetailToForm(task: TaskDetailDto) {
+  form.title = task.title || "";
+  form.description = task.description || "";
+  form.required_items = task.required_items || "猫粮、水";
+  form.execute_dates = sortUniqueDates(
+    task.execution_dates.map((item) => item.execute_date).filter(Boolean),
+  );
+  form.location = {
+    campus_id: task.map_point.campus_id,
+    area_id: task.map_point.area_id,
+    location_name: task.map_point.location_name || task.title,
+    location_detail: task.map_point.location_detail,
+    lng: task.map_point.lng,
+    lat: task.map_point.lat,
+    route_instruction: task.map_point.route_instruction,
+    landmark_hint: task.map_point.landmark_hint,
+    entrance_hint: task.map_point.entrance_hint,
+    amap_poi_id: task.map_point.amap_poi_id,
+    amap_address: task.map_point.amap_address,
+  };
+  form.route_instruction = task.map_point.route_instruction || "";
+  form.photos = task.photos.map(taskPhotoToUploadedRef);
+}
+
+async function loadEditableTaskDetail() {
+  const token = await getAccessToken();
+  if (!token || !editTaskId.value) {
+    return;
+  }
+
+  isLoadingDetail.value = true;
+  try {
+    const task = await getAdminTaskDetail(token, editTaskId.value);
+    applyTaskDetailToForm(task);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "任务数据加载失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    isLoadingDetail.value = false;
   }
 }
 
@@ -442,7 +528,8 @@ function readSelectedLocation() {
 }
 
 function goLocation() {
-  uni.navigateTo({ url: "/pages/admin/tasks/location" });
+  const suffix = isEditMode.value ? `?mode=edit&task_id=${editTaskId.value}` : "";
+  uni.navigateTo({ url: `/pages/admin/tasks/location${suffix}` });
 }
 
 function goBack() {
@@ -451,6 +538,14 @@ function goBack() {
 
 onShow(() => {
   readSelectedLocation();
+});
+
+onLoad((query) => {
+  const queryTaskId = typeof query?.task_id === "string" ? query.task_id : "";
+  editTaskId.value = queryTaskId;
+  if (editTaskId.value) {
+    void loadEditableTaskDetail();
+  }
 });
 </script>
 
@@ -506,6 +601,7 @@ onShow(() => {
 
 .back-button::after,
 .outline-button::after,
+.photo-remove::after,
 .photo-upload::after,
 .date-picker-button::after,
 .date-tag::after,
@@ -568,6 +664,17 @@ onShow(() => {
   border-radius: 28rpx;
   background: rgba(255, 255, 255, 0.93);
   box-shadow: 0 14rpx 34rpx rgba(27, 54, 30, 0.09);
+}
+
+.loading-section {
+  padding: 26rpx 30rpx;
+}
+
+.loading-title {
+  display: block;
+  color: #287c31;
+  font-size: 26rpx;
+  font-weight: 900;
 }
 
 .section-title-row {
@@ -781,6 +888,7 @@ onShow(() => {
   gap: 16rpx;
 }
 
+.photo-item,
 .photo-thumb,
 .photo-upload {
   width: 150rpx;
@@ -788,8 +896,29 @@ onShow(() => {
   border-radius: 22rpx;
 }
 
+.photo-item {
+  position: relative;
+}
+
 .photo-thumb {
   overflow: hidden;
+}
+
+.photo-remove {
+  position: absolute;
+  top: -14rpx;
+  right: -14rpx;
+  width: 46rpx;
+  height: 46rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(17, 24, 39, 0.72);
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 42rpx;
 }
 
 .photo-upload {
@@ -960,6 +1089,10 @@ onShow(() => {
   background: #287c31;
   color: #ffffff;
   box-shadow: 0 14rpx 34rpx rgba(40, 124, 49, 0.22);
+}
+
+.submit-button[disabled] {
+  background: #9fb59d;
 }
 
 .button-hover {

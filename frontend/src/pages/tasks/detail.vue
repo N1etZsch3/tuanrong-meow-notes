@@ -18,6 +18,9 @@
         <view v-else-if="loadState === 'error'" class="state-box">
           <text class="state-title">任务详情加载失败</text>
           <text class="state-copy">{{ errorMessage }}</text>
+          <button class="retry-button" hover-class="button-hover" @tap="retryTaskDetail">
+            重新加载
+          </button>
         </view>
 
         <view v-else-if="task" class="detail-content">
@@ -50,7 +53,17 @@
 
           <view class="title-block">
             <text class="eyebrow">喂食点名称</text>
-            <text class="task-title">{{ task.title }}</text>
+            <view class="task-title-row">
+              <text class="task-title">{{ task.title }}</text>
+              <button
+                v-if="canAdminEditTask"
+                class="task-edit-button"
+                hover-class="button-hover"
+                @tap="goEditTask"
+              >
+                编辑
+              </button>
+            </view>
             <text class="task-desc">{{ task.description }}</text>
           </view>
 
@@ -113,7 +126,7 @@
             <view v-if="checkinPhotos.length" class="photo-strip">
               <image
                 v-for="photo in checkinPhotos"
-                :key="photo.file_id"
+                :key="photo.file_id || photo.file_url"
                 class="checkin-photo"
                 :src="photo.thumbnail_url || photo.file_url"
                 mode="aspectFill"
@@ -191,6 +204,9 @@ const heroPhotos = computed(() => {
 const currentExecution = computed(() => task.value?.current_execution || task.value?.next_execution || null);
 const currentDateText = computed(() => formatTaskDate(currentExecution.value?.execute_date));
 const canCheckin = computed(() => Boolean(task.value?.actions.can_checkin && currentExecution.value));
+const canAdminEditTask = computed(() =>
+  Boolean(userStore.isAdmin && task.value?.actions.can_admin_edit),
+);
 
 async function getAccessToken(): Promise<string | null> {
   const accessToken = await userStore.ensureFreshAccessToken();
@@ -225,7 +241,13 @@ function markHeroPhotoFailed(photoId: string) {
   }
 }
 
-async function loadTaskDetail() {
+function wait(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+async function loadTaskDetail(options: { retry?: boolean } = {}): Promise<void> {
   const token = await getAccessToken();
   if (!token || !taskId.value) {
     return;
@@ -238,12 +260,20 @@ async function loadTaskDetail() {
     checkinPhotos.value = [];
     loadState.value = "ready";
   } catch (error) {
+    if (options.retry) {
+      await wait(350);
+      return loadTaskDetail({ retry: false });
+    }
     loadState.value = "error";
     errorMessage.value =
       error instanceof ApiBusinessError || error instanceof Error
         ? error.message
         : "请稍后重试";
   }
+}
+
+function retryTaskDetail() {
+  void loadTaskDetail({ retry: true });
 }
 
 function chooseCheckinPhoto() {
@@ -324,13 +354,22 @@ function showNavigationTodo() {
   uni.showToast({ title: "导航后续接入", icon: "none" });
 }
 
+function goEditTask() {
+  if (!task.value) {
+    return;
+  }
+  uni.navigateTo({
+    url: `/pages/admin/tasks/create?mode=edit&task_id=${task.value.task_id}`,
+  });
+}
+
 function goBack() {
   uni.navigateBack();
 }
 
 onLoad((query) => {
   taskId.value = typeof query?.task_id === "string" ? query.task_id : "";
-  void loadTaskDetail();
+  void loadTaskDetail({ retry: true });
 });
 </script>
 
@@ -385,7 +424,9 @@ onLoad((query) => {
 }
 
 .back-button::after,
+.retry-button::after,
 .small-button::after,
+.task-edit-button::after,
 .ghost-action::after,
 .primary-action::after {
   border: 0;
@@ -465,11 +506,45 @@ onLoad((query) => {
 }
 
 .task-title {
-  margin-top: 12rpx;
   color: #111827;
   font-size: 52rpx;
   font-weight: 900;
   line-height: 1.12;
+}
+
+.task-title-row {
+  margin-top: 12rpx;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104rpx;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.task-edit-button,
+.retry-button {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #e8f5e6;
+  color: #287c31;
+  font-weight: 900;
+}
+
+.task-edit-button {
+  width: 104rpx;
+  height: 56rpx;
+  border-radius: 18rpx;
+  font-size: 24rpx;
+  line-height: 56rpx;
+}
+
+.retry-button {
+  width: 168rpx;
+  height: 64rpx;
+  margin-top: 22rpx;
+  border-radius: 20rpx;
+  font-size: 25rpx;
+  line-height: 64rpx;
 }
 
 .task-desc {

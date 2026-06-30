@@ -74,7 +74,7 @@
             <text class="menu-chevron">›</text>
           </button>
           <button v-if="dashboard?.profile.show_admin_entry" class="menu-row" @tap="goAdmin">
-            <text class="menu-icon-fallback">▣</text>
+            <image class="menu-icon-image" :src="adminIcon" mode="aspectFit" />
             <text class="menu-label">管理员入口</text>
             <text class="menu-chevron">›</text>
           </button>
@@ -116,6 +116,8 @@ import inProgressStatsIcon from "../../../素材/svg/用户页/进行中.svg";
 import settingsIcon from "../../../素材/svg/用户页/设置.svg";
 import notificationsIcon from "../../../素材/svg/用户页/通知.svg";
 import feedbackIcon from "../../../素材/svg/用户页/帮助和反馈.svg";
+import observationIcon from "../../../素材/登录页素材/密码-显示.svg";
+import adminIcon from "../../../素材/svg/登录页/修改密码.svg";
 
 const userStore = useUserStore();
 const dashboard = ref<MeDashboardResponse | null>(null);
@@ -127,6 +129,7 @@ const profileStatIconMap: Partial<Record<(typeof PROFILE_STAT_ENTRIES)[number]["
   total_completed_tasks: taskStatsIcon,
   monthly_completed_tasks: taskStatsIcon,
   current_in_progress_tasks: inProgressStatsIcon,
+  total_observation_records: observationIcon,
 };
 const profileMenuIconMap = {
   settings: settingsIcon,

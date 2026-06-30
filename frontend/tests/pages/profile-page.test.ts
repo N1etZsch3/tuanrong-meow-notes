@@ -47,6 +47,20 @@ describe("profile center pages", () => {
     expect(PROFILE_RECORD_TYPES.favorite_cats.title).toBe("收藏猫咪");
   });
 
+
+  it("uses the provided profile svg assets for dashboard and menu icons", () => {
+    expect(profileIndexSource).toContain("素材/svg/用户页/任务.svg");
+    expect(profileIndexSource).toContain("素材/svg/用户页/进行中.svg");
+    expect(profileIndexSource).toContain("素材/svg/用户页/设置.svg");
+    expect(profileIndexSource).toContain("素材/svg/用户页/通知.svg");
+    expect(profileIndexSource).toContain("素材/svg/用户页/帮助和反馈.svg");
+    expect(profileIndexSource).toContain("profileStatIconMap");
+    expect(profileIndexSource).toContain("profileMenuIconMap");
+    expect(profileIndexSource).toContain('class="stat-icon-image"');
+    expect(profileIndexSource).toContain('class="menu-icon-image"');
+    expect(profileIndexSource).not.toContain("{{ item.icon }}");
+  });
+
   it("keeps profile detail editable with the profile update api", () => {
     expect(profileDetailSource).toContain("getMyProfile");
     expect(profileDetailSource).toContain("updateMyProfile");

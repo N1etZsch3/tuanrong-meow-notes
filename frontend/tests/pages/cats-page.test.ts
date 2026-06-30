@@ -47,6 +47,12 @@ describe("cats page behavior", () => {
     expect(catsPageSource).toContain("hasMore");
   });
 
+  it("uses the planet svg for the graduated stats icon", () => {
+    expect(catsPageSource).toContain("素材/svg/猫咪库/星球.svg");
+    expect(catsPageSource).toContain("graduated: graduatedStatsIcon");
+    expect(catsPageSource).not.toContain('graduated: ""');
+  });
+
   it("builds the stat card items from the new archive counts", () => {
     expect(
       buildCatStatsDisplayItems({
@@ -64,7 +70,7 @@ describe("cats page behavior", () => {
       { key: "active", label: "正常在校", value: 55, tone: "green", has_icon: true },
       { key: "waiting_adoption", label: "待领养", value: 10, tone: "orange" },
       { key: "adopted", label: "已领养", value: 20, tone: "blue" },
-      { key: "graduated", label: "毕业", value: 5, tone: "purple", has_icon: false },
+      { key: "graduated", label: "毕业", value: 5, tone: "purple", has_icon: true },
     ]);
   });
 

@@ -34,7 +34,15 @@
             :class="`stat-${item.color}`"
             @tap="goRecord(item.recordType)"
           >
-            <text class="stat-icon">{{ item.icon }}</text>
+            <view class="stat-icon-shell">
+              <image
+                v-if="getProfileStatIcon(item)"
+                class="stat-icon-image"
+                :src="getProfileStatIcon(item)"
+                mode="aspectFit"
+              />
+              <text v-else class="stat-icon-fallback">{{ getProfileStatFallbackIcon(item) }}</text>
+            </view>
             <text class="stat-label">{{ item.label }}</text>
             <text class="stat-value">{{ getStatValue(dashboard?.stats || null, item.key) }}</text>
           </button>
@@ -51,22 +59,22 @@
 
         <view class="menu-card">
           <button class="menu-row" @tap="goProfileDetail">
-            <text class="menu-icon">⚙</text>
+            <image class="menu-icon-image" :src="profileMenuIconMap.settings" mode="aspectFit" />
             <text class="menu-label">账号设置</text>
             <text class="menu-chevron">›</text>
           </button>
           <button class="menu-row" @tap="showPendingToast('消息通知')">
-            <text class="menu-icon">♧</text>
+            <image class="menu-icon-image" :src="profileMenuIconMap.notifications" mode="aspectFit" />
             <text class="menu-label">消息通知</text>
             <text class="menu-chevron">›</text>
           </button>
           <button class="menu-row" @tap="showPendingToast('帮助与反馈')">
-            <text class="menu-icon">?</text>
+            <image class="menu-icon-image" :src="profileMenuIconMap.feedback" mode="aspectFit" />
             <text class="menu-label">帮助与反馈</text>
             <text class="menu-chevron">›</text>
           </button>
           <button v-if="dashboard?.profile.show_admin_entry" class="menu-row" @tap="goAdmin">
-            <text class="menu-icon">▣</text>
+            <text class="menu-icon-fallback">▣</text>
             <text class="menu-label">管理员入口</text>
             <text class="menu-chevron">›</text>
           </button>
@@ -103,6 +111,11 @@ import {
 import defaultAvatar from "../../../素材/svg/萌猫/橘猫.svg";
 import catLineArt from "../../../素材/svg/萌猫/猫.svg";
 import favoriteCat from "../../../素材/svg/用户页/猫咪插画.svg";
+import taskStatsIcon from "../../../素材/svg/用户页/任务.svg";
+import inProgressStatsIcon from "../../../素材/svg/用户页/进行中.svg";
+import settingsIcon from "../../../素材/svg/用户页/设置.svg";
+import notificationsIcon from "../../../素材/svg/用户页/通知.svg";
+import feedbackIcon from "../../../素材/svg/用户页/帮助和反馈.svg";
 
 const userStore = useUserStore();
 const dashboard = ref<MeDashboardResponse | null>(null);
@@ -110,6 +123,16 @@ const isLoading = ref(false);
 const errorMessage = ref("");
 const PROFILE_DASHBOARD_CACHE_MS = 10_000;
 const lastDashboardLoadedAt = ref(0);
+const profileStatIconMap: Partial<Record<(typeof PROFILE_STAT_ENTRIES)[number]["key"], string>> = {
+  total_completed_tasks: taskStatsIcon,
+  monthly_completed_tasks: taskStatsIcon,
+  current_in_progress_tasks: inProgressStatsIcon,
+};
+const profileMenuIconMap = {
+  settings: settingsIcon,
+  notifications: notificationsIcon,
+  feedback: feedbackIcon,
+} as const;
 
 const profileAvatar = computed(
   () => dashboard.value?.profile.avatar_url || userStore.currentUser?.avatar_url || defaultAvatar,
@@ -152,6 +175,14 @@ function goProfileDetail() {
 
 function goRecord(type: ProfileRecordType) {
   uni.navigateTo({ url: buildRecordRoute(type) });
+}
+
+function getProfileStatIcon(item: (typeof PROFILE_STAT_ENTRIES)[number]) {
+  return profileStatIconMap[item.key] || "";
+}
+
+function getProfileStatFallbackIcon(item: (typeof PROFILE_STAT_ENTRIES)[number]) {
+  return item.icon;
 }
 
 function goAdmin() {
@@ -368,10 +399,24 @@ onShow(() => {
   border-left: 2rpx solid #e7ece7;
 }
 
-.stat-icon {
+.stat-icon-shell {
+  width: 58rpx;
+  height: 58rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.stat-icon-image {
+  width: 54rpx;
+  height: 54rpx;
+}
+
+.stat-icon-fallback {
   width: 54rpx;
   height: 54rpx;
   border-radius: 16rpx;
+  background: #8056df;
   color: #ffffff;
   font-size: 34rpx;
   font-weight: 900;
@@ -379,20 +424,20 @@ onShow(() => {
   text-align: center;
 }
 
-.stat-green .stat-icon {
-  background: #278331;
+.stat-green .stat-icon-image {
+  filter: brightness(0) saturate(100%) invert(33%) sepia(65%) saturate(1011%) hue-rotate(84deg) brightness(93%) contrast(91%);
 }
 
-.stat-blue .stat-icon {
-  background: #4a85f4;
+.stat-blue .stat-icon-image {
+  filter: brightness(0) saturate(100%) invert(52%) sepia(92%) saturate(2389%) hue-rotate(199deg) brightness(98%) contrast(94%);
 }
 
-.stat-orange .stat-icon {
-  background: #f47b24;
+.stat-orange .stat-icon-image {
+  filter: brightness(0) saturate(100%) invert(60%) sepia(87%) saturate(1903%) hue-rotate(347deg) brightness(99%) contrast(93%);
 }
 
-.stat-purple .stat-icon {
-  background: #8056df;
+.stat-purple .stat-icon-image {
+  filter: brightness(0) saturate(100%) invert(42%) sepia(80%) saturate(2012%) hue-rotate(236deg) brightness(95%) contrast(91%);
 }
 
 .stat-label {
@@ -497,11 +542,22 @@ onShow(() => {
   border-top: 2rpx solid #eef1ef;
 }
 
-.menu-icon {
+.menu-icon-image,
+.menu-icon-fallback {
   width: 68rpx;
+  height: 42rpx;
+  flex: 0 0 68rpx;
+}
+
+.menu-icon-image {
+  filter: brightness(0) saturate(100%) invert(36%) sepia(33%) saturate(1009%) hue-rotate(75deg) brightness(92%) contrast(91%);
+}
+
+.menu-icon-fallback {
   color: #2f8037;
   font-size: 38rpx;
   font-weight: 900;
+  line-height: 42rpx;
 }
 
 .menu-label {

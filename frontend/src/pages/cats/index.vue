@@ -230,6 +230,7 @@ import totalStatsIcon from "../../../素材/svg/猫咪库/总计.svg";
 import activeStatsIcon from "../../../素材/svg/猫咪库/盾牌.svg";
 import waitingAdoptionStatsIcon from "../../../素材/svg/猫咪库/未领养.svg";
 import neuteredStatsIcon from "../../../素材/svg/猫咪库/领养.svg";
+import graduatedStatsIcon from "../../../素材/svg/猫咪库/星球.svg";
 import filterArrowIcon from "../../../素材/svg/地图点/箭头.svg";
 import clearFilterIcon from "../../../素材/svg/猫咪库/删除.svg";
 
@@ -248,7 +249,7 @@ const statIconMap: Record<string, string> = {
   active: activeStatsIcon,
   waiting_adoption: waitingAdoptionStatsIcon,
   adopted: neuteredStatsIcon,
-  graduated: "",
+  graduated: graduatedStatsIcon,
 };
 
 const userStore = useUserStore();

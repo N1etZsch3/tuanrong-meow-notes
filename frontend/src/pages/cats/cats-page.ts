@@ -42,7 +42,7 @@ export function buildCatStatsDisplayItems(stats: CatStatsResponse | null): CatSt
     { key: "active", label: "正常在校", value: resolvedStats.active_cats, tone: "green", has_icon: true },
     { key: "waiting_adoption", label: "待领养", value: resolvedStats.waiting_adoption_cats, tone: "orange" },
     { key: "adopted", label: "已领养", value: resolvedStats.adopted_cats, tone: "blue" },
-    { key: "graduated", label: "毕业", value: resolvedStats.deceased_cats, tone: "purple", has_icon: false },
+    { key: "graduated", label: "毕业", value: resolvedStats.deceased_cats, tone: "purple", has_icon: true },
   ];
 }
 

@@ -27,6 +27,14 @@ class AdminMapPointUpdateRequest(BaseModel):
     location_detail: str | None = None
     amap_poi_id: str | None = Field(default=None, max_length=128)
     amap_address: str | None = Field(default=None, max_length=255)
+    tencent_poi_id: str | None = Field(default=None, max_length=128)
+    tencent_poi_name: str | None = Field(default=None, max_length=128)
+    tencent_poi_address: str | None = Field(default=None, max_length=255)
+    tencent_poi_category: str | None = Field(default=None, max_length=128)
+    tencent_poi_lng: float | None = None
+    tencent_poi_lat: float | None = None
+    tencent_poi_distance_meters: int | None = None
+    tencent_poi_match_method: str | None = Field(default=None, max_length=32)
     route_instruction: str | None = None
     landmark_hint: str | None = None
     entrance_hint: str | None = None
@@ -91,4 +99,3 @@ def update_admin_map_point_location(
         lat=payload.lat,
     )
     return api_success(data=data, trace_id=request.state.trace_id)
-

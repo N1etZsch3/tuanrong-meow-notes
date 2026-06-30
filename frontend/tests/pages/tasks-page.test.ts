@@ -105,6 +105,13 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).not.toContain("导航后续接入");
   });
 
+  it("shows associated tencent poi metadata on task detail when available", () => {
+    expect(taskDetailSource).toContain("associatedPoi");
+    expect(taskDetailSource).toContain("公共地点");
+    expect(taskDetailSource).toContain("associatedPoi.category");
+    expect(taskDetailSource).toContain("associatedPoi.address");
+  });
+
   it("uses a custom multi-select calendar instead of the native date picker", () => {
     expect(adminCreateTaskSource).not.toContain('<picker mode="date"');
     expect(adminCreateTaskSource).toContain('class="calendar-overlay"');
@@ -126,6 +133,12 @@ describe("summer feeding task pages", () => {
     expect(adminTaskLocationSource).toContain("@tap=\"selectLocationFromMap\"");
     expect(adminTaskLocationSource).toContain("uni.setStorageSync");
     expect(adminTaskLocationSource).toContain("确认此位置");
+    expect(adminTaskLocationSource).toContain("getNearbyMapPois");
+    expect(adminTaskLocationSource).toContain("associatedPoiCandidates");
+    expect(adminTaskLocationSource).toContain("associateSelectedPoi");
+    expect(adminTaskLocationSource).toContain("clearAssociatedPoi");
+    expect(adminTaskLocationSource).not.toContain("自选喂食点");
+    expect(adminTaskLocationSource).not.toContain("请补充具体参照物");
   });
 
   it("defaults materials to cat food and water and builds the publish payload", () => {
@@ -172,6 +185,36 @@ describe("summer feeding task pages", () => {
     expect(validatePublishDraft(createDefaultFeedingTaskDraft())).toEqual({
       valid: false,
       message: "请输入任务标题",
+    });
+
+    const draft = createDefaultFeedingTaskDraft();
+    draft.title = "学生宿舍区北侧喂食点";
+    draft.description = "补粮、换水并观察食盆状态";
+    draft.execute_dates = ["2026-07-02"];
+    draft.photos = [
+      {
+        file_id: "asset-1",
+        file_url: "/uploads/task/asset-1.jpg",
+        thumbnail_url: "/uploads/task/asset-1-thumb.jpg",
+      },
+    ];
+    draft.location = {
+      location_name: "",
+      location_detail: "",
+      lng: 115.061742,
+      lat: 30.22532684,
+      route_instruction: "",
+    };
+
+    expect(validatePublishDraft(draft)).toEqual({
+      valid: false,
+      message: "请填写喂食点名称",
+    });
+
+    draft.location.location_name = "学生宿舍区北侧喂食点";
+    expect(validatePublishDraft(draft)).toEqual({
+      valid: false,
+      message: "请填写位置补充说明",
     });
   });
 

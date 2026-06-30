@@ -58,7 +58,7 @@ def seed_map_data(db: Session) -> dict[str, MapPoint]:
         default_zoom=17,
         min_zoom=15,
         max_zoom=20,
-        map_provider="amap",
+        map_provider="tencent",
     )
     db.add(campus)
     db.flush()
@@ -159,7 +159,7 @@ def seed_map_data(db: Session) -> dict[str, MapPoint]:
     return points
 
 
-def test_map_init_returns_campus_marker_configs_and_amap_config(api_client, db_session):
+def test_map_init_returns_campus_marker_configs_and_tencent_config(api_client, db_session):
     user = create_member(db_session)
     seed_map_data(db_session)
 
@@ -175,7 +175,8 @@ def test_map_init_returns_campus_marker_configs_and_amap_config(api_client, db_s
         "cat_home",
         "supply_food",
     }
-    assert data["amap_config"]["web_key"]
+    assert data["tencent_config"]["map_provider"] == "tencent"
+    assert "key" not in data["tencent_config"]
 
 
 def test_map_points_returns_visible_markers_with_filter_and_distance(api_client, db_session):
@@ -211,27 +212,28 @@ def test_map_search_finds_points_by_keyword(api_client, db_session):
     assert data["items"][0]["map_point_id"]
 
 
-def test_map_search_can_include_external_amap_pois(api_client, db_session, monkeypatch):
+def test_map_search_can_include_external_tencent_pois(api_client, db_session, monkeypatch):
     user = create_member(db_session)
     seed_map_data(db_session)
 
-    def fake_amap_json(path, params):
-        assert path == "/v3/place/text"
-        assert params["keywords"] == "教学楼"
+    def fake_tencent_json(path, params):
+        assert path == "/ws/place/v1/search"
+        assert params["keyword"] == "教学楼"
+        assert params["boundary"].startswith("rectangle(")
         return {
-            "status": "1",
-            "pois": [
+            "status": 0,
+            "data": [
                 {
-                    "id": "B0FFFAKE01",
-                    "name": "湖北师范大学教育大楼",
-                    "type": "科教文化服务;学校;高等院校",
+                    "id": "7554185223751732838",
+                    "title": "湖北师范大学教育大楼",
+                    "category": "教育学校:大学",
                     "address": "湖北省黄石市黄石港区",
-                    "location": "115.061700,30.231100",
+                    "location": {"lng": 115.061700, "lat": 30.231100},
                 }
             ],
         }
 
-    monkeypatch.setattr(map_service, "_request_amap_json", fake_amap_json, raising=False)
+    monkeypatch.setattr(map_service, "_request_tencent_json", fake_tencent_json, raising=False)
 
     response = api_client.get(
         "/api/v1/map/search?keyword=教学楼&include_external=true&user_lng=115.062202&user_lat=30.229910",
@@ -242,8 +244,11 @@ def test_map_search_can_include_external_amap_pois(api_client, db_session, monke
     data = response.json()["data"]
     external = next(item for item in data["items"] if item["result_type"] == "external_poi")
     assert external["map_point_id"] is None
-    assert external["business_id"] == "amap:B0FFFAKE01"
+    assert external["business_id"] == "tencent:7554185223751732838"
+    assert external["business_type"] == "tencent_poi"
     assert external["title"] == "湖北师范大学教育大楼"
+    assert external["subtitle"] == "教育学校:大学"
+    assert external["description"] == "湖北省黄石市黄石港区"
     assert external["lng"] == 115.0617
     assert external["distance_meters"] > 0
 
@@ -252,6 +257,15 @@ def test_map_summary_and_navigation_return_point_card_data(api_client, db_sessio
     user = create_member(db_session)
     points = seed_map_data(db_session)
     point_id = points["task"].id
+    points["task"].tencent_poi_id = "7554185223751732838"
+    points["task"].tencent_poi_name = "湖北师范大学教育大楼"
+    points["task"].tencent_poi_address = "湖北省黄石市黄石港区"
+    points["task"].tencent_poi_category = "教育学校:大学"
+    points["task"].tencent_poi_lng = 115.0617
+    points["task"].tencent_poi_lat = 30.2311
+    points["task"].tencent_poi_distance_meters = 42
+    points["task"].tencent_poi_match_method = "admin_selected"
+    db_session.commit()
 
     summary = api_client.get(
         f"/api/v1/map/points/{point_id}/summary",
@@ -266,12 +280,24 @@ def test_map_summary_and_navigation_return_point_card_data(api_client, db_sessio
     summary_data = summary.json()["data"]
     assert summary_data["title"] == "北门草丛紧急救助任务"
     assert "紧急任务" in summary_data["tags"]
+    assert summary_data["associated_poi"] == {
+        "provider": "tencent",
+        "poi_id": "7554185223751732838",
+        "name": "湖北师范大学教育大楼",
+        "address": "湖北省黄石市黄石港区",
+        "category": "教育学校:大学",
+        "lng": 115.0617,
+        "lat": 30.2311,
+        "distance_meters": 42,
+        "match_method": "admin_selected",
+    }
     assert {action["key"] for action in summary_data["actions"]} >= {"navigate", "view_detail"}
 
     assert navigation.status_code == 200
     navigation_data = navigation.json()["data"]
     assert navigation_data["destination"]["lng"] == 115.0609
-    assert "uri.amap.com" in navigation_data["amap_navigation"]["web_url"]
+    assert navigation_data["destination"]["associated_poi"]["poi_id"] == "7554185223751732838"
+    assert "apis.map.qq.com" in navigation_data["tencent_navigation"]["web_url"]
 
 
 def test_map_navigation_returns_walking_route_geometry(api_client, db_session, monkeypatch):
@@ -279,29 +305,37 @@ def test_map_navigation_returns_walking_route_geometry(api_client, db_session, m
     points = seed_map_data(db_session)
     point_id = points["task"].id
 
-    def fake_amap_json(path, params):
-        assert path == "/v3/direction/walking"
-        assert params["origin"] == "115.0622,30.22991"
-        assert params["destination"] == "115.0609,30.233"
+    def fake_tencent_json(path, params):
+        assert path == "/ws/direction/v1/walking/"
+        assert params["from"] == "30.22991,115.0622"
+        assert params["to"] == "30.233,115.0609"
         return {
-            "status": "1",
-            "route": {
-                "paths": [
+            "status": 0,
+            "result": {
+                "routes": [
                     {
-                        "distance": "450",
-                        "duration": "360",
+                        "distance": 450,
+                        "duration": 6,
+                        "polyline": [
+                            30229910,
+                            115062200,
+                            1490,
+                            -700,
+                            1600,
+                            -600,
+                        ],
                         "steps": [
                             {
                                 "instruction": "沿磁湖路向北步行",
-                                "distance": "300",
-                                "duration": "240",
-                                "polyline": "115.0622,30.22991;115.0615,30.2314",
+                                "distance": 300,
+                                "duration": 4,
+                                "polyline_idx": [0, 1],
                             },
                             {
                                 "instruction": "到达北门草丛",
-                                "distance": "150",
-                                "duration": "120",
-                                "polyline": "115.0615,30.2314;115.0609,30.233",
+                                "distance": 150,
+                                "duration": 2,
+                                "polyline_idx": [1, 2],
                             },
                         ],
                     }
@@ -309,7 +343,7 @@ def test_map_navigation_returns_walking_route_geometry(api_client, db_session, m
             },
         }
 
-    monkeypatch.setattr(map_service, "_request_amap_json", fake_amap_json, raising=False)
+    monkeypatch.setattr(map_service, "_request_tencent_json", fake_tencent_json, raising=False)
 
     response = api_client.get(
         f"/api/v1/map/points/{point_id}/navigation?from_lng=115.0622&from_lat=30.22991",
@@ -318,7 +352,7 @@ def test_map_navigation_returns_walking_route_geometry(api_client, db_session, m
 
     assert response.status_code == 200
     route = response.json()["data"]["route"]
-    assert route["provider"] == "amap"
+    assert route["provider"] == "tencent"
     assert route["fallback"] is False
     assert route["distance_meters"] == 450
     assert route["duration_seconds"] == 360
@@ -328,6 +362,65 @@ def test_map_navigation_returns_walking_route_geometry(api_client, db_session, m
         {"lng": 115.0609, "lat": 30.233},
     ]
     assert route["steps"][0]["instruction"] == "沿磁湖路向北步行"
+
+
+def test_map_resolves_poi_and_recommends_nearby_tencent_pois(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    user = create_member(db_session)
+    seed_map_data(db_session)
+
+    def fake_tencent_json(path, params):
+        assert path == "/ws/place/v1/search"
+        assert "nearby(30.2311,115.0617" in params["boundary"]
+        return {
+            "status": 0,
+            "data": [
+                {
+                    "id": "7554185223751732838",
+                    "title": "湖北师范大学教育大楼",
+                    "category": "教育学校:大学",
+                    "address": "湖北省黄石市黄石港区",
+                    "location": {"lng": 115.06172, "lat": 30.23108},
+                    "_distance": 8,
+                },
+                {
+                    "id": "7554185223751732839",
+                    "title": "湖北师范大学问山居",
+                    "category": "教育学校:校园设施",
+                    "address": "湖北师范大学校内",
+                    "location": {"lng": 115.06145, "lat": 30.2312},
+                    "_distance": 28,
+                },
+            ],
+        }
+
+    monkeypatch.setattr(map_service, "_request_tencent_json", fake_tencent_json, raising=False)
+
+    resolve = api_client.get(
+        "/api/v1/map/poi/resolve?keyword=教育大楼&lng=115.0617&lat=30.2311",
+        headers=auth_headers(user),
+    )
+    nearby = api_client.get(
+        "/api/v1/map/poi/nearby?lng=115.0617&lat=30.2311&keyword=教育大楼",
+        headers=auth_headers(user),
+    )
+
+    assert resolve.status_code == 200
+    resolve_data = resolve.json()["data"]
+    assert resolve_data["matched_poi"]["poi_id"] == "7554185223751732838"
+    assert resolve_data["matched_poi"]["name"] == "湖北师范大学教育大楼"
+    assert resolve_data["matched_poi"]["distance_meters"] == 8
+
+    assert nearby.status_code == 200
+    nearby_data = nearby.json()["data"]
+    assert nearby_data["recommended"]["poi_id"] == "7554185223751732838"
+    assert [item["name"] for item in nearby_data["candidates"]] == [
+        "湖北师范大学教育大楼",
+        "湖北师范大学问山居",
+    ]
 
 
 def test_admin_can_edit_map_point_and_location(api_client, db_session):

@@ -85,6 +85,52 @@ def search_map(
     return api_success(data=data, trace_id=request.state.trace_id)
 
 
+@router.get("/poi/resolve", summary="Resolve native Tencent POI tap")
+def resolve_poi(
+    request: Request,
+    keyword: str = Query(default="", max_length=128),
+    lng: float = Query(),
+    lat: float = Query(),
+    radius: int = Query(default=120, ge=10, le=1000),
+    limit: int = Query(default=5, ge=1, le=20),
+    current_user: User = Depends(require_profile_completed),
+):
+    data = service.resolve_poi(keyword=keyword, lng=lng, lat=lat, radius=radius, limit=limit)
+    return api_success(data=data, trace_id=request.state.trace_id)
+
+
+@router.get("/poi/nearby", summary="Recommend nearby Tencent POIs")
+def nearby_pois(
+    request: Request,
+    lng: float = Query(),
+    lat: float = Query(),
+    keyword: str | None = Query(default=None, max_length=128),
+    radius: int = Query(default=180, ge=10, le=1000),
+    limit: int = Query(default=8, ge=1, le=20),
+    current_user: User = Depends(require_profile_completed),
+):
+    data = service.nearby_pois(lng=lng, lat=lat, keyword=keyword, radius=radius, limit=limit)
+    return api_success(data=data, trace_id=request.state.trace_id)
+
+
+@router.get("/route/walking", summary="Get Tencent walking route between two coordinates")
+def walking_route(
+    request: Request,
+    from_lng: float = Query(),
+    from_lat: float = Query(),
+    to_lng: float = Query(),
+    to_lat: float = Query(),
+    current_user: User = Depends(require_profile_completed),
+):
+    data = service.walking_route_between(
+        from_lng=from_lng,
+        from_lat=from_lat,
+        to_lng=to_lng,
+        to_lat=to_lat,
+    )
+    return api_success(data=data, trace_id=request.state.trace_id)
+
+
 @router.get("/points/{point_id}/summary", summary="Get map point summary card")
 def point_summary(
     point_id: UUID,

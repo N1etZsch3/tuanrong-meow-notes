@@ -24,12 +24,20 @@ class TaskMapPointRequest(BaseModel):
     lng: float
     lat: float
     location_name: str = Field(min_length=1, max_length=128)
-    location_detail: str | None = None
+    location_detail: str = Field(min_length=1, max_length=255)
     route_instruction: str | None = None
     landmark_hint: str | None = None
     entrance_hint: str | None = None
     amap_poi_id: str | None = Field(default=None, max_length=128)
     amap_address: str | None = Field(default=None, max_length=255)
+    tencent_poi_id: str | None = Field(default=None, max_length=128)
+    tencent_poi_name: str | None = Field(default=None, max_length=128)
+    tencent_poi_address: str | None = Field(default=None, max_length=255)
+    tencent_poi_category: str | None = Field(default=None, max_length=128)
+    tencent_poi_lng: float | None = None
+    tencent_poi_lat: float | None = None
+    tencent_poi_distance_meters: int | None = None
+    tencent_poi_match_method: str | None = Field(default=None, max_length=32)
 
 
 class SummerFeedingTaskCreateRequest(BaseModel):

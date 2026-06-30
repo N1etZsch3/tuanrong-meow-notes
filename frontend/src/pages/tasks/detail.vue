@@ -80,6 +80,17 @@
             </view>
           </view>
 
+          <view v-if="associatedPoi" class="section-card poi-section">
+            <text class="section-title">公共地点</text>
+            <text class="section-line">名称：{{ associatedPoi.name }}</text>
+            <text class="section-line">
+              类别：{{ associatedPoi.category || "腾讯地图点位" }}
+            </text>
+            <text class="section-line">
+              地址：{{ associatedPoi.address || "暂无地址" }}
+            </text>
+          </view>
+
           <view class="section-card">
             <text class="section-title">任务要求</text>
             <text class="section-line">物资：{{ task.required_items }}</text>
@@ -204,6 +215,7 @@ const heroPhotos = computed(() => {
 });
 const currentExecution = computed(() => task.value?.current_execution || task.value?.next_execution || null);
 const currentDateText = computed(() => formatTaskDate(currentExecution.value?.execute_date));
+const associatedPoi = computed(() => task.value?.map_point.associated_poi || null);
 const canCheckin = computed(() => Boolean(task.value?.actions.can_checkin && currentExecution.value));
 const canAdminEditTask = computed(() =>
   Boolean(userStore.isAdmin && task.value?.actions.can_admin_edit),

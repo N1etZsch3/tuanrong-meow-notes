@@ -113,6 +113,14 @@ describe("tasks api", () => {
           lng: 115.061742,
           lat: 30.22532684,
           route_instruction: "",
+          tencent_poi_id: "7554185223751732838",
+          tencent_poi_name: "湖北师范大学教育大楼",
+          tencent_poi_address: "湖北省黄石市黄石港区",
+          tencent_poi_category: "教育学校:大学",
+          tencent_poi_lng: 115.0617,
+          tencent_poi_lat: 30.2311,
+          tencent_poi_distance_meters: 42,
+          tencent_poi_match_method: "admin_selected",
         },
         photos: [
           {
@@ -135,6 +143,8 @@ describe("tasks api", () => {
           required_items: "猫粮、水",
           map_point: expect.objectContaining({
             route_instruction: "",
+            tencent_poi_id: "7554185223751732838",
+            tencent_poi_name: "湖北师范大学教育大楼",
           }),
           photos: [
             expect.objectContaining({
@@ -168,6 +178,14 @@ describe("tasks api", () => {
           lng: 115.061742,
           lat: 30.22532684,
           route_instruction: "从教学楼B后方小路进入",
+          tencent_poi_id: "7554185223751732838",
+          tencent_poi_name: "湖北师范大学教育大楼",
+          tencent_poi_address: "湖北省黄石市黄石港区",
+          tencent_poi_category: "教育学校:大学",
+          tencent_poi_lng: 115.0617,
+          tencent_poi_lat: 30.2311,
+          tencent_poi_distance_meters: 42,
+          tencent_poi_match_method: "admin_selected",
         },
         photos: [
           {
@@ -186,6 +204,9 @@ describe("tasks api", () => {
         url: expect.stringContaining("/admin/tasks/task-1"),
         data: expect.objectContaining({
           execute_dates: ["2026-07-02", "2026-07-09"],
+          map_point: expect.objectContaining({
+            tencent_poi_id: "7554185223751732838",
+          }),
           photos: [expect.objectContaining({ file_id: "asset-1" })],
         }),
       }),

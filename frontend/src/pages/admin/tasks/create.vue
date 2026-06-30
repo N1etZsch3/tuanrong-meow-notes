@@ -93,6 +93,9 @@
               <text class="location-detail">
                 {{ selectedLocation?.location_detail || "点击地图选点插入喂食点" }}
               </text>
+              <text v-if="selectedLocation?.tencent_poi_name" class="location-detail">
+                公共地点：{{ selectedLocation.tencent_poi_name }}
+              </text>
               <button class="outline-button" hover-class="button-hover" @tap="goLocation">
                 地图选点
               </button>
@@ -563,6 +566,14 @@ function applyTaskDetailToForm(task: TaskDetailDto) {
     entrance_hint: task.map_point.entrance_hint,
     amap_poi_id: task.map_point.amap_poi_id,
     amap_address: task.map_point.amap_address,
+    tencent_poi_id: task.map_point.tencent_poi_id,
+    tencent_poi_name: task.map_point.tencent_poi_name,
+    tencent_poi_address: task.map_point.tencent_poi_address,
+    tencent_poi_category: task.map_point.tencent_poi_category,
+    tencent_poi_lng: task.map_point.tencent_poi_lng,
+    tencent_poi_lat: task.map_point.tencent_poi_lat,
+    tencent_poi_distance_meters: task.map_point.tencent_poi_distance_meters,
+    tencent_poi_match_method: task.map_point.tencent_poi_match_method,
   };
   form.route_instruction = task.map_point.route_instruction || "";
   form.photos = task.photos.map(taskPhotoToUploadedRef);

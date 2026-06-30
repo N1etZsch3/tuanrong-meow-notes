@@ -46,6 +46,23 @@ export interface AmapConfigDto {
   map_style: string;
 }
 
+export interface TencentMapConfigDto {
+  map_provider: "tencent";
+  referer: string;
+}
+
+export interface TencentPoiDto {
+  provider: "tencent";
+  poi_id: string | null;
+  name: string;
+  address: string | null;
+  category: string | null;
+  lng: number;
+  lat: number;
+  distance_meters: number | null;
+  match_method: string | null;
+}
+
 export interface MapFilterOptionDto {
   key: string;
   label: string;
@@ -70,6 +87,7 @@ export interface MapInitResponse {
     search_placeholder?: string;
     bottom_default_mode?: string;
   };
+  tencent_config?: TencentMapConfigDto;
   amap_config?: AmapConfigDto;
 }
 
@@ -125,6 +143,7 @@ export interface MapSearchResultDto {
   status_label: string | null;
   highlight_text: string | null;
   sort_score: number;
+  poi?: TencentPoiDto | null;
 }
 
 export interface MapSearchResponse {
@@ -194,6 +213,7 @@ export interface MapPointSummaryResponse {
   lng: number;
   lat: number;
   distance_meters: number | null;
+  associated_poi?: TencentPoiDto | null;
   photos: MapPointPhotoDto[];
   business_summary: Record<string, unknown>;
   actions: CardActionDto[];
@@ -208,6 +228,7 @@ export interface MapNavigationResponse {
     location_name: string;
     amap_poi_id: string | null;
     amap_address: string | null;
+    associated_poi?: TencentPoiDto | null;
   };
   route_instruction: string | null;
   landmark_hint: string | null;
@@ -216,6 +237,10 @@ export interface MapNavigationResponse {
   amap_navigation: {
     mode: string;
     open_url: string;
+    web_url: string;
+  };
+  tencent_navigation?: {
+    mode: string;
     web_url: string;
   };
   route: {
@@ -268,6 +293,43 @@ export interface MapNavigationQuery {
   from_lat?: number;
   mode?: "walking";
 }
+
+export interface MapPoiResolveQuery {
+  keyword?: string;
+  lng: number;
+  lat: number;
+  radius?: number;
+  limit?: number;
+}
+
+export interface MapPoiNearbyQuery {
+  lng: number;
+  lat: number;
+  keyword?: string;
+  radius?: number;
+  limit?: number;
+}
+
+export interface MapPoiResolveResponse {
+  query: Record<string, unknown>;
+  matched_poi: TencentPoiDto;
+  candidates: TencentPoiDto[];
+}
+
+export interface MapPoiNearbyResponse {
+  query: Record<string, unknown>;
+  recommended: TencentPoiDto | null;
+  candidates: TencentPoiDto[];
+}
+
+export interface WalkingRouteQuery {
+  from_lng: number;
+  from_lat: number;
+  to_lng: number;
+  to_lat: number;
+}
+
+export type WalkingRouteResponse = MapNavigationResponse["route"];
 
 function compactQuery<T extends object>(query: T): Record<string, unknown> {
   return Object.fromEntries(
@@ -341,6 +403,42 @@ export function getMapPointNavigation(
 ): Promise<MapNavigationResponse> {
   return request<MapNavigationResponse>({
     url: `/map/points/${pointId}/navigation`,
+    method: "GET",
+    data: compactQuery(query),
+    token: accessToken,
+  });
+}
+
+export function resolveMapPoi(
+  accessToken: string,
+  query: MapPoiResolveQuery,
+): Promise<MapPoiResolveResponse> {
+  return request<MapPoiResolveResponse>({
+    url: "/map/poi/resolve",
+    method: "GET",
+    data: compactQuery(query),
+    token: accessToken,
+  });
+}
+
+export function getNearbyMapPois(
+  accessToken: string,
+  query: MapPoiNearbyQuery,
+): Promise<MapPoiNearbyResponse> {
+  return request<MapPoiNearbyResponse>({
+    url: "/map/poi/nearby",
+    method: "GET",
+    data: compactQuery(query),
+    token: accessToken,
+  });
+}
+
+export function getWalkingRoute(
+  accessToken: string,
+  query: WalkingRouteQuery,
+): Promise<WalkingRouteResponse> {
+  return request<WalkingRouteResponse>({
+    url: "/map/route/walking",
     method: "GET",
     data: compactQuery(query),
     token: accessToken,

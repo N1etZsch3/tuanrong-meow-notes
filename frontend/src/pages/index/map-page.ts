@@ -4,6 +4,7 @@ import type {
   MapPointMarkerDto,
   MapPointQuery,
   MapSearchResultDto,
+  TencentPoiDto,
 } from "@/api/map";
 
 
@@ -51,6 +52,7 @@ export interface MapShellItem {
   lat?: number;
   cover_photo_url?: string | null;
   icon_key?: string | null;
+  associated_poi?: TencentPoiDto | null;
 }
 
 export interface CampusExternalPoiResult {
@@ -396,6 +398,7 @@ export function mapSearchResultToShellItem(
     lat: result.lat,
     cover_photo_url: result.cover_photo_url,
     icon_key: result.icon_key,
+    associated_poi: result.poi || null,
   };
 }
 

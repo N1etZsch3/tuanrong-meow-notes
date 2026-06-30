@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.errors import APIError
 from app.modules.auth.models import AdminOperationLog, User
 from app.modules.map.models import MapPoint
-from app.modules.map.service import get_default_campus
+from app.modules.map.service import associated_poi_payload, get_default_campus
 from app.modules.tasks.models import (
     Task,
     TaskActivityLog,
@@ -241,6 +241,8 @@ def _cover_photo_url(task: Task) -> str | None:
 def _map_point_payload(point: MapPoint) -> dict:
     return {
         "map_point_id": point.id,
+        "campus_id": point.campus_id,
+        "area_id": point.area_id,
         "point_type": point.point_type,
         "point_scope": point.point_scope,
         "name": point.name,
@@ -253,6 +255,19 @@ def _map_point_payload(point: MapPoint) -> dict:
         "entrance_hint": point.entrance_hint,
         "amap_poi_id": point.amap_poi_id,
         "amap_address": point.amap_address,
+        "tencent_poi_id": point.tencent_poi_id,
+        "tencent_poi_name": point.tencent_poi_name,
+        "tencent_poi_address": point.tencent_poi_address,
+        "tencent_poi_category": point.tencent_poi_category,
+        "tencent_poi_lng": (
+            float(point.tencent_poi_lng) if point.tencent_poi_lng is not None else None
+        ),
+        "tencent_poi_lat": (
+            float(point.tencent_poi_lat) if point.tencent_poi_lat is not None else None
+        ),
+        "tencent_poi_distance_meters": point.tencent_poi_distance_meters,
+        "tencent_poi_match_method": point.tencent_poi_match_method,
+        "associated_poi": associated_poi_payload(point),
     }
 
 
@@ -460,6 +475,18 @@ def _create_map_point(
         geom=f"POINT({payload.map_point.lng} {payload.map_point.lat})",
         amap_poi_id=payload.map_point.amap_poi_id,
         amap_address=payload.map_point.amap_address,
+        tencent_poi_id=payload.map_point.tencent_poi_id,
+        tencent_poi_name=payload.map_point.tencent_poi_name,
+        tencent_poi_address=payload.map_point.tencent_poi_address,
+        tencent_poi_category=payload.map_point.tencent_poi_category,
+        tencent_poi_lng=Decimal(str(payload.map_point.tencent_poi_lng))
+        if payload.map_point.tencent_poi_lng is not None
+        else None,
+        tencent_poi_lat=Decimal(str(payload.map_point.tencent_poi_lat))
+        if payload.map_point.tencent_poi_lat is not None
+        else None,
+        tencent_poi_distance_meters=payload.map_point.tencent_poi_distance_meters,
+        tencent_poi_match_method=payload.map_point.tencent_poi_match_method,
         route_instruction=payload.map_point.route_instruction,
         landmark_hint=payload.map_point.landmark_hint,
         entrance_hint=payload.map_point.entrance_hint,
@@ -784,6 +811,26 @@ def update_summer_feeding_task(
         task.map_point.location_name = payload.map_point.location_name
         task.map_point.location_detail = payload.map_point.location_detail
         task.map_point.route_instruction = payload.map_point.route_instruction
+        task.map_point.landmark_hint = payload.map_point.landmark_hint
+        task.map_point.entrance_hint = payload.map_point.entrance_hint
+        task.map_point.amap_poi_id = payload.map_point.amap_poi_id
+        task.map_point.amap_address = payload.map_point.amap_address
+        task.map_point.tencent_poi_id = payload.map_point.tencent_poi_id
+        task.map_point.tencent_poi_name = payload.map_point.tencent_poi_name
+        task.map_point.tencent_poi_address = payload.map_point.tencent_poi_address
+        task.map_point.tencent_poi_category = payload.map_point.tencent_poi_category
+        task.map_point.tencent_poi_lng = (
+            Decimal(str(payload.map_point.tencent_poi_lng))
+            if payload.map_point.tencent_poi_lng is not None
+            else None
+        )
+        task.map_point.tencent_poi_lat = (
+            Decimal(str(payload.map_point.tencent_poi_lat))
+            if payload.map_point.tencent_poi_lat is not None
+            else None
+        )
+        task.map_point.tencent_poi_distance_meters = payload.map_point.tencent_poi_distance_meters
+        task.map_point.tencent_poi_match_method = payload.map_point.tencent_poi_match_method
         task.route_instruction = payload.map_point.route_instruction
     if payload.execute_dates is not None:
         execute_dates = _normalize_dates(payload.execute_dates)

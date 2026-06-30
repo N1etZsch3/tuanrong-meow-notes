@@ -1,4 +1,5 @@
 import { request } from "@/services/request";
+import type { TencentPoiDto } from "@/api/map";
 
 export interface AdminMapPointPhotoDto {
   photo_id: string;
@@ -25,6 +26,15 @@ export interface AdminMapPointDto {
   lat: number;
   amap_poi_id: string | null;
   amap_address: string | null;
+  tencent_poi_id: string | null;
+  tencent_poi_name: string | null;
+  tencent_poi_address: string | null;
+  tencent_poi_category: string | null;
+  tencent_poi_lng: number | null;
+  tencent_poi_lat: number | null;
+  tencent_poi_distance_meters: number | null;
+  tencent_poi_match_method: string | null;
+  associated_poi: TencentPoiDto | null;
   route_instruction: string | null;
   landmark_hint: string | null;
   entrance_hint: string | null;
@@ -51,6 +61,14 @@ export interface AdminMapPointUpdatePayload {
   location_detail?: string | null;
   amap_poi_id?: string | null;
   amap_address?: string | null;
+  tencent_poi_id?: string | null;
+  tencent_poi_name?: string | null;
+  tencent_poi_address?: string | null;
+  tencent_poi_category?: string | null;
+  tencent_poi_lng?: number | null;
+  tencent_poi_lat?: number | null;
+  tencent_poi_distance_meters?: number | null;
+  tencent_poi_match_method?: string | null;
   route_instruction?: string | null;
   landmark_hint?: string | null;
   entrance_hint?: string | null;

@@ -9,8 +9,8 @@ export const DEFAULT_REQUIRED_ITEMS = "猫粮、水";
 export const DEFAULT_ROUTE_INSTRUCTION = "";
 export const TASK_PUBLISH_LOCATION_STORAGE_KEY = "catmap_task_publish_location";
 export const HBNU_DEFAULT_TASK_LOCATION = {
-  location_name: "学生宿舍区北侧喂食点",
-  location_detail: "靠近教学楼B",
+  location_name: "",
+  location_detail: "",
   lng: 115.061742,
   lat: 30.22532684,
   route_instruction: DEFAULT_ROUTE_INSTRUCTION,
@@ -28,6 +28,14 @@ export interface SelectedTaskLocation {
   entrance_hint?: string | null;
   amap_poi_id?: string | null;
   amap_address?: string | null;
+  tencent_poi_id?: string | null;
+  tencent_poi_name?: string | null;
+  tencent_poi_address?: string | null;
+  tencent_poi_category?: string | null;
+  tencent_poi_lng?: number | null;
+  tencent_poi_lat?: number | null;
+  tencent_poi_distance_meters?: number | null;
+  tencent_poi_match_method?: string | null;
 }
 
 export interface FeedingTaskDraft {
@@ -116,6 +124,14 @@ export function validatePublishDraft(draft: FeedingTaskDraft): ValidationResult 
 
   if (!draft.location) {
     return { valid: false, message: "请选择任务位置" };
+  }
+
+  if (!draft.location.location_name?.trim()) {
+    return { valid: false, message: "请填写喂食点名称" };
+  }
+
+  if (!draft.location.location_detail?.trim()) {
+    return { valid: false, message: "请填写位置补充说明" };
   }
 
   if (!draft.photos.length) {

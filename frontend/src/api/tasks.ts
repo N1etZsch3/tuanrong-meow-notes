@@ -1,4 +1,5 @@
 import { request } from "@/services/request";
+import type { TencentPoiDto } from "@/api/map";
 
 export interface UploadedFileRef {
   file_id: string | null;
@@ -26,6 +27,15 @@ export interface TaskMapPointPayload {
   entrance_hint?: string | null;
   amap_poi_id?: string | null;
   amap_address?: string | null;
+  tencent_poi_id?: string | null;
+  tencent_poi_name?: string | null;
+  tencent_poi_address?: string | null;
+  tencent_poi_category?: string | null;
+  tencent_poi_lng?: number | null;
+  tencent_poi_lat?: number | null;
+  tencent_poi_distance_meters?: number | null;
+  tencent_poi_match_method?: string | null;
+  associated_poi?: TencentPoiDto | null;
 }
 
 export interface SummerFeedingTaskCreatePayload {

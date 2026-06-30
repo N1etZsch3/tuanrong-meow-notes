@@ -176,7 +176,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).not.toContain("停止模拟");
   });
 
-  it("requests backend merged internal and amap poi search results", () => {
+  it("requests backend merged internal and tencent poi search results", () => {
     expect(indexPageSource).toContain("include_external: true");
     expect(indexPageSource).not.toContain("searchCampusExternalPoisByRest");
     expect(indexPageSource).not.toContain("https://restapi.amap.com/v3/place/text");
@@ -205,6 +205,15 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("getWechatMiniProgramLocation");
     expect(indexPageSource).not.toContain("当前位置 ${point.lat");
     expect(indexPageSource).not.toContain("当前位置信息");
+    expect(indexPageSource).not.toContain("simulatedNavigationMarker.value = point");
+  });
+
+  it("enables native tencent poi tap and resolves tapped poi details through the backend", () => {
+    expect(indexPageSource).toContain(":enable-poi=\"true\"");
+    expect(indexPageSource).toContain("@poitap=\"handleNativePoiTap\"");
+    expect(indexPageSource).toContain("resolveMapPoi");
+    expect(indexPageSource).toContain("handleNativePoiTap");
+    expect(indexPageSource).toContain("matched_poi");
   });
 
   it("lowers and compacts the map title, map viewport, filter, and content drawer", () => {
@@ -419,11 +428,11 @@ describe("map page shell behavior", () => {
       mapSearchResultToShellItem({
         result_type: "external_poi",
         map_point_id: null,
-        business_id: "amap:B0FFFAKE01",
+        business_id: "tencent:7554185223751732838",
         point_type: "landmark",
-        business_type: "amap_poi",
+        business_type: "tencent_poi",
         title: "湖北师范大学教育大楼",
-        subtitle: "科教文化服务",
+        subtitle: "教育学校:大学",
         description: "湖北省黄石市黄石港区",
         icon_key: "landmark",
         cover_photo_url: null,
@@ -435,7 +444,7 @@ describe("map page shell behavior", () => {
         sort_score: 50,
       }),
     ).toMatchObject({
-      id: "amap:B0FFFAKE01",
+      id: "tencent:7554185223751732838",
       type: "landmark",
       map_point_id: undefined,
       distance_meters: null,

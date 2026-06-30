@@ -17,6 +17,11 @@ from app.modules.tasks.models import Task
 
 EARTH_RADIUS_METERS = 6_371_000
 AMAP_REST_BASE_URL = "https://restapi.amap.com"
+TENCENT_MAP_REST_BASE_URL = "https://apis.map.qq.com"
+HBNU_CAMPUS_SEARCH_BOUNDS = {
+    "south_west": {"lng": 115.0558, "lat": 30.2248},
+    "north_east": {"lng": 115.0693, "lat": 30.2342},
+}
 
 
 def as_float(value) -> float | None:
@@ -69,6 +74,17 @@ def _request_amap_json(path: str, params: dict) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
+def _request_tencent_json(path: str, params: dict) -> dict:
+    settings = get_settings()
+    key = settings.tencent_map_key.strip()
+    if not key:
+        return {}
+    query = {**params, "key": key}
+    url = f"{TENCENT_MAP_REST_BASE_URL}{path}?{urlencode(query)}"
+    with urlopen(url, timeout=settings.tencent_map_service_timeout_seconds) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 def parse_lng_lat_pair(value: str | None) -> tuple[float, float] | None:
     if not value:
         return None
@@ -88,6 +104,33 @@ def parse_amap_polyline(polyline: str | None) -> list[dict]:
         if not parsed:
             continue
         lng, lat = parsed
+        point = {"lng": lng, "lat": lat}
+        if not points or points[-1] != point:
+            points.append(point)
+    return points
+
+
+def parse_tencent_polyline(polyline) -> list[dict]:
+    if not polyline:
+        return []
+    if isinstance(polyline, list) and polyline and isinstance(polyline[0], dict):
+        points = []
+        for item in polyline:
+            lng = item.get("lng")
+            lat = item.get("lat")
+            if lng is None or lat is None:
+                continue
+            points.append({"lng": float(lng), "lat": float(lat)})
+        return points
+    if not isinstance(polyline, list) or len(polyline) < 2:
+        return []
+    values = [int(value) for value in polyline]
+    for index in range(2, len(values)):
+        values[index] = values[index - 2] + values[index]
+    points = []
+    for index in range(0, len(values) - 1, 2):
+        lat = round(values[index] / 1_000_000, 7)
+        lng = round(values[index + 1] / 1_000_000, 7)
         point = {"lng": lng, "lat": lat}
         if not points or points[-1] != point:
             points.append(point)
@@ -130,51 +173,50 @@ def build_walking_route(
         return fallback_route(from_lng=from_lng, from_lat=from_lat, to_lng=to_lng, to_lat=to_lat)
 
     try:
-        payload = _request_amap_json(
-            "/v3/direction/walking",
+        payload = _request_tencent_json(
+            "/ws/direction/v1/walking/",
             {
-                "origin": f"{format_coord(from_lng)},{format_coord(from_lat)}",
-                "destination": f"{format_coord(to_lng)},{format_coord(to_lat)}",
+                "from": f"{format_coord(from_lat)},{format_coord(from_lng)}",
+                "to": f"{format_coord(to_lat)},{format_coord(to_lng)}",
                 "output": "json",
             },
         )
     except Exception:
         return fallback_route(from_lng=from_lng, from_lat=from_lat, to_lng=to_lng, to_lat=to_lat)
 
-    if payload.get("status") != "1":
+    if payload.get("status") != 0:
         return fallback_route(from_lng=from_lng, from_lat=from_lat, to_lng=to_lng, to_lat=to_lat)
-    paths = (payload.get("route") or {}).get("paths") or []
-    if not paths:
+    routes = (payload.get("result") or {}).get("routes") or []
+    if not routes:
         return fallback_route(from_lng=from_lng, from_lat=from_lat, to_lng=to_lng, to_lat=to_lat)
 
-    path = paths[0]
-    route_points: list[dict] = []
-    steps = []
-    for step in path.get("steps") or []:
-        polyline_points = parse_amap_polyline(step.get("polyline"))
-        for point in polyline_points:
-            if not route_points or route_points[-1] != point:
-                route_points.append(point)
-        steps.append(
-            {
-                "instruction": step.get("instruction") or "",
-                "distance_meters": int(float(step.get("distance") or 0)),
-                "duration_seconds": int(float(step.get("duration") or 0)),
-                "points": polyline_points,
-            }
-        )
-
+    route = routes[0]
+    route_points = parse_tencent_polyline(route.get("polyline"))
     if not route_points:
         route_points = [
             {"lng": from_lng, "lat": from_lat},
             {"lng": to_lng, "lat": to_lat},
         ]
+    steps = []
+    for step in route.get("steps") or []:
+        polyline_points = parse_tencent_polyline(step.get("polyline"))
+        if not polyline_points and step.get("polyline_idx"):
+            start, end = step.get("polyline_idx")[:2]
+            polyline_points = route_points[start : end + 1]
+        steps.append(
+            {
+                "instruction": step.get("instruction") or "",
+                "distance_meters": int(float(step.get("distance") or 0)),
+                "duration_seconds": int(float(step.get("duration") or 0) * 60),
+                "points": polyline_points,
+            }
+        )
 
     return {
-        "provider": "amap",
+        "provider": "tencent",
         "fallback": False,
-        "distance_meters": int(float(path.get("distance") or 0)),
-        "duration_seconds": int(float(path.get("duration") or 0)),
+        "distance_meters": int(float(route.get("distance") or 0)),
+        "duration_seconds": int(float(route.get("duration") or 0) * 60),
         "points": route_points,
         "steps": steps,
     }
@@ -254,6 +296,133 @@ def point_cover_photo(point: MapPoint) -> str | None:
     if first_photo is None:
         return None
     return first_photo.thumbnail_url or first_photo.file_url
+
+
+def associated_poi_payload(point: MapPoint) -> dict | None:
+    if not point.tencent_poi_id and not point.tencent_poi_name:
+        return None
+    lng = as_float(point.tencent_poi_lng)
+    lat = as_float(point.tencent_poi_lat)
+    return {
+        "provider": "tencent",
+        "poi_id": point.tencent_poi_id,
+        "name": point.tencent_poi_name,
+        "address": point.tencent_poi_address,
+        "category": point.tencent_poi_category,
+        "lng": lng,
+        "lat": lat,
+        "distance_meters": point.tencent_poi_distance_meters,
+        "match_method": point.tencent_poi_match_method,
+    }
+
+
+def tencent_bounds_boundary() -> str:
+    south_west = HBNU_CAMPUS_SEARCH_BOUNDS["south_west"]
+    north_east = HBNU_CAMPUS_SEARCH_BOUNDS["north_east"]
+    return (
+        "rectangle("
+        f"{south_west['lat']},{south_west['lng']},"
+        f"{north_east['lat']},{north_east['lng']}"
+        ")"
+    )
+
+
+def is_inside_campus_bounds(*, lng: float, lat: float) -> bool:
+    south_west = HBNU_CAMPUS_SEARCH_BOUNDS["south_west"]
+    north_east = HBNU_CAMPUS_SEARCH_BOUNDS["north_east"]
+    return (
+        south_west["lng"] <= lng <= north_east["lng"]
+        and south_west["lat"] <= lat <= north_east["lat"]
+    )
+
+
+def tencent_poi_payload(
+    raw: dict,
+    *,
+    keyword: str,
+    anchor_lng: float | None = None,
+    anchor_lat: float | None = None,
+    match_method: str,
+) -> dict | None:
+    location = raw.get("location") or {}
+    try:
+        lng = float(location.get("lng"))
+        lat = float(location.get("lat"))
+    except (TypeError, ValueError):
+        return None
+    if not is_inside_campus_bounds(lng=lng, lat=lat):
+        return None
+    poi_id = raw.get("id") or raw.get("uid") or f"{keyword}-{format_coord(lng)}-{format_coord(lat)}"
+    distance = raw.get("_distance")
+    if distance is None:
+        distance = raw.get("distance")
+    try:
+        distance_value = int(float(distance)) if distance is not None else None
+    except (TypeError, ValueError):
+        distance_value = None
+    if distance_value is None:
+        distance_value = distance_meters(
+            from_lng=anchor_lng,
+            from_lat=anchor_lat,
+            to_lng=lng,
+            to_lat=lat,
+        )
+    return {
+        "provider": "tencent",
+        "poi_id": str(poi_id),
+        "name": raw.get("title") or raw.get("name") or keyword,
+        "address": raw.get("address") or None,
+        "category": raw.get("category") or raw.get("type") or None,
+        "lng": lng,
+        "lat": lat,
+        "distance_meters": distance_value,
+        "match_method": match_method,
+    }
+
+
+def search_tencent_pois(
+    *,
+    keyword: str,
+    boundary: str,
+    anchor_lng: float | None = None,
+    anchor_lat: float | None = None,
+    limit: int = 20,
+    match_method: str = "search",
+) -> list[dict]:
+    try:
+        payload = _request_tencent_json(
+            "/ws/place/v1/search",
+            {
+                "keyword": keyword,
+                "boundary": boundary,
+                "orderby": "_distance",
+                "page_size": str(min(max(limit, 1), 20)),
+                "page_index": "1",
+                "output": "json",
+            },
+        )
+    except Exception:
+        return []
+    if payload.get("status") != 0:
+        return []
+    pois = []
+    for raw in payload.get("data") or []:
+        poi = tencent_poi_payload(
+            raw,
+            keyword=keyword,
+            anchor_lng=anchor_lng,
+            anchor_lat=anchor_lat,
+            match_method=match_method,
+        )
+        if poi:
+            pois.append(poi)
+    pois.sort(
+        key=lambda item: (
+            item["distance_meters"] if item["distance_meters"] is not None else 999_999,
+            item["name"],
+        )
+    )
+    return pois
 
 
 def point_business_type(point: MapPoint, configs: dict[str, MapMarkerConfig]) -> str | None:
@@ -361,6 +530,10 @@ def point_marker_payload(
 ) -> dict:
     lng = as_float(point.lng)
     lat = as_float(point.lat)
+    extra = task_marker_extra(task)
+    associated_poi = associated_poi_payload(point)
+    if associated_poi:
+        extra["associated_poi"] = associated_poi
     return {
         "point_id": point.id,
         "point_type": point.point_type,
@@ -388,7 +561,7 @@ def point_marker_payload(
             to_lng=lng,
             to_lat=lat,
         ),
-        "extra": task_marker_extra(task),
+        "extra": extra,
     }
 
 
@@ -420,6 +593,10 @@ def map_init(db: Session, campus_id: UUID | None = None) -> dict:
             "show_title": True,
             "search_placeholder": "搜索猫咪、任务、物资点、地标",
             "bottom_default_mode": "auto",
+        },
+        "tencent_config": {
+            "map_provider": "tencent",
+            "referer": settings.tencent_map_referer,
         },
         "amap_config": {
             "web_key": settings.amap_web_key,
@@ -582,6 +759,9 @@ def normalized_search_text(point: MapPoint) -> str:
         point.landmark_hint,
         point.entrance_hint,
         point.amap_address,
+        point.tencent_poi_name,
+        point.tencent_poi_address,
+        point.tencent_poi_category,
     ]
     return " ".join(value for value in values if value).lower()
 
@@ -594,60 +774,124 @@ def external_poi_search_results(
     user_lat: float | None = None,
     limit: int = 20,
 ) -> list[dict]:
-    try:
-        payload = _request_amap_json(
-            "/v3/place/text",
-            {
-                "keywords": keyword,
-                "city": "黄石",
-                "citylimit": "false",
-                "offset": str(min(max(limit, 1), 25)),
-                "page": "1",
-                "extensions": "base",
-                "output": "json",
-                "location": f"{format_coord(campus.center_lng)},{format_coord(campus.center_lat)}",
-            },
-        )
-    except Exception:
-        return []
-
-    if payload.get("status") != "1":
-        return []
-
+    pois = search_tencent_pois(
+        keyword=keyword,
+        boundary=tencent_bounds_boundary(),
+        anchor_lng=user_lng if user_lng is not None else as_float(campus.center_lng),
+        anchor_lat=user_lat if user_lat is not None else as_float(campus.center_lat),
+        limit=limit,
+        match_method="search",
+    )
     results = []
-    for index, poi in enumerate(payload.get("pois") or []):
-        parsed = parse_lng_lat_pair(poi.get("location"))
-        if not parsed:
-            continue
-        lng, lat = parsed
-        poi_id = poi.get("id") or f"{keyword}-{index}"
-        distance = distance_meters(
-            from_lng=user_lng,
-            from_lat=user_lat,
-            to_lng=lng,
-            to_lat=lat,
-        )
+    for index, poi in enumerate(pois):
         results.append(
             {
                 "result_type": "external_poi",
                 "map_point_id": None,
-                "business_id": f"amap:{poi_id}",
+                "business_id": f"tencent:{poi['poi_id']}",
                 "point_type": "landmark",
-                "business_type": "amap_poi",
-                "title": poi.get("name") or keyword,
-                "subtitle": poi.get("type") or "高德地图点位",
-                "description": poi.get("address") or None,
+                "business_type": "tencent_poi",
+                "title": poi["name"],
+                "subtitle": poi["category"] or "腾讯地图点位",
+                "description": poi["address"],
                 "icon_key": "landmark",
                 "cover_photo_url": None,
-                "lng": lng,
-                "lat": lat,
-                "distance_meters": distance,
+                "lng": poi["lng"],
+                "lat": poi["lat"],
+                "distance_meters": poi["distance_meters"],
                 "status_label": "地图点位",
                 "highlight_text": keyword,
                 "sort_score": 50 - index,
+                "poi": poi,
             }
         )
     return results
+
+
+def resolve_poi(
+    *,
+    keyword: str,
+    lng: float,
+    lat: float,
+    radius: int = 120,
+    limit: int = 5,
+) -> dict:
+    normalized_keyword = keyword.strip() or "湖北师范大学"
+    boundary = f"nearby({format_coord(lat)},{format_coord(lng)},{max(min(radius, 1000), 10)})"
+    candidates = search_tencent_pois(
+        keyword=normalized_keyword,
+        boundary=boundary,
+        anchor_lng=lng,
+        anchor_lat=lat,
+        limit=limit,
+        match_method="poi_tap",
+    )
+    matched = candidates[0] if candidates else {
+        "provider": "tencent",
+        "poi_id": None,
+        "name": normalized_keyword,
+        "address": None,
+        "category": None,
+        "lng": lng,
+        "lat": lat,
+        "distance_meters": 0,
+        "match_method": "poi_tap_fallback",
+    }
+    return {
+        "query": {
+            "keyword": normalized_keyword,
+            "lng": lng,
+            "lat": lat,
+            "radius": radius,
+        },
+        "matched_poi": matched,
+        "candidates": candidates,
+    }
+
+
+def nearby_pois(
+    *,
+    lng: float,
+    lat: float,
+    keyword: str | None = None,
+    radius: int = 180,
+    limit: int = 8,
+) -> dict:
+    normalized_keyword = (keyword or "湖北师范大学").strip() or "湖北师范大学"
+    boundary = f"nearby({format_coord(lat)},{format_coord(lng)},{max(min(radius, 1000), 10)})"
+    candidates = search_tencent_pois(
+        keyword=normalized_keyword,
+        boundary=boundary,
+        anchor_lng=lng,
+        anchor_lat=lat,
+        limit=limit,
+        match_method="nearby",
+    )
+    return {
+        "query": {
+            "keyword": normalized_keyword,
+            "lng": lng,
+            "lat": lat,
+            "radius": radius,
+        },
+        "recommended": candidates[0] if candidates else None,
+        "candidates": candidates,
+    }
+
+
+def walking_route_between(
+    *,
+    from_lng: float,
+    from_lat: float,
+    to_lng: float,
+    to_lat: float,
+) -> dict:
+    return build_walking_route(
+        from_lng=from_lng,
+        from_lat=from_lat,
+        to_lng=to_lng,
+        to_lat=to_lat,
+    )
 
 
 def search(
@@ -827,6 +1071,7 @@ def summary(
             to_lng=lng,
             to_lat=lat,
         ),
+        "associated_poi": associated_poi_payload(point),
         "photos": [
             photo_payload(photo)
             for photo in sorted(point.photos, key=lambda item: item.sort_order)
@@ -880,6 +1125,7 @@ def navigation(
     lat = as_float(point.lat)
     title = point.location_name or point.name
     encoded_title = quote(title)
+    encoded_referer = quote(get_settings().tencent_map_referer)
     return {
         "point_id": point.id,
         "title": point.name,
@@ -889,6 +1135,7 @@ def navigation(
             "location_name": title,
             "amap_poi_id": point.amap_poi_id,
             "amap_address": point.amap_address,
+            "associated_poi": associated_poi_payload(point),
         },
         "route_instruction": point.route_instruction,
         "landmark_hint": point.landmark_hint,
@@ -902,6 +1149,13 @@ def navigation(
             "mode": "walking",
             "open_url": f"amapuri://route/plan/?dlat={lat}&dlon={lng}&dev=0&t=2",
             "web_url": f"https://uri.amap.com/navigation?to={lng},{lat},{encoded_title}&mode=walk",
+        },
+        "tencent_navigation": {
+            "mode": "walking",
+            "web_url": (
+                "https://apis.map.qq.com/uri/v1/routeplan"
+                f"?type=walk&to={encoded_title}&tocoord={lat},{lng}&referer={encoded_referer}"
+            ),
         },
         "route": build_walking_route(
             from_lng=from_lng,
@@ -982,6 +1236,15 @@ def admin_point_payload(point: MapPoint) -> dict:
         "lat": as_float(point.lat),
         "amap_poi_id": point.amap_poi_id,
         "amap_address": point.amap_address,
+        "tencent_poi_id": point.tencent_poi_id,
+        "tencent_poi_name": point.tencent_poi_name,
+        "tencent_poi_address": point.tencent_poi_address,
+        "tencent_poi_category": point.tencent_poi_category,
+        "tencent_poi_lng": as_float(point.tencent_poi_lng),
+        "tencent_poi_lat": as_float(point.tencent_poi_lat),
+        "tencent_poi_distance_meters": point.tencent_poi_distance_meters,
+        "tencent_poi_match_method": point.tencent_poi_match_method,
+        "associated_poi": associated_poi_payload(point),
         "route_instruction": point.route_instruction,
         "landmark_hint": point.landmark_hint,
         "entrance_hint": point.entrance_hint,
@@ -1013,6 +1276,14 @@ ADMIN_POINT_EDITABLE_FIELDS = {
     "location_detail",
     "amap_poi_id",
     "amap_address",
+    "tencent_poi_id",
+    "tencent_poi_name",
+    "tencent_poi_address",
+    "tencent_poi_category",
+    "tencent_poi_lng",
+    "tencent_poi_lat",
+    "tencent_poi_distance_meters",
+    "tencent_poi_match_method",
     "route_instruction",
     "landmark_hint",
     "entrance_hint",

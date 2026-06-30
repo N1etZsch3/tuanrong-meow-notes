@@ -57,6 +57,36 @@
             <text class="coord-value">{{ selectedLocation.lat.toFixed(6) }}</text>
           </view>
         </view>
+        <view v-if="currentAssociatedPoi" class="poi-card is-linked">
+          <text class="poi-title">已关联公共地点：{{ currentAssociatedPoi.name }}</text>
+          <text class="poi-desc">
+            {{ currentAssociatedPoi.category || "腾讯地图点位" }} · {{ currentAssociatedPoi.address || "暂无地址" }}
+          </text>
+          <button class="poi-ghost-button" hover-class="button-hover" @tap="clearAssociatedPoi">
+            取消关联
+          </button>
+        </view>
+        <view v-else-if="poiLoadState === 'loading'" class="poi-card">
+          <text class="poi-title">正在查找附近公共地点</text>
+          <text class="poi-desc">请稍候</text>
+        </view>
+        <view v-else-if="recommendedPoi" class="poi-card">
+          <text class="poi-title">附近公共地点：{{ recommendedPoi.name }}</text>
+          <text class="poi-desc">
+            {{ recommendedPoi.category || "腾讯地图点位" }} · 距离 {{ recommendedPoi.distance_meters ?? "未知" }}m
+          </text>
+          <view class="poi-actions">
+            <button class="poi-button" hover-class="button-hover" @tap="associateSelectedPoi">
+              关联
+            </button>
+            <button class="poi-ghost-button" hover-class="button-hover" @tap="switchAssociatedPoi">
+              换一个
+            </button>
+            <button class="poi-ghost-button" hover-class="button-hover" @tap="clearAssociatedPoi">
+              不关联
+            </button>
+          </view>
+        </view>
         <text class="info-line">该位置将用于后续喂食任务</text>
       </view>
     </view>
@@ -71,20 +101,47 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive } from "vue";
+import { computed, reactive, ref } from "vue";
 
+import { getNearbyMapPois, type TencentPoiDto } from "@/api/map";
 import {
   HBNU_DEFAULT_TASK_LOCATION,
   TASK_PUBLISH_LOCATION_STORAGE_KEY,
   type SelectedTaskLocation,
 } from "@/pages/tasks/task-page";
+import { useUserStore } from "@/stores/user";
 
 import feedingPendingIcon from "../../../../素材/svg/地图点/失败任务.svg";
 import loadingBackground from "../../../../素材/加载页素材/加载页背景.jpg";
 
+type PoiLoadState = "idle" | "loading" | "ready" | "error";
+
+const userStore = useUserStore();
 const selectedLocation = reactive<SelectedTaskLocation>({
   ...HBNU_DEFAULT_TASK_LOCATION,
 });
+const associatedPoiCandidates = ref<TencentPoiDto[]>([]);
+const associatedPoiIndex = ref(0);
+const poiLoadState = ref<PoiLoadState>("idle");
+const currentAssociatedPoi = computed<TencentPoiDto | null>(() => {
+  if (!selectedLocation.tencent_poi_id && !selectedLocation.tencent_poi_name) {
+    return null;
+  }
+  return {
+    provider: "tencent",
+    poi_id: selectedLocation.tencent_poi_id || null,
+    name: selectedLocation.tencent_poi_name || "",
+    address: selectedLocation.tencent_poi_address || null,
+    category: selectedLocation.tencent_poi_category || null,
+    lng: selectedLocation.tencent_poi_lng || selectedLocation.lng,
+    lat: selectedLocation.tencent_poi_lat || selectedLocation.lat,
+    distance_meters: selectedLocation.tencent_poi_distance_meters ?? null,
+    match_method: selectedLocation.tencent_poi_match_method || "admin_selected",
+  };
+});
+const recommendedPoi = computed(
+  () => associatedPoiCandidates.value[associatedPoiIndex.value] || null,
+);
 const markers = computed(() => [
   {
     id: 1,
@@ -94,7 +151,7 @@ const markers = computed(() => [
     width: 42,
     height: 42,
     callout: {
-      content: selectedLocation.location_name,
+      content: selectedLocation.location_name || "喂食点坐标",
       color: "#111827",
       fontSize: 12,
       borderRadius: 8,
@@ -114,19 +171,88 @@ function selectLocationFromMap(event: any) {
 
   selectedLocation.lng = Number(lng.toFixed(7));
   selectedLocation.lat = Number(lat.toFixed(7));
-  if (!selectedLocation.location_name || selectedLocation.location_name === "学生宿舍区北侧喂食点") {
-    selectedLocation.location_name = "自选喂食点";
-  }
-  selectedLocation.location_detail = "请补充具体参照物";
+  clearAssociatedPoi({ keepCandidates: false });
+  void loadNearbyPoiCandidates();
 }
 
 function resetLocation() {
   Object.assign(selectedLocation, HBNU_DEFAULT_TASK_LOCATION);
+  clearAssociatedPoi({ keepCandidates: false });
+  poiLoadState.value = "idle";
+}
+
+async function loadNearbyPoiCandidates() {
+  const token = await userStore.ensureFreshAccessToken();
+  if (!token) {
+    poiLoadState.value = "error";
+    return;
+  }
+  poiLoadState.value = "loading";
+  try {
+    const response = await getNearbyMapPois(token, {
+      lng: selectedLocation.lng,
+      lat: selectedLocation.lat,
+      keyword: selectedLocation.location_name || "湖北师范大学",
+      radius: 180,
+      limit: 6,
+    });
+    associatedPoiCandidates.value = response.candidates;
+    associatedPoiIndex.value = 0;
+    poiLoadState.value = "ready";
+  } catch {
+    associatedPoiCandidates.value = [];
+    poiLoadState.value = "error";
+  }
+}
+
+function associateSelectedPoi() {
+  const poi = recommendedPoi.value;
+  if (!poi) {
+    return;
+  }
+  selectedLocation.tencent_poi_id = poi.poi_id;
+  selectedLocation.tencent_poi_name = poi.name;
+  selectedLocation.tencent_poi_address = poi.address;
+  selectedLocation.tencent_poi_category = poi.category;
+  selectedLocation.tencent_poi_lng = poi.lng;
+  selectedLocation.tencent_poi_lat = poi.lat;
+  selectedLocation.tencent_poi_distance_meters = poi.distance_meters;
+  selectedLocation.tencent_poi_match_method = "admin_selected";
+  if (!selectedLocation.location_detail?.trim()) {
+    selectedLocation.location_detail = poi.address || poi.name;
+  }
+}
+
+function switchAssociatedPoi() {
+  if (!associatedPoiCandidates.value.length) {
+    return;
+  }
+  associatedPoiIndex.value =
+    (associatedPoiIndex.value + 1) % associatedPoiCandidates.value.length;
+}
+
+function clearAssociatedPoi(options: { keepCandidates?: boolean } = {}) {
+  selectedLocation.tencent_poi_id = null;
+  selectedLocation.tencent_poi_name = null;
+  selectedLocation.tencent_poi_address = null;
+  selectedLocation.tencent_poi_category = null;
+  selectedLocation.tencent_poi_lng = null;
+  selectedLocation.tencent_poi_lat = null;
+  selectedLocation.tencent_poi_distance_meters = null;
+  selectedLocation.tencent_poi_match_method = null;
+  if (!options.keepCandidates) {
+    associatedPoiCandidates.value = [];
+    associatedPoiIndex.value = 0;
+  }
 }
 
 function confirmLocation() {
   if (!selectedLocation.location_name.trim()) {
     uni.showToast({ title: "请输入喂食点名称", icon: "none" });
+    return;
+  }
+  if (!selectedLocation.location_detail?.trim()) {
+    uni.showToast({ title: "请输入位置补充说明", icon: "none" });
     return;
   }
 
@@ -318,6 +444,77 @@ function goBack() {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18rpx;
+}
+
+.poi-card {
+  margin-top: 22rpx;
+  padding: 18rpx;
+  border-radius: 20rpx;
+  background: #f6fbf2;
+  border: 2rpx solid rgba(40, 124, 49, 0.14);
+}
+
+.poi-card.is-linked {
+  background: #edf8e8;
+}
+
+.poi-title,
+.poi-desc {
+  display: block;
+}
+
+.poi-title {
+  color: #1f6f29;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.poi-desc {
+  margin-top: 8rpx;
+  color: #65705f;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.poi-actions {
+  margin-top: 16rpx;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10rpx;
+}
+
+.poi-button,
+.poi-ghost-button {
+  height: 58rpx;
+  margin: 0;
+  padding: 0 10rpx;
+  border: 0;
+  border-radius: 18rpx;
+  font-size: 22rpx;
+  font-weight: 900;
+  line-height: 58rpx;
+}
+
+.poi-button::after,
+.poi-ghost-button::after {
+  border: 0;
+}
+
+.poi-button {
+  background: #287c31;
+  color: #ffffff;
+}
+
+.poi-ghost-button {
+  margin-top: 14rpx;
+  background: #ffffff;
+  color: #287c31;
+}
+
+.poi-actions .poi-ghost-button {
+  margin-top: 0;
 }
 
 .coord-label {

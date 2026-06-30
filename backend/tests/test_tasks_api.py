@@ -54,7 +54,7 @@ def seed_campus(db: Session) -> Campus:
         default_zoom=17,
         min_zoom=15,
         max_zoom=20,
-        map_provider="amap",
+        map_provider="tencent",
     )
     db.add(campus)
     db.add(
@@ -90,6 +90,14 @@ def publish_payload(campus: Campus) -> dict:
             "route_instruction": "到达教学楼B后沿右侧小路进入。",
             "landmark_hint": "教学楼B",
             "entrance_hint": "从宿舍区北侧小路进入最近",
+            "tencent_poi_id": "7554185223751732838",
+            "tencent_poi_name": "湖北师范大学教育大楼",
+            "tencent_poi_address": "湖北省黄石市黄石港区",
+            "tencent_poi_category": "教育学校:大学",
+            "tencent_poi_lng": 115.0617,
+            "tencent_poi_lat": 30.2311,
+            "tencent_poi_distance_meters": 42,
+            "tencent_poi_match_method": "admin_selected",
         },
         "execute_dates": ["2026-07-02", "2026-07-09", "2026-07-16"],
         "photos": [
@@ -148,6 +156,7 @@ def test_admin_can_publish_summer_feeding_task_and_map_marker_is_visible(
     assert marker["business_id"] == data["task_id"]
     assert marker["marker_key"] == "task_feeding"
     assert marker["extra"]["next_execute_date"] == "2026-07-02"
+    assert marker["extra"]["associated_poi"]["poi_id"] == "7554185223751732838"
 
 
 def test_member_list_and_detail_include_dates_photos_location_materials_and_activities(
@@ -181,6 +190,19 @@ def test_member_list_and_detail_include_dates_photos_location_materials_and_acti
     assert detail["description"] == "暑假投喂，注意清理食盆周边。"
     assert detail["required_items"] == "猫粮、水"
     assert detail["map_point"]["route_instruction"] == "到达教学楼B后沿右侧小路进入。"
+    assert detail["map_point"]["lng"] == 115.06321
+    assert detail["map_point"]["lat"] == 30.23108
+    assert detail["map_point"]["associated_poi"] == {
+        "provider": "tencent",
+        "poi_id": "7554185223751732838",
+        "name": "湖北师范大学教育大楼",
+        "address": "湖北省黄石市黄石港区",
+        "category": "教育学校:大学",
+        "lng": 115.0617,
+        "lat": 30.2311,
+        "distance_meters": 42,
+        "match_method": "admin_selected",
+    }
     assert detail["photos"][0]["is_cover"] is True
     assert [item["execute_date"] for item in detail["execution_dates"]] == [
         "2026-07-02",

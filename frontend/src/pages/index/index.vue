@@ -32,9 +32,11 @@
         :min-scale="Math.round(campusMapConfig.min_zoom)"
         :max-scale="Math.round(campusMapConfig.max_zoom)"
         :show-location="Boolean(userLocation)"
+        :enable-poi="true"
         :enable-zoom="true"
         :enable-scroll="true"
         @markertap="handleNativeMarkerTap"
+        @poitap="handleNativePoiTap"
         @markerlongpress="handleNativeMarkerLongPress"
         @longpress="handleMarkerLongPress"
         @regionchange="handleMapRegionChange"
@@ -199,6 +201,12 @@
               · 距离 {{ formatDistance(selectedSummary.distance_meters) }}
             </text>
           </view>
+          <view v-if="associatedPoi" class="summary-poi">
+            <text class="summary-poi-title">公共地点：{{ associatedPoi.name }}</text>
+            <text class="summary-poi-desc">
+              {{ associatedPoi.category || "腾讯地图点位" }} · {{ associatedPoi.address || "暂无地址" }}
+            </text>
+          </view>
           <text v-if="selectedSummary.route_instruction" class="summary-route">
             {{ selectedSummary.route_instruction }}
           </text>
@@ -269,6 +277,8 @@ import {
   getMapPointNavigation,
   getMapPointSummary,
   getMapPoints,
+  getWalkingRoute,
+  resolveMapPoi,
   searchMap,
   type CardActionDto,
   type MapInitResponse,
@@ -352,6 +362,7 @@ interface PendingMapNavigation {
     route_instruction?: string | null;
     lng?: number | null;
     lat?: number | null;
+    associated_poi?: MapPointSummaryResponse["associated_poi"];
   };
   route_instruction?: string | null;
 }
@@ -472,6 +483,7 @@ const summaryActions = computed<CardActionDto[]>(() => {
   }
   return selectedSummary.value.actions;
 });
+const associatedPoi = computed(() => selectedSummary.value?.associated_poi || null);
 const navigationRouteDistance = computed(() =>
   navigationRoute.value ? formatDistance(navigationRoute.value.distance_meters) : "未知",
 );
@@ -912,16 +924,16 @@ function clearNativeRoute() {
 
 function renderNativeRoute(from: LngLat, destination: LngLat, routePoints?: LngLat[]) {
   clearNativeRoute();
-  const points = (routePoints && routePoints.length >= 2 ? routePoints : [from, destination])
+  const routeLngLatPoints = (routePoints && routePoints.length >= 2 ? routePoints : [from, destination])
     .filter(isFiniteLngLat)
     .map((point) => clampLngLatToBounds(point, campusMapConfig.value.limit_bounds));
-  nativeRoutePoints.value = points
+  nativeRoutePoints.value = routeLngLatPoints
     .map((point) => toNativeMapPoint(point))
     .filter(
       (point): point is { longitude: number; latitude: number } =>
         Boolean(point),
     );
-  simulatedNavigationMarker.value = points[0] || from;
+  simulatedNavigationMarker.value = routeLngLatPoints[0] || from;
   centerMapToPoint({
     lng: (from.lng + destination.lng) / 2,
     lat: (from.lat + destination.lat) / 2,
@@ -943,13 +955,13 @@ function startNavigationTracking() {
       return;
     }
     navigationSimulationIndex += 1;
-    const point = navigationRoute.value.points[navigationSimulationIndex];
-    if (!point) {
+    const routePoint = navigationRoute.value.points[navigationSimulationIndex];
+    if (!routePoint) {
       stopNavigationTracking();
       return;
     }
-    simulatedNavigationMarker.value = point;
-    setUserLocation(point);
+    simulatedNavigationMarker.value = routePoint;
+    setUserLocation(routePoint);
   }, 1000);
 }
 
@@ -970,13 +982,18 @@ function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | nul
   }
 
   const isTask = item.type === "emergency_task" || item.type === "daily_task";
+  const isExternalPoi = Boolean(
+    item.associated_poi || (!item.map_point_id && item.type === "landmark"),
+  );
   const pointType = isTask ? "task" : item.type;
   const businessType =
-    item.type === "emergency_task"
-      ? "emergency"
-      : item.type === "daily_task"
-        ? "daily"
-        : null;
+    isExternalPoi
+      ? "tencent_poi"
+      : item.type === "emergency_task"
+        ? "emergency"
+        : item.type === "daily_task"
+          ? "daily"
+          : null;
 
   return {
     point_id: item.map_point_id || item.id,
@@ -1002,7 +1019,8 @@ function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | nul
     distance_meters: item.distance_meters,
     extra: {
       source: "map_search",
-      is_external_poi: !item.map_point_id,
+      is_external_poi: isExternalPoi,
+      associated_poi: item.associated_poi || null,
     },
   };
 }
@@ -1017,7 +1035,7 @@ function buildExternalSummaryFromItem(item: MapShellItem): MapPointSummaryRespon
   return {
     point_id: item.id,
     point_type: "landmark",
-    business_type: "amap_poi",
+    business_type: "tencent_poi",
     business_id: item.id,
     title: item.title,
     subtitle: item.subtitle,
@@ -1032,6 +1050,7 @@ function buildExternalSummaryFromItem(item: MapShellItem): MapPointSummaryRespon
     lng: item.lng,
     lat: item.lat,
     distance_meters: item.distance_meters,
+    associated_poi: item.associated_poi || null,
     photos: [],
     business_summary: {},
     actions: [
@@ -1052,7 +1071,7 @@ function buildExternalSummaryFromMarker(marker: MapPointMarkerDto): MapPointSumm
   return {
     point_id: marker.point_id,
     point_type: "landmark",
-    business_type: "amap_poi",
+    business_type: "tencent_poi",
     business_id: marker.business_id,
     title: marker.name,
     subtitle: marker.subtitle,
@@ -1067,6 +1086,7 @@ function buildExternalSummaryFromMarker(marker: MapPointMarkerDto): MapPointSumm
     lng: marker.lng,
     lat: marker.lat,
     distance_meters: marker.distance_meters,
+    associated_poi: (marker.extra.associated_poi || null) as MapPointSummaryResponse["associated_poi"],
     photos: [],
     business_summary: {},
     actions: [
@@ -1291,7 +1311,13 @@ async function handleSummaryAction(action: CardActionDto) {
       uni.showToast({ title: "无法获取当前位置", icon: "none" });
       return;
     }
-    if (selectedSummary.value.business_type === "amap_poi") {
+    if (selectedSummary.value.business_type === "tencent_poi") {
+      const route = await getWalkingRoute(token, {
+        from_lng: from.lng,
+        from_lat: from.lat,
+        to_lng: selectedSummary.value.lng,
+        to_lat: selectedSummary.value.lat,
+      });
       renderInAppRoute(from, {
         point_id: selectedSummary.value.point_id,
         title: selectedSummary.value.title,
@@ -1301,6 +1327,7 @@ async function handleSummaryAction(action: CardActionDto) {
           location_name: selectedSummary.value.location_name || selectedSummary.value.title,
           amap_poi_id: null,
           amap_address: null,
+          associated_poi: selectedSummary.value.associated_poi || null,
         },
         route_instruction: selectedSummary.value.route_instruction,
         landmark_hint: selectedSummary.value.landmark_hint,
@@ -1311,14 +1338,11 @@ async function handleSummaryAction(action: CardActionDto) {
           open_url: "",
           web_url: "",
         },
-        route: {
-          provider: "fallback",
-          fallback: true,
-          distance_meters: selectedSummary.value.distance_meters,
-          duration_seconds: null,
-          points: [from, { lng: selectedSummary.value.lng, lat: selectedSummary.value.lat }],
-          steps: [],
+        tencent_navigation: {
+          mode: "walking",
+          web_url: "",
         },
+        route,
       });
       return;
     }
@@ -1366,6 +1390,7 @@ function buildPendingNavigationSummary(
     lng: point.lng,
     lat: point.lat,
     distance_meters: null,
+    associated_poi: mapPoint.associated_poi || null,
     photos: [],
     business_summary: {},
     actions: [
@@ -1456,6 +1481,53 @@ function handleNativeMarkerTap(event: Event) {
   handleMapMarkerSelected(marker);
 }
 
+async function handleNativePoiTap(event: Event) {
+  const detail = (event as CustomEvent<Record<string, any>>).detail || {};
+  const rawPoi = detail.poi || {};
+  const lng = Number(detail.longitude ?? detail.lng ?? rawPoi.longitude ?? rawPoi.lng);
+  const lat = Number(detail.latitude ?? detail.lat ?? rawPoi.latitude ?? rawPoi.lat);
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+    return;
+  }
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  const keyword = String(detail.name || detail.title || rawPoi.name || rawPoi.title || "");
+  try {
+    const data = await resolveMapPoi(token, {
+      keyword,
+      lng,
+      lat,
+    });
+    const poi = data.matched_poi;
+    const item: MapShellItem = {
+      id: `tencent:${poi.poi_id || `${poi.name}-${poi.lng}-${poi.lat}`}`,
+      type: "landmark",
+      title: poi.name,
+      subtitle: poi.category,
+      description: poi.address,
+      distance_meters: poi.distance_meters,
+      status_label: "地图点位",
+      tag_label: "地标",
+      lng: poi.lng,
+      lat: poi.lat,
+      icon_key: "landmark",
+      associated_poi: poi,
+    };
+    const marker = mapSearchShellItemToMarker(item);
+    if (marker) {
+      mapPointMarkers.value = [marker];
+      selectedSummary.value = buildExternalSummaryFromMarker(marker);
+      centerMapToPoint({ lng: marker.lng, lat: marker.lat });
+      contentLoadState.value = "ready";
+    }
+  } catch (error) {
+    handleMapError(error, "地图点位解析失败");
+    uni.showToast({ title: contentErrorMessage.value, icon: "none" });
+  }
+}
+
 function handleNativeMarkerLongPress(event: Event) {
   const markerId = (event as CustomEvent<{ markerId?: number }>).detail?.markerId;
   if (!markerId) {
@@ -1485,7 +1557,7 @@ function findNearestEditableMarker(point: LngLat): MapPointMarkerDto | null {
   const nearest = mapPointMarkers.value
     .filter(
       (marker) =>
-        marker.business_type !== "amap_poi" &&
+        marker.business_type !== "tencent_poi" &&
         isFiniteLngLat({ lng: marker.lng, lat: marker.lat }),
     )
     .map((marker) => ({
@@ -1750,7 +1822,6 @@ async function locateMe() {
   }
   centerMapToPoint(point);
   setUserLocation(point);
-  simulatedNavigationMarker.value = point;
   void refreshMapPoints();
 }
 
@@ -2439,6 +2510,32 @@ onBeforeUnmount(() => {
   padding: 14rpx 16rpx;
   border-radius: 18rpx;
   background: #f5faef;
+}
+
+.summary-poi {
+  padding: 14rpx 16rpx;
+  border-radius: 18rpx;
+  background: #f6fbf2;
+}
+
+.summary-poi-title,
+.summary-poi-desc {
+  display: block;
+}
+
+.summary-poi-title {
+  color: #267b2f;
+  font-size: 23rpx;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.summary-poi-desc {
+  margin-top: 6rpx;
+  color: #6b7280;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 1.35;
 }
 
 .summary-actions {

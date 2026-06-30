@@ -5,7 +5,15 @@ import {
   updateAdminMapPoint,
   updateAdminMapPointLocation,
 } from "@/api/admin-map";
-import { getMapInit, getMapPointNavigation, getMapPoints, searchMap } from "@/api/map";
+import {
+  getMapInit,
+  getMapPointNavigation,
+  getMapPoints,
+  getNearbyMapPois,
+  getWalkingRoute,
+  resolveMapPoi,
+  searchMap,
+} from "@/api/map";
 
 function mockSuccess(data: unknown) {
   return vi.fn((options: UniNamespace.RequestOptions) => {
@@ -32,7 +40,7 @@ describe("map api", () => {
       filter_options: [{ key: "none", label: "无标记" }],
       default_filters: {},
       ui_config: {},
-      amap_config: { web_key: "web-key", security_js_code: "security" },
+      tencent_config: { map_provider: "tencent", referer: "catmap-miniapp" },
     });
     vi.stubGlobal("uni", { request: requestMock });
 
@@ -108,6 +116,62 @@ describe("map api", () => {
     );
   });
 
+  it("resolves a tapped tencent poi and requests nearby candidates", async () => {
+    const requestMock = mockSuccess({
+      matched_poi: {
+        provider: "tencent",
+        poi_id: "7554185223751732838",
+        name: "湖北师范大学教育大楼",
+        address: "湖北省黄石市黄石港区",
+        category: "教育学校:大学",
+        lng: 115.0617,
+        lat: 30.2311,
+        distance_meters: 8,
+        match_method: "poi_tap",
+      },
+      candidates: [],
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await resolveMapPoi("token-1", {
+      keyword: "教育大楼",
+      lng: 115.0617,
+      lat: 30.2311,
+    });
+    await getNearbyMapPois("token-1", {
+      lng: 115.0617,
+      lat: 30.2311,
+      keyword: "教育大楼",
+      radius: 150,
+    });
+
+    expect(requestMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        method: "GET",
+        url: expect.stringContaining("/map/poi/resolve"),
+        data: {
+          keyword: "教育大楼",
+          lng: 115.0617,
+          lat: 30.2311,
+        },
+      }),
+    );
+    expect(requestMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: "GET",
+        url: expect.stringContaining("/map/poi/nearby"),
+        data: {
+          lng: 115.0617,
+          lat: 30.2311,
+          keyword: "教育大楼",
+          radius: 150,
+        },
+      }),
+    );
+  });
+
   it("requests point navigation with current location and in-app mode", async () => {
     const requestMock = mockSuccess({
       point_id: "point-1",
@@ -118,6 +182,17 @@ describe("map api", () => {
         location_name: "北门草丛",
         amap_poi_id: null,
         amap_address: null,
+        associated_poi: {
+          provider: "tencent",
+          poi_id: "7554185223751732838",
+          name: "湖北师范大学教育大楼",
+          address: "湖北省黄石市黄石港区",
+          category: "教育学校:大学",
+          lng: 115.0617,
+          lat: 30.2311,
+          distance_meters: 42,
+          match_method: "admin_selected",
+        },
       },
       route_instruction: null,
       landmark_hint: null,
@@ -128,8 +203,12 @@ describe("map api", () => {
         open_url: "",
         web_url: "",
       },
+      tencent_navigation: {
+        mode: "walking",
+        web_url: "https://apis.map.qq.com/uri/v1/routeplan",
+      },
       route: {
-        provider: "amap",
+        provider: "tencent",
         fallback: false,
         distance_meters: 450,
         duration_seconds: 360,
@@ -156,6 +235,41 @@ describe("map api", () => {
           from_lng: 115.0622,
           from_lat: 30.2299,
           mode: "walking",
+        },
+      }),
+    );
+  });
+
+  it("requests a walking route for temporary poi navigation", async () => {
+    const requestMock = mockSuccess({
+      provider: "tencent",
+      fallback: false,
+      distance_meters: 450,
+      duration_seconds: 360,
+      points: [
+        { lng: 115.0622, lat: 30.2299 },
+        { lng: 115.0617, lat: 30.2311 },
+      ],
+      steps: [],
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await getWalkingRoute("token-1", {
+      from_lng: 115.0622,
+      from_lat: 30.2299,
+      to_lng: 115.0617,
+      to_lat: 30.2311,
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        url: expect.stringContaining("/map/route/walking"),
+        data: {
+          from_lng: 115.0622,
+          from_lat: 30.2299,
+          to_lng: 115.0617,
+          to_lat: 30.2311,
         },
       }),
     );

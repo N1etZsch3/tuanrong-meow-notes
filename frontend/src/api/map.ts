@@ -110,7 +110,7 @@ export interface MapPointsResponse {
 
 export interface MapSearchResultDto {
   result_type: string;
-  map_point_id: string;
+  map_point_id: string | null;
   business_id: string | null;
   point_type: string;
   business_type: string | null;
@@ -218,6 +218,19 @@ export interface MapNavigationResponse {
     open_url: string;
     web_url: string;
   };
+  route: {
+    provider: string;
+    fallback: boolean;
+    distance_meters: number | null;
+    duration_seconds: number | null;
+    points: Array<{ lng: number; lat: number }>;
+    steps: Array<{
+      instruction: string;
+      distance_meters: number;
+      duration_seconds: number;
+      points: Array<{ lng: number; lat: number }>;
+    }>;
+  };
 }
 
 export interface MapPointQuery {
@@ -238,6 +251,7 @@ export interface MapSearchQuery {
   keyword: string;
   campus_id?: string;
   point_types?: string;
+  include_external?: boolean;
   user_lng?: number;
   user_lat?: number;
   page?: number;

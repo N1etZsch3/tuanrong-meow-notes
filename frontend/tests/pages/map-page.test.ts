@@ -62,7 +62,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain('class="native-map"');
     expect(indexPageSource).toContain(':show-location="Boolean(userLocation)"');
     expect(indexPageSource).toContain("uni.getLocation");
-    expect(indexPageSource).toContain("uni.openLocation");
+    expect(indexPageSource).not.toContain("uni.openLocation");
     expect(indexPageSource).not.toContain("supportsAmapWeb");
     expect(indexPageSource).not.toContain("window.AMap");
     expect(indexPageSource).not.toContain("appEnv");
@@ -154,9 +154,35 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).not.toContain("window.open");
     expect(indexPageSource).toContain("renderNativeRoute");
     expect(indexPageSource).toContain("renderInAppRoute");
-    expect(indexPageSource).toContain("uni.openLocation");
+    expect(indexPageSource).not.toContain("uni.openLocation");
     expect(indexPageSource).toContain(':polyline="nativeMapPolylines"');
     expect(indexPageSource).not.toContain("renderAmapWalkingRoute");
+  });
+
+  it("renders in-page navigation route controls and simulated movement", () => {
+    expect(indexPageSource).toContain('class="navigation-panel"');
+    expect(indexPageSource).toContain("navigationRoute");
+    expect(indexPageSource).toContain("navigationRouteDistance");
+    expect(indexPageSource).toContain("startSimulatedNavigation");
+    expect(indexPageSource).toContain("stopSimulatedNavigation");
+    expect(indexPageSource).toContain("simulatedNavigationMarker");
+    expect(indexPageSource).toContain("navigationSimulationTimer");
+  });
+
+  it("requests backend merged internal and amap poi search results", () => {
+    expect(indexPageSource).toContain("include_external: true");
+    expect(indexPageSource).not.toContain("searchCampusExternalPoisByRest");
+    expect(indexPageSource).not.toContain("https://restapi.amap.com/v3/place/text");
+  });
+
+  it("exposes admin point editing and long-press location editing controls", () => {
+    expect(indexPageSource).toContain("userStore.isAdmin");
+    expect(indexPageSource).toContain('action.key === "edit_point"');
+    expect(indexPageSource).toContain("@longpress");
+    expect(indexPageSource).toContain("handleMarkerLongPress");
+    expect(indexPageSource).toContain("mapPointEditMode");
+    expect(indexPageSource).toContain("saveEditedPointLocation");
+    expect(indexPageSource).toContain("updateAdminMapPointLocation");
   });
 
   it("lowers and compacts the map title, map viewport, filter, and content drawer", () => {
@@ -341,26 +367,27 @@ describe("map page shell behavior", () => {
   it("maps backend search and bottom content items to the same list shape", () => {
     expect(
       mapSearchResultToShellItem({
-        result_type: "supply",
-        map_point_id: "supply-point",
-        business_id: "supply-1",
-        point_type: "supply",
-        business_type: "food",
-        title: "猫协物资点 #1",
-        subtitle: "体育馆旁物资补给",
-        description: "猫粮、航空箱、诱捕笼备用点。",
-        icon_key: "supply_food",
+        result_type: "external_poi",
+        map_point_id: null,
+        business_id: "amap:B0FFFAKE01",
+        point_type: "landmark",
+        business_type: "amap_poi",
+        title: "湖北师范大学教育大楼",
+        subtitle: "科教文化服务",
+        description: "湖北省黄石市黄石港区",
+        icon_key: "landmark",
         cover_photo_url: null,
-        lng: 115.0642,
-        lat: 30.2287,
+        lng: 115.0617,
+        lat: 30.2311,
         distance_meters: null,
-        status_label: "物资点",
-        highlight_text: "猫粮",
+        status_label: "地图点位",
+        highlight_text: "教学楼",
         sort_score: 50,
       }),
     ).toMatchObject({
-      id: "supply-point",
-      type: "supply",
+      id: "amap:B0FFFAKE01",
+      type: "landmark",
+      map_point_id: undefined,
       distance_meters: null,
     });
 

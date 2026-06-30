@@ -32,6 +32,8 @@
         :enable-zoom="true"
         :enable-scroll="true"
         @markertap="handleNativeMarkerTap"
+        @longpress="handleMarkerLongPress"
+        @regionchange="handleMapRegionChange"
       />
 
       <view v-if="mapLoadState !== 'ready'" class="map-placeholder">
@@ -47,6 +49,44 @@
         <image class="my-location-icon" :src="locationIcon" mode="aspectFit" />
         <text>我的位置</text>
       </button>
+
+      <view v-if="navigationRoute" class="navigation-panel">
+        <view class="navigation-copy">
+          <text class="navigation-title">{{ navigationRoute.title }}</text>
+          <text class="navigation-meta">
+            {{ navigationRouteDistance }} · {{ navigationRouteDuration }}
+          </text>
+        </view>
+        <button
+          v-if="!navigationSimulationRunning"
+          class="navigation-control"
+          hover-class="summary-action-hover"
+          @tap="startSimulatedNavigation"
+        >
+          模拟导航
+        </button>
+        <button
+          v-else
+          class="navigation-control is-secondary"
+          hover-class="summary-action-hover"
+          @tap="stopSimulatedNavigation"
+        >
+          停止
+        </button>
+      </view>
+
+      <view v-if="mapPointEditMode" class="map-edit-panel">
+        <text class="map-edit-title">点位编辑模式</text>
+        <text class="map-edit-desc">
+          移动地图后保存中心点：{{ editedPointLocationText }}
+        </text>
+        <view class="map-edit-actions">
+          <button class="map-edit-button" @tap="saveEditedPointLocation">保存位置</button>
+          <button class="map-edit-button is-ghost" @tap="cancelMapPointEditMode">
+            取消
+          </button>
+        </view>
+      </view>
     </view>
 
     <cover-view class="map-filter-layer">
@@ -154,7 +194,7 @@
           </text>
           <view class="summary-actions">
             <button
-              v-for="action in selectedSummary.actions"
+              v-for="action in summaryActions"
               :key="action.key"
               class="summary-action"
               :class="{ 'is-disabled': !action.enabled }"
@@ -222,9 +262,11 @@ import {
   searchMap,
   type CardActionDto,
   type MapInitResponse,
+  type MapNavigationResponse,
   type MapPointMarkerDto,
   type MapPointSummaryResponse,
 } from "@/api/map";
+import { updateAdminMapPointLocation } from "@/api/admin-map";
 import AppTabBar from "@/components/AppTabBar.vue";
 import { ApiBusinessError, isRequestCanceledError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
@@ -273,6 +315,13 @@ import {
 
 type MapLoadState = "idle" | "loading" | "ready" | "error";
 type ContentLoadState = "idle" | "loading" | "ready" | "error";
+interface NavigationRouteState {
+  title: string;
+  distance_meters: number | null;
+  duration_seconds: number | null;
+  points: LngLat[];
+  steps: MapNavigationResponse["route"]["steps"];
+}
 
 const userStore = useUserStore();
 const sysInfo = uni.getSystemInfoSync();
@@ -292,9 +341,14 @@ const mapCenter = ref<LngLat>({ ...HBNU_CAMPUS.center });
 const userLocation = ref<LngLat | null>(null);
 const mapPointMarkers = ref<MapPointMarkerDto[]>([]);
 const nativeRoutePoints = ref<Array<{ longitude: number; latitude: number }>>([]);
+const navigationRoute = ref<NavigationRouteState | null>(null);
+const simulatedNavigationMarker = ref<LngLat | null>(null);
+const navigationSimulationRunning = ref(false);
 const bottomContentItems = ref<MapShellItem[]>([]);
 const searchResultItems = ref<MapShellItem[]>([]);
 const selectedSummary = ref<MapPointSummaryResponse | null>(null);
+const mapPointEditMode = ref(false);
+const editedPointLocation = ref<LngLat | null>(null);
 const MAP_FILTER_ICON_SRC: Record<string, string> = {
   none: filterDefaultIcon,
   all: allMarkerPointIcon,
@@ -310,6 +364,8 @@ const MAP_FILTER_ICON_SRC: Record<string, string> = {
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let mapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+let navigationSimulationTimer: ReturnType<typeof setInterval> | null = null;
+let navigationSimulationIndex = 0;
 
 const isPageVisible = ref(true);
 const isSearchMode = computed(() => searchKeyword.value.trim().length > 0);
@@ -350,6 +406,45 @@ const summaryType = computed<MapShellItemType>(() => {
   return summary
     ? resolveMapShellItemType(summary.point_type, summary.business_type)
     : "landmark";
+});
+const summaryActions = computed<CardActionDto[]>(() => {
+  if (!selectedSummary.value) {
+    return [];
+  }
+  const actions = [...selectedSummary.value.actions];
+  if (
+    userStore.isAdmin &&
+    selectedSummary.value.business_type !== "amap_poi" &&
+    !actions.some((action) => action.key === "edit_point")
+  ) {
+    actions.push({
+      key: "edit_point",
+      label: "编辑点位",
+      enabled: true,
+      disabled_reason: null,
+      method: null,
+      path: `/pages/admin/map-point/edit?point_id=${selectedSummary.value.point_id}`,
+      target_type: "page",
+    });
+  }
+  return actions;
+});
+const navigationRouteDistance = computed(() =>
+  navigationRoute.value ? formatDistance(navigationRoute.value.distance_meters) : "未知",
+);
+const navigationRouteDuration = computed(() => {
+  const seconds = navigationRoute.value?.duration_seconds;
+  if (!seconds) {
+    return "预计时间未知";
+  }
+  return `约 ${Math.max(1, Math.round(seconds / 60))} 分钟`;
+});
+const editedPointLocationText = computed(() => {
+  const point = editedPointLocation.value || selectedSummary.value;
+  if (!point) {
+    return "未知坐标";
+  }
+  return `${point.lng.toFixed(6)}, ${point.lat.toFixed(6)}`;
 });
 const contentSectionTitle = computed(() => {
   if (selectedSummary.value) {
@@ -394,7 +489,7 @@ const emptyDescription = computed(() => {
     : "后端暂时没有返回最新任务。";
 });
 const nativeMapMarkers = computed(() => {
-  return mapPointMarkers.value.map((marker, index) => {
+  const markers = mapPointMarkers.value.map((marker, index) => {
     const type = resolveMapShellItemType(marker.point_type, marker.business_type);
 
     return {
@@ -415,6 +510,45 @@ const nativeMapMarkers = computed(() => {
       },
     };
   });
+  if (simulatedNavigationMarker.value) {
+    markers.push({
+      id: 900001,
+      longitude: simulatedNavigationMarker.value.lng,
+      latitude: simulatedNavigationMarker.value.lat,
+      iconPath: locationIcon,
+      width: 32,
+      height: 32,
+      callout: {
+        content: "当前位置",
+        color: "#267b2f",
+        fontSize: 12,
+        borderRadius: 8,
+        bgColor: "#ffffff",
+        padding: 8,
+        display: "ALWAYS",
+      },
+    });
+  }
+  if (mapPointEditMode.value && editedPointLocation.value) {
+    markers.push({
+      id: 900002,
+      longitude: editedPointLocation.value.lng,
+      latitude: editedPointLocation.value.lat,
+      iconPath: locationIcon,
+      width: 38,
+      height: 38,
+      callout: {
+        content: "编辑位置",
+        color: "#111827",
+        fontSize: 12,
+        borderRadius: 8,
+        bgColor: "#ffffff",
+        padding: 8,
+        display: "ALWAYS",
+      },
+    });
+  }
+  return markers;
 });
 const nativeMapPolylines = computed(() => {
   if (nativeRoutePoints.value.length < 2) {
@@ -496,7 +630,7 @@ function selectShellItem(item: MapShellItem) {
     return;
   }
 
-  selectedSummary.value = null;
+  selectedSummary.value = buildExternalSummaryFromItem(item);
 }
 
 function getItemSymbol(type: MapShellItemType): string {
@@ -601,18 +735,58 @@ function getCurrentLocationForNavigation(): Promise<LngLat | null> {
 
 function clearNativeRoute() {
   nativeRoutePoints.value = [];
+  navigationRoute.value = null;
+  simulatedNavigationMarker.value = null;
+  stopSimulatedNavigation();
 }
 
-function renderNativeRoute(from: LngLat, destination: LngLat) {
+function renderNativeRoute(from: LngLat, destination: LngLat, routePoints?: LngLat[]) {
   clearNativeRoute();
-  nativeRoutePoints.value = [
-    { longitude: from.lng, latitude: from.lat },
-    { longitude: destination.lng, latitude: destination.lat },
-  ];
+  const points = routePoints && routePoints.length >= 2 ? routePoints : [from, destination];
+  nativeRoutePoints.value = points.map((point) => ({
+    longitude: point.lng,
+    latitude: point.lat,
+  }));
+  simulatedNavigationMarker.value = points[0] || from;
   mapCenter.value = {
     lng: (from.lng + destination.lng) / 2,
     lat: (from.lat + destination.lat) / 2,
   };
+}
+
+function startSimulatedNavigation() {
+  if (!navigationRoute.value || navigationRoute.value.points.length < 2) {
+    uni.showToast({ title: "暂无可模拟的路线", icon: "none" });
+    return;
+  }
+
+  stopSimulatedNavigation();
+  navigationSimulationRunning.value = true;
+  navigationSimulationIndex = 0;
+  simulatedNavigationMarker.value = navigationRoute.value.points[0];
+  navigationSimulationTimer = setInterval(() => {
+    if (!navigationRoute.value) {
+      stopSimulatedNavigation();
+      return;
+    }
+    navigationSimulationIndex += 1;
+    const point = navigationRoute.value.points[navigationSimulationIndex];
+    if (!point) {
+      stopSimulatedNavigation();
+      uni.showToast({ title: "已到达目标点附近", icon: "none" });
+      return;
+    }
+    simulatedNavigationMarker.value = point;
+    setUserLocation(point);
+  }, 1000);
+}
+
+function stopSimulatedNavigation() {
+  if (navigationSimulationTimer) {
+    clearInterval(navigationSimulationTimer);
+    navigationSimulationTimer = null;
+  }
+  navigationSimulationRunning.value = false;
 }
 
 function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | null {
@@ -634,7 +808,7 @@ function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | nul
     point_type: pointType,
     point_scope: "search_result",
     business_type: businessType,
-    business_id: null,
+    business_id: item.map_point_id || item.id,
     name: item.title,
     subtitle: item.subtitle,
     lng: item.lng,
@@ -653,7 +827,81 @@ function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | nul
     distance_meters: item.distance_meters,
     extra: {
       source: "map_search",
+      is_external_poi: !item.map_point_id,
     },
+  };
+}
+
+function buildExternalSummaryFromItem(item: MapShellItem): MapPointSummaryResponse | null {
+  if (!item.lng || !item.lat) {
+    return null;
+  }
+  return {
+    point_id: item.id,
+    point_type: "landmark",
+    business_type: "amap_poi",
+    business_id: item.id,
+    title: item.title,
+    subtitle: item.subtitle,
+    cover_photo_url: item.cover_photo_url || null,
+    tags: ["地图点位"],
+    description: item.description,
+    location_name: item.title,
+    location_detail: item.subtitle,
+    route_instruction: null,
+    landmark_hint: null,
+    entrance_hint: null,
+    lng: item.lng,
+    lat: item.lat,
+    distance_meters: item.distance_meters,
+    photos: [],
+    business_summary: {},
+    actions: [
+      {
+        key: "navigate",
+        label: "导航",
+        enabled: true,
+        disabled_reason: null,
+        method: null,
+        path: null,
+        target_type: "page",
+      },
+    ],
+  };
+}
+
+function buildExternalSummaryFromMarker(marker: MapPointMarkerDto): MapPointSummaryResponse {
+  return {
+    point_id: marker.point_id,
+    point_type: "landmark",
+    business_type: "amap_poi",
+    business_id: marker.business_id,
+    title: marker.name,
+    subtitle: marker.subtitle,
+    cover_photo_url: null,
+    tags: ["地图点位"],
+    description: marker.subtitle,
+    location_name: marker.name,
+    location_detail: marker.subtitle,
+    route_instruction: null,
+    landmark_hint: null,
+    entrance_hint: null,
+    lng: marker.lng,
+    lat: marker.lat,
+    distance_meters: marker.distance_meters,
+    photos: [],
+    business_summary: {},
+    actions: [
+      {
+        key: "navigate",
+        label: "导航",
+        enabled: true,
+        disabled_reason: null,
+        method: null,
+        path: null,
+        target_type: "page",
+      },
+    ],
   };
 }
 
@@ -774,6 +1022,9 @@ async function runSearch(keyword: string) {
       keyword: normalizedKeyword,
       campus_id: campusMapConfig.value.id,
       point_types: filterQuery.point_types,
+      include_external: true,
+      user_lng: userLocation.value?.lng,
+      user_lat: userLocation.value?.lat,
       page: 1,
       page_size: 20,
     });
@@ -823,6 +1074,17 @@ async function handleSummaryAction(action: CardActionDto) {
     return;
   }
 
+  if (action.key === "edit_point") {
+    if (!userStore.isAdmin) {
+      uni.showToast({ title: "仅管理员可编辑点位", icon: "none" });
+      return;
+    }
+    uni.navigateTo({
+      url: action.path || `/pages/admin/map-point/edit?point_id=${selectedSummary.value.point_id}`,
+    });
+    return;
+  }
+
   if (action.key === "view_detail") {
     if (action.target_type === "page" && action.path) {
       uni.navigateTo({ url: action.path });
@@ -849,20 +1111,43 @@ async function handleSummaryAction(action: CardActionDto) {
 
   try {
     const from = (await getCurrentLocationForNavigation()) || mapCenter.value;
+    if (selectedSummary.value.business_type === "amap_poi") {
+      renderInAppRoute(from, {
+        point_id: selectedSummary.value.point_id,
+        title: selectedSummary.value.title,
+        destination: {
+          lng: selectedSummary.value.lng,
+          lat: selectedSummary.value.lat,
+          location_name: selectedSummary.value.location_name || selectedSummary.value.title,
+          amap_poi_id: null,
+          amap_address: null,
+        },
+        route_instruction: selectedSummary.value.route_instruction,
+        landmark_hint: selectedSummary.value.landmark_hint,
+        entrance_hint: selectedSummary.value.entrance_hint,
+        photos: [],
+        amap_navigation: {
+          mode: "walking",
+          open_url: "",
+          web_url: "",
+        },
+        route: {
+          provider: "fallback",
+          fallback: true,
+          distance_meters: selectedSummary.value.distance_meters,
+          duration_seconds: null,
+          points: [from, { lng: selectedSummary.value.lng, lat: selectedSummary.value.lat }],
+          steps: [],
+        },
+      });
+      return;
+    }
     const navigation = await getMapPointNavigation(token, selectedSummary.value.point_id, {
       from_lng: from.lng,
       from_lat: from.lat,
       mode: "walking",
     });
-    const destination = {
-      lng: navigation.destination.lng,
-      lat: navigation.destination.lat,
-    };
-
-    renderInAppRoute(from, destination, {
-      name: navigation.title,
-      address: navigation.destination.location_name || "",
-    });
+    renderInAppRoute(from, navigation);
   } catch (error) {
     handleMapError(error, "导航信息加载失败");
     uni.showToast({ title: contentErrorMessage.value, icon: "none" });
@@ -922,26 +1207,114 @@ function handleNativeMarkerTap(event: Event) {
   handleMapMarkerSelected(marker);
 }
 
+function handleMarkerLongPress(event: Event) {
+  if (!userStore.isAdmin || !selectedSummary.value) {
+    return;
+  }
+  if (selectedSummary.value.business_type === "amap_poi") {
+    uni.showToast({ title: "外部地图点位不能编辑", icon: "none" });
+    return;
+  }
+  const detail = (event as CustomEvent<{ longitude?: number; latitude?: number }>).detail;
+  editedPointLocation.value = {
+    lng: detail?.longitude ?? selectedSummary.value.lng,
+    lat: detail?.latitude ?? selectedSummary.value.lat,
+  };
+  mapPointEditMode.value = true;
+  uni.showToast({ title: "已进入点位编辑模式", icon: "none" });
+}
+
+function handleMapRegionChange(event: Event) {
+  if (!mapPointEditMode.value) {
+    return;
+  }
+  const detail = (event as CustomEvent<{
+    type?: string;
+    centerLocation?: { longitude?: number; latitude?: number };
+  }>).detail;
+  if (detail?.type && detail.type !== "end") {
+    return;
+  }
+  const center = detail?.centerLocation;
+  if (typeof center?.longitude === "number" && typeof center?.latitude === "number") {
+    editedPointLocation.value = {
+      lng: center.longitude,
+      lat: center.latitude,
+    };
+  }
+}
+
 function handleMapMarkerSelected(marker: MapPointMarkerDto) {
+  if (marker.point_scope === "search_result" && marker.extra.is_external_poi) {
+    selectedSummary.value = buildExternalSummaryFromMarker(marker);
+    return;
+  }
   void loadPointSummary(marker.point_id);
+}
+
+function cancelMapPointEditMode() {
+  mapPointEditMode.value = false;
+  editedPointLocation.value = null;
+}
+
+async function saveEditedPointLocation() {
+  if (!selectedSummary.value || !editedPointLocation.value) {
+    return;
+  }
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  try {
+    const updated = await updateAdminMapPointLocation(
+      token,
+      selectedSummary.value.point_id,
+      editedPointLocation.value,
+    );
+    selectedSummary.value = {
+      ...selectedSummary.value,
+      lng: updated.lng,
+      lat: updated.lat,
+      location_name: updated.location_name,
+      location_detail: updated.location_detail,
+      route_instruction: updated.route_instruction,
+      landmark_hint: updated.landmark_hint,
+      entrance_hint: updated.entrance_hint,
+    };
+    mapPointMarkers.value = mapPointMarkers.value.map((marker) =>
+      marker.point_id === updated.point_id
+        ? { ...marker, lng: updated.lng, lat: updated.lat, name: updated.name }
+        : marker,
+    );
+    mapCenter.value = { lng: updated.lng, lat: updated.lat };
+    cancelMapPointEditMode();
+    uni.showToast({ title: "点位位置已更新", icon: "none" });
+  } catch (error) {
+    handleMapError(error, "点位位置保存失败");
+    uni.showToast({ title: contentErrorMessage.value, icon: "none" });
+  }
 }
 
 function renderInAppRoute(
   from: LngLat,
-  destination: LngLat,
-  target: { name?: string; address?: string } = {},
+  navigation: MapNavigationResponse,
 ) {
-  renderNativeRoute(from, destination);
-  uni.openLocation({
-    latitude: destination.lat,
-    longitude: destination.lng,
-    scale: Math.round(campusMapConfig.value.default_zoom),
-    name: target.name || selectedSummary.value?.title || "校园点位",
-    address: target.address || selectedSummary.value?.location_name || "",
-    fail: () => {
-      uni.showToast({ title: "无法打开微信地图位置页", icon: "none" });
-    },
-  });
+  const destination = {
+    lng: navigation.destination.lng,
+    lat: navigation.destination.lat,
+  };
+  const routePoints = navigation.route.points.length
+    ? navigation.route.points
+    : [from, destination];
+  renderNativeRoute(from, destination, routePoints);
+  navigationRoute.value = {
+    title: navigation.title,
+    distance_meters: navigation.route.distance_meters,
+    duration_seconds: navigation.route.duration_seconds,
+    points: routePoints,
+    steps: navigation.route.steps,
+  };
+  uni.showToast({ title: "已在当前地图规划路线", icon: "none" });
 }
 
 function locateMe() {
@@ -1159,7 +1532,9 @@ onBeforeUnmount(() => {
 
 .content-row::after,
 .my-location-btn::after,
-.clear-search::after {
+.clear-search::after,
+.navigation-control::after,
+.map-edit-button::after {
   border: 0;
 }
 
@@ -1295,6 +1670,83 @@ onBeforeUnmount(() => {
 .my-location-icon {
   width: 42rpx;
   height: 42rpx;
+}
+
+.navigation-panel,
+.map-edit-panel {
+  position: absolute;
+  z-index: 6;
+  left: 24rpx;
+  right: 154rpx;
+  bottom: 32rpx;
+  box-sizing: border-box;
+  padding: 18rpx 20rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14rpx 34rpx rgba(20, 28, 40, 0.12);
+}
+
+.navigation-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 136rpx;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.navigation-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.navigation-title,
+.map-edit-title {
+  color: #111827;
+  font-size: 25rpx;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.navigation-meta,
+.map-edit-desc {
+  color: #6b7280;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.navigation-control,
+.map-edit-button {
+  height: 58rpx;
+  margin: 0;
+  padding: 0 16rpx;
+  border: 0;
+  border-radius: 18rpx;
+  background: #267b2f;
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 900;
+  line-height: 58rpx;
+}
+
+.navigation-control.is-secondary,
+.map-edit-button.is-ghost {
+  background: #edf8e8;
+  color: #267b2f;
+}
+
+.map-edit-panel {
+  bottom: 128rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.map-edit-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12rpx;
 }
 
 .content-drawer {

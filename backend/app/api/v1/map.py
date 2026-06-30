@@ -63,6 +63,7 @@ def search_map(
     keyword: str = Query(min_length=0, max_length=128),
     campus_id: UUID | None = None,
     point_types: str | None = None,
+    include_external: bool = False,
     user_lng: float | None = None,
     user_lat: float | None = None,
     page: int = Query(default=1, ge=1),
@@ -75,6 +76,7 @@ def search_map(
         keyword=keyword,
         campus_id=campus_id,
         point_types=point_types,
+        include_external=include_external,
         user_lng=user_lng,
         user_lat=user_lat,
         page=page,
@@ -100,10 +102,12 @@ def point_summary(
 def point_navigation(
     point_id: UUID,
     request: Request,
+    from_lng: float | None = None,
+    from_lat: float | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_profile_completed),
 ):
-    data = service.navigation(db, point_id=point_id)
+    data = service.navigation(db, point_id=point_id, from_lng=from_lng, from_lat=from_lat)
     return api_success(data=data, trace_id=request.state.trace_id)
 
 

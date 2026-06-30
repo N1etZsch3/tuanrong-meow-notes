@@ -350,10 +350,11 @@ export function mapSearchResultToShellItem(
   result: MapSearchResultDto,
 ): MapShellItem {
   const type = resolveMapShellItemType(result.point_type, result.business_type);
+  const id = result.map_point_id || result.business_id || result.title;
 
   return {
-    id: result.map_point_id,
-    map_point_id: result.map_point_id,
+    id,
+    map_point_id: result.map_point_id || undefined,
     type,
     title: result.title,
     subtitle: result.subtitle,

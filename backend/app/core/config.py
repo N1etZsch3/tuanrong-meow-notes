@@ -28,7 +28,9 @@ class Settings(BaseSettings):
     auth_lock_failed_attempts: int = 5
     auth_lock_minutes: int = 15
     amap_web_key: str = "replace-with-amap-web-key"
+    amap_web_service_key: str = ""
     amap_security_js_code: str = "replace-with-amap-security-js-code"
+    amap_web_service_timeout_seconds: float = 3.0
     tencent_cos_secret_id: str = ""
     tencent_cos_secret_key: str = ""
     tencent_cos_region: str = "ap-guangzhou"
@@ -59,6 +61,10 @@ class Settings(BaseSettings):
     @property
     def file_upload_max_bytes(self) -> int:
         return self.file_upload_max_mb * 1024 * 1024
+
+    @property
+    def effective_amap_web_service_key(self) -> str:
+        return self.amap_web_service_key or self.amap_web_key
 
     model_config = SettingsConfigDict(
         env_prefix="CATMAP_",

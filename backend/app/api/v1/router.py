@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 
+from app.api.v1.admin_map import router as admin_map_router
 from app.api.v1.admin_tasks import router as admin_tasks_router
 from app.api.v1.admin_users import router as admin_users_router
 from app.api.v1.auth import router as auth_router
@@ -14,6 +15,7 @@ from app.api.v1.tasks import router as tasks_router
 api_router = APIRouter()
 api_router.include_router(health_router)
 api_router.include_router(auth_router, prefix="/auth")
+api_router.include_router(admin_map_router, prefix="/admin/map")
 api_router.include_router(admin_tasks_router, prefix="/admin/tasks")
 api_router.include_router(admin_users_router, prefix="/admin/users")
 api_router.include_router(cats_router, prefix="/cats")

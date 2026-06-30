@@ -4,19 +4,21 @@ from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
+from app.modules.map import service as map_service
 from app.modules.map.models import Campus, CampusArea, MapMarkerConfig, MapPoint
 
 
 def create_member(
     db: Session,
     *,
+    role: str = "member",
     must_change_password: bool = False,
     profile_completed: bool = True,
 ) -> User:
     user = User(
         student_no=f"map{uuid4().hex[:10]}",
         password_hash=hash_password("Password123"),
-        role="member",
+        role=role,
         status="active",
         must_change_password=must_change_password,
     )
@@ -209,6 +211,43 @@ def test_map_search_finds_points_by_keyword(api_client, db_session):
     assert data["items"][0]["map_point_id"]
 
 
+def test_map_search_can_include_external_amap_pois(api_client, db_session, monkeypatch):
+    user = create_member(db_session)
+    seed_map_data(db_session)
+
+    def fake_amap_json(path, params):
+        assert path == "/v3/place/text"
+        assert params["keywords"] == "教学楼"
+        return {
+            "status": "1",
+            "pois": [
+                {
+                    "id": "B0FFFAKE01",
+                    "name": "湖北师范大学教育大楼",
+                    "type": "科教文化服务;学校;高等院校",
+                    "address": "湖北省黄石市黄石港区",
+                    "location": "115.061700,30.231100",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(map_service, "_request_amap_json", fake_amap_json, raising=False)
+
+    response = api_client.get(
+        "/api/v1/map/search?keyword=教学楼&include_external=true&user_lng=115.062202&user_lat=30.229910",
+        headers=auth_headers(user),
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    external = next(item for item in data["items"] if item["result_type"] == "external_poi")
+    assert external["map_point_id"] is None
+    assert external["business_id"] == "amap:B0FFFAKE01"
+    assert external["title"] == "湖北师范大学教育大楼"
+    assert external["lng"] == 115.0617
+    assert external["distance_meters"] > 0
+
+
 def test_map_summary_and_navigation_return_point_card_data(api_client, db_session):
     user = create_member(db_session)
     points = seed_map_data(db_session)
@@ -233,6 +272,114 @@ def test_map_summary_and_navigation_return_point_card_data(api_client, db_sessio
     navigation_data = navigation.json()["data"]
     assert navigation_data["destination"]["lng"] == 115.0609
     assert "uri.amap.com" in navigation_data["amap_navigation"]["web_url"]
+
+
+def test_map_navigation_returns_walking_route_geometry(api_client, db_session, monkeypatch):
+    user = create_member(db_session)
+    points = seed_map_data(db_session)
+    point_id = points["task"].id
+
+    def fake_amap_json(path, params):
+        assert path == "/v3/direction/walking"
+        assert params["origin"] == "115.0622,30.22991"
+        assert params["destination"] == "115.0609,30.233"
+        return {
+            "status": "1",
+            "route": {
+                "paths": [
+                    {
+                        "distance": "450",
+                        "duration": "360",
+                        "steps": [
+                            {
+                                "instruction": "沿磁湖路向北步行",
+                                "distance": "300",
+                                "duration": "240",
+                                "polyline": "115.0622,30.22991;115.0615,30.2314",
+                            },
+                            {
+                                "instruction": "到达北门草丛",
+                                "distance": "150",
+                                "duration": "120",
+                                "polyline": "115.0615,30.2314;115.0609,30.233",
+                            },
+                        ],
+                    }
+                ]
+            },
+        }
+
+    monkeypatch.setattr(map_service, "_request_amap_json", fake_amap_json, raising=False)
+
+    response = api_client.get(
+        f"/api/v1/map/points/{point_id}/navigation?from_lng=115.0622&from_lat=30.22991",
+        headers=auth_headers(user),
+    )
+
+    assert response.status_code == 200
+    route = response.json()["data"]["route"]
+    assert route["provider"] == "amap"
+    assert route["fallback"] is False
+    assert route["distance_meters"] == 450
+    assert route["duration_seconds"] == 360
+    assert route["points"] == [
+        {"lng": 115.0622, "lat": 30.22991},
+        {"lng": 115.0615, "lat": 30.2314},
+        {"lng": 115.0609, "lat": 30.233},
+    ]
+    assert route["steps"][0]["instruction"] == "沿磁湖路向北步行"
+
+
+def test_admin_can_edit_map_point_and_location(api_client, db_session):
+    admin = create_member(db_session, role="admin")
+    points = seed_map_data(db_session)
+    point_id = points["task"].id
+
+    detail = api_client.get(
+        f"/api/v1/admin/map/points/{point_id}",
+        headers=auth_headers(admin),
+    )
+    update = api_client.patch(
+        f"/api/v1/admin/map/points/{point_id}",
+        json={
+            "name": "北门草丛救助点",
+            "location_name": "北门右侧草丛",
+            "route_instruction": "从北门进来后沿右侧围栏走。",
+        },
+        headers=auth_headers(admin),
+    )
+    location = api_client.patch(
+        f"/api/v1/admin/map/points/{point_id}/location",
+        json={"lng": 115.0611, "lat": 30.2332},
+        headers=auth_headers(admin),
+    )
+
+    assert detail.status_code == 200
+    assert detail.json()["data"]["name"] == "北门草丛紧急救助任务"
+
+    assert update.status_code == 200
+    assert update.json()["data"]["name"] == "北门草丛救助点"
+
+    assert location.status_code == 200
+    assert location.json()["data"]["lng"] == 115.0611
+    assert location.json()["data"]["lat"] == 30.2332
+    db_session.refresh(points["task"])
+    assert float(points["task"].lng) == 115.0611
+    assert points["task"].geom == "POINT(115.0611000 30.2332000)"
+
+
+def test_member_cannot_edit_map_point(api_client, db_session):
+    member = create_member(db_session)
+    points = seed_map_data(db_session)
+
+    response = api_client.patch(
+        f"/api/v1/admin/map/points/{points['task'].id}/location",
+        json={"lng": 115.0611, "lat": 30.2332},
+        headers=auth_headers(member),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == 40302
 
 
 def test_map_bottom_content_returns_latest_task_items(api_client, db_session):

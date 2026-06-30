@@ -104,6 +104,13 @@
 				"navigationStyle": "custom",
 				"navigationBarTitleText": "选择任务位置"
 			}
+		},
+		{
+			"path": "pages/admin/map-point/edit",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "编辑点位"
+			}
 		}
 	],
 	"globalStyle": {

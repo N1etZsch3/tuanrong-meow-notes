@@ -1,6 +1,9 @@
+import json
 from datetime import date
+from decimal import Decimal
 from math import asin, cos, radians, sin, sqrt
-from urllib.parse import quote
+from urllib.parse import quote, urlencode
+from urllib.request import urlopen
 from uuid import UUID
 
 from sqlalchemy import select
@@ -8,10 +11,12 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
 from app.core.errors import APIError, ErrorCode
+from app.modules.auth.models import User
 from app.modules.map.models import Campus, CampusArea, MapMarkerConfig, MapPoint, MapPointPhoto
 from app.modules.tasks.models import Task
 
 EARTH_RADIUS_METERS = 6_371_000
+AMAP_REST_BASE_URL = "https://restapi.amap.com"
 
 
 def as_float(value) -> float | None:
@@ -25,6 +30,16 @@ def parse_csv_filter(value: str | None) -> set[str] | None:
         return None
     values = {item.strip() for item in value.split(",") if item.strip()}
     return values or None
+
+
+def format_coord(value: float | Decimal | None) -> str:
+    if value is None:
+        return ""
+    return f"{float(value):.7f}".rstrip("0").rstrip(".")
+
+
+def point_wkt(lng: float | Decimal, lat: float | Decimal) -> str:
+    return f"POINT({float(lng):.7f} {float(lat):.7f})"
 
 
 def distance_meters(
@@ -41,6 +56,128 @@ def distance_meters(
     delta_lat = lat2 - lat1
     haversine = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lng / 2) ** 2
     return round(2 * EARTH_RADIUS_METERS * asin(sqrt(haversine)))
+
+
+def _request_amap_json(path: str, params: dict) -> dict:
+    settings = get_settings()
+    key = settings.effective_amap_web_service_key
+    if not key:
+        return {}
+    query = {**params, "key": key}
+    url = f"{AMAP_REST_BASE_URL}{path}?{urlencode(query)}"
+    with urlopen(url, timeout=settings.amap_web_service_timeout_seconds) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def parse_lng_lat_pair(value: str | None) -> tuple[float, float] | None:
+    if not value:
+        return None
+    try:
+        lng_text, lat_text = value.split(",", 1)
+        return float(lng_text), float(lat_text)
+    except (TypeError, ValueError):
+        return None
+
+
+def parse_amap_polyline(polyline: str | None) -> list[dict]:
+    if not polyline:
+        return []
+    points = []
+    for part in polyline.split(";"):
+        parsed = parse_lng_lat_pair(part)
+        if not parsed:
+            continue
+        lng, lat = parsed
+        point = {"lng": lng, "lat": lat}
+        if not points or points[-1] != point:
+            points.append(point)
+    return points
+
+
+def fallback_route(
+    *,
+    from_lng: float | None,
+    from_lat: float | None,
+    to_lng: float,
+    to_lat: float,
+) -> dict:
+    points = [{"lng": to_lng, "lat": to_lat}]
+    if from_lng is not None and from_lat is not None:
+        points.insert(0, {"lng": from_lng, "lat": from_lat})
+    return {
+        "provider": "fallback",
+        "fallback": True,
+        "distance_meters": distance_meters(
+            from_lng=from_lng,
+            from_lat=from_lat,
+            to_lng=to_lng,
+            to_lat=to_lat,
+        ),
+        "duration_seconds": None,
+        "points": points,
+        "steps": [],
+    }
+
+
+def build_walking_route(
+    *,
+    from_lng: float | None,
+    from_lat: float | None,
+    to_lng: float,
+    to_lat: float,
+) -> dict:
+    if from_lng is None or from_lat is None:
+        return fallback_route(from_lng=from_lng, from_lat=from_lat, to_lng=to_lng, to_lat=to_lat)
+
+    try:
+        payload = _request_amap_json(
+            "/v3/direction/walking",
+            {
+                "origin": f"{format_coord(from_lng)},{format_coord(from_lat)}",
+                "destination": f"{format_coord(to_lng)},{format_coord(to_lat)}",
+                "output": "json",
+            },
+        )
+    except Exception:
+        return fallback_route(from_lng=from_lng, from_lat=from_lat, to_lng=to_lng, to_lat=to_lat)
+
+    if payload.get("status") != "1":
+        return fallback_route(from_lng=from_lng, from_lat=from_lat, to_lng=to_lng, to_lat=to_lat)
+    paths = (payload.get("route") or {}).get("paths") or []
+    if not paths:
+        return fallback_route(from_lng=from_lng, from_lat=from_lat, to_lng=to_lng, to_lat=to_lat)
+
+    path = paths[0]
+    route_points: list[dict] = []
+    steps = []
+    for step in path.get("steps") or []:
+        polyline_points = parse_amap_polyline(step.get("polyline"))
+        for point in polyline_points:
+            if not route_points or route_points[-1] != point:
+                route_points.append(point)
+        steps.append(
+            {
+                "instruction": step.get("instruction") or "",
+                "distance_meters": int(float(step.get("distance") or 0)),
+                "duration_seconds": int(float(step.get("duration") or 0)),
+                "points": polyline_points,
+            }
+        )
+
+    if not route_points:
+        route_points = [
+            {"lng": from_lng, "lat": from_lat},
+            {"lng": to_lng, "lat": to_lat},
+        ]
+
+    return {
+        "provider": "amap",
+        "fallback": False,
+        "distance_meters": int(float(path.get("distance") or 0)),
+        "duration_seconds": int(float(path.get("duration") or 0)),
+        "points": route_points,
+        "steps": steps,
+    }
 
 
 def get_default_campus(db: Session, campus_id: UUID | None = None) -> Campus:
@@ -449,12 +586,77 @@ def normalized_search_text(point: MapPoint) -> str:
     return " ".join(value for value in values if value).lower()
 
 
+def external_poi_search_results(
+    *,
+    keyword: str,
+    campus: Campus,
+    user_lng: float | None = None,
+    user_lat: float | None = None,
+    limit: int = 20,
+) -> list[dict]:
+    try:
+        payload = _request_amap_json(
+            "/v3/place/text",
+            {
+                "keywords": keyword,
+                "city": "黄石",
+                "citylimit": "false",
+                "offset": str(min(max(limit, 1), 25)),
+                "page": "1",
+                "extensions": "base",
+                "output": "json",
+                "location": f"{format_coord(campus.center_lng)},{format_coord(campus.center_lat)}",
+            },
+        )
+    except Exception:
+        return []
+
+    if payload.get("status") != "1":
+        return []
+
+    results = []
+    for index, poi in enumerate(payload.get("pois") or []):
+        parsed = parse_lng_lat_pair(poi.get("location"))
+        if not parsed:
+            continue
+        lng, lat = parsed
+        poi_id = poi.get("id") or f"{keyword}-{index}"
+        distance = distance_meters(
+            from_lng=user_lng,
+            from_lat=user_lat,
+            to_lng=lng,
+            to_lat=lat,
+        )
+        results.append(
+            {
+                "result_type": "external_poi",
+                "map_point_id": None,
+                "business_id": f"amap:{poi_id}",
+                "point_type": "landmark",
+                "business_type": "amap_poi",
+                "title": poi.get("name") or keyword,
+                "subtitle": poi.get("type") or "高德地图点位",
+                "description": poi.get("address") or None,
+                "icon_key": "landmark",
+                "cover_photo_url": None,
+                "lng": lng,
+                "lat": lat,
+                "distance_meters": distance,
+                "status_label": "地图点位",
+                "highlight_text": keyword,
+                "sort_score": 50 - index,
+            }
+        )
+    return results
+
+
 def search(
     db: Session,
     *,
     keyword: str,
     campus_id: UUID | None = None,
     point_types: str | None = None,
+    include_external: bool = False,
     user_lng: float | None = None,
     user_lat: float | None = None,
     page: int = 1,
@@ -501,38 +703,51 @@ def search(
         payload["sort_score"] = point.display_level + exact_title_bonus + title_bonus
         matched.append(payload)
 
-    matched.sort(key=lambda item: item["sort_score"], reverse=True)
+    internal_items = [
+        {
+            "result_type": item["point_type"],
+            "map_point_id": item["point_id"],
+            "business_id": item["business_id"],
+            "point_type": item["point_type"],
+            "business_type": item["business_type"],
+            "title": item["name"],
+            "subtitle": item["subtitle"],
+            "description": points_by_id[item["point_id"]].description,
+            "icon_key": item["icon_key"],
+            "cover_photo_url": item["cover_photo_url"],
+            "lng": item["lng"],
+            "lat": item["lat"],
+            "distance_meters": item["distance_meters"],
+            "status_label": point_label_for_type(item["point_type"], item["business_type"]),
+            "highlight_text": normalized_keyword,
+            "sort_score": item["sort_score"],
+        }
+        for item in matched
+    ]
+    external_items = (
+        external_poi_search_results(
+            keyword=normalized_keyword,
+            campus=campus,
+            user_lng=user_lng,
+            user_lat=user_lat,
+            limit=page_size,
+        )
+        if include_external and (not type_filter or "landmark" in type_filter)
+        else []
+    )
+    all_items = [*internal_items, *external_items]
+    all_items.sort(key=lambda item: item["sort_score"], reverse=True)
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
     start = (page - 1) * page_size
-    items = matched[start : start + page_size]
+    items = all_items[start : start + page_size]
     return {
-        "items": [
-            {
-                "result_type": item["point_type"],
-                "map_point_id": item["point_id"],
-                "business_id": item["business_id"],
-                "point_type": item["point_type"],
-                "business_type": item["business_type"],
-                "title": item["name"],
-                "subtitle": item["subtitle"],
-                "description": points_by_id[item["point_id"]].description,
-                "icon_key": item["icon_key"],
-                "cover_photo_url": item["cover_photo_url"],
-                "lng": item["lng"],
-                "lat": item["lat"],
-                "distance_meters": item["distance_meters"],
-                "status_label": point_label_for_type(item["point_type"], item["business_type"]),
-                "highlight_text": normalized_keyword,
-                "sort_score": item["sort_score"],
-            }
-            for item in items
-        ],
+        "items": items,
         "page": page,
         "page_size": page_size,
-        "total": len(matched),
-        "has_more": start + page_size < len(matched),
-        "suggestions": [] if matched else ["北门", "小橘", "猫粮", "体育馆"],
+        "total": len(all_items),
+        "has_more": start + page_size < len(all_items),
+        "suggestions": [] if all_items else ["北门", "小橘", "猫粮", "体育馆"],
     }
 
 
@@ -653,7 +868,13 @@ def detail_path(point: MapPoint, task: Task | None = None) -> str:
     return f"/pages/map/points/detail?point_id={point.id}"
 
 
-def navigation(db: Session, *, point_id: UUID) -> dict:
+def navigation(
+    db: Session,
+    *,
+    point_id: UUID,
+    from_lng: float | None = None,
+    from_lat: float | None = None,
+) -> dict:
     point = get_visible_point(db, point_id)
     lng = as_float(point.lng)
     lat = as_float(point.lat)
@@ -682,6 +903,12 @@ def navigation(db: Session, *, point_id: UUID) -> dict:
             "open_url": f"amapuri://route/plan/?dlat={lat}&dlon={lng}&dev=0&t=2",
             "web_url": f"https://uri.amap.com/navigation?to={lng},{lat},{encoded_title}&mode=walk",
         },
+        "route": build_walking_route(
+            from_lng=from_lng,
+            from_lat=from_lat,
+            to_lng=lng,
+            to_lat=lat,
+        ),
     }
 
 
@@ -722,3 +949,119 @@ def bottom_content(db: Session, *, mode: str = "auto", limit: int = 10) -> dict:
             for point in points
         ],
     }
+
+
+def get_admin_point(db: Session, point_id: UUID) -> MapPoint:
+    point = db.scalar(
+        select(MapPoint)
+        .options(selectinload(MapPoint.area), selectinload(MapPoint.photos))
+        .where(MapPoint.id == point_id, MapPoint.deleted_at.is_(None))
+    )
+    if point is None:
+        raise APIError(
+            code=ErrorCode.MAP_POINT_NOT_FOUND,
+            message="点位不存在",
+            status_code=404,
+        )
+    return point
+
+
+def admin_point_payload(point: MapPoint) -> dict:
+    return {
+        "point_id": point.id,
+        "campus_id": point.campus_id,
+        "area_id": point.area_id,
+        "point_type": point.point_type,
+        "point_scope": point.point_scope,
+        "name": point.name,
+        "subtitle": point.subtitle,
+        "description": point.description,
+        "location_name": point.location_name,
+        "location_detail": point.location_detail,
+        "lng": as_float(point.lng),
+        "lat": as_float(point.lat),
+        "amap_poi_id": point.amap_poi_id,
+        "amap_address": point.amap_address,
+        "route_instruction": point.route_instruction,
+        "landmark_hint": point.landmark_hint,
+        "entrance_hint": point.entrance_hint,
+        "icon_key": point.icon_key,
+        "display_level": point.display_level,
+        "label_min_zoom": point.label_min_zoom,
+        "preview_enabled": point.preview_enabled,
+        "preview_min_zoom": point.preview_min_zoom,
+        "visibility": point.visibility,
+        "status": point.status,
+        "cover_photo_url": point_cover_photo(point),
+        "photos": [
+            photo_payload(photo)
+            for photo in sorted(point.photos, key=lambda item: item.sort_order)
+            if photo.deleted_at is None
+        ],
+        "updated_at": point.updated_at,
+    }
+
+
+ADMIN_POINT_EDITABLE_FIELDS = {
+    "area_id",
+    "point_type",
+    "point_scope",
+    "name",
+    "subtitle",
+    "description",
+    "location_name",
+    "location_detail",
+    "amap_poi_id",
+    "amap_address",
+    "route_instruction",
+    "landmark_hint",
+    "entrance_hint",
+    "icon_key",
+    "display_level",
+    "label_min_zoom",
+    "preview_enabled",
+    "preview_min_zoom",
+    "visibility",
+    "status",
+}
+
+
+def admin_point_detail(db: Session, *, point_id: UUID) -> dict:
+    return admin_point_payload(get_admin_point(db, point_id))
+
+
+def update_admin_point(
+    db: Session,
+    *,
+    point_id: UUID,
+    admin: User,
+    payload: dict,
+) -> dict:
+    point = get_admin_point(db, point_id)
+    for field, value in payload.items():
+        if field in ADMIN_POINT_EDITABLE_FIELDS:
+            setattr(point, field, value)
+    point.updated_by = admin.id
+    db.add(point)
+    db.commit()
+    db.refresh(point)
+    return admin_point_payload(point)
+
+
+def update_admin_point_location(
+    db: Session,
+    *,
+    point_id: UUID,
+    admin: User,
+    lng: float,
+    lat: float,
+) -> dict:
+    point = get_admin_point(db, point_id)
+    point.lng = Decimal(str(lng))
+    point.lat = Decimal(str(lat))
+    point.geom = point_wkt(lng, lat)
+    point.updated_by = admin.id
+    db.add(point)
+    db.commit()
+    db.refresh(point)
+    return admin_point_payload(point)

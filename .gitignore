@@ -9,6 +9,9 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Local secrets
+ssl_key/
+
 # Logs
 *.log
 logs/

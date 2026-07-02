@@ -45,14 +45,50 @@ function Assert-NotContains {
     }
 }
 
+function Assert-Before {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Content,
+        [Parameter(Mandatory = $true)]
+        [string] $EarlierNeedle,
+        [Parameter(Mandatory = $true)]
+        [string] $LaterNeedle,
+        [Parameter(Mandatory = $true)]
+        [string] $Message
+    )
+
+    $earlierIndex = $Content.IndexOf($EarlierNeedle)
+    $laterIndex = $Content.IndexOf($LaterNeedle)
+    if ($earlierIndex -lt 0 -or $laterIndex -lt 0 -or $earlierIndex -gt $laterIndex) {
+        throw $Message
+    }
+}
+
 $deployScript = Read-RequiredFile (Join-Path $repoRoot "scripts/deploy-backend.ps1")
 $nginxConfig = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap.conf")
 $frontendEnv = Read-RequiredFile (Join-Path $repoRoot "frontend/src/config/app-env.ts")
+$frontendEnvExample = Read-RequiredFile (Join-Path $repoRoot "frontend/.env.example")
 
 Assert-NotContains `
     -Content $deployScript `
     -Needle "server_key.txt" `
     -Message "deploy-backend.ps1 must not reference the server password file."
+
+Assert-Contains `
+    -Content $deployScript `
+    -Needle 'if [ -f "`$ENV_UPLOAD" ]; then' `
+    -Message "deploy-backend.ps1 must update the remote .env when -EnvFile is provided."
+
+Assert-Contains `
+    -Content $deployScript `
+    -Needle 'install -m 600 "`$ENV_UPLOAD" "`$DEPLOY_DIR/.env"' `
+    -Message "deploy-backend.ps1 must install the uploaded env file into the backend deploy directory."
+
+Assert-Before `
+    -Content $deployScript `
+    -EarlierNeedle 'if [ -f "`$ENV_UPLOAD" ]; then' `
+    -LaterNeedle 'if [ ! -f "`$DEPLOY_DIR/.env" ]; then' `
+    -Message "deploy-backend.ps1 must apply an uploaded env file before checking whether the remote .env already exists."
 
 Assert-Contains `
     -Content $deployScript `
@@ -76,7 +112,12 @@ Assert-Contains `
 
 Assert-Contains `
     -Content $frontendEnv `
-    -Needle 'const DEFAULT_API_BASE_URL = "http://203.0.113.10/api/v1";' `
-    -Message "Frontend default API base URL must point to the temporary HTTP IP endpoint."
+    -Needle 'apiBaseUrl: resolveApiBaseUrl(import.meta.env)' `
+    -Message "Frontend API base URL must be resolved from the build environment."
+
+Assert-Contains `
+    -Content $frontendEnvExample `
+    -Needle "VITE_API_BASE_URL=http://203.0.113.10/api/v1" `
+    -Message "Frontend env example must document the temporary HTTP IP endpoint."
 
 Write-Host "Deployment contract checks passed."

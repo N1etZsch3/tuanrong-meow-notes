@@ -73,6 +73,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="CATMAP_",
         env_file=BACKEND_DIR / ".env",
+        env_file_encoding="utf-8-sig",
         extra="ignore",
     )
 

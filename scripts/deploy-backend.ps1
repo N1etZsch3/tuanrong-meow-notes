@@ -179,13 +179,11 @@ find "`$DEPLOY_DIR" -mindepth 1 -maxdepth 1 \
     -exec rm -rf {} +
 cp -a /tmp/catmap-backend-new/. "`$DEPLOY_DIR"/
 
-if [ ! -f "`$DEPLOY_DIR/.env" ]; then
-    if [ -f "`$ENV_UPLOAD" ]; then
-        install -m 600 "`$ENV_UPLOAD" "`$DEPLOY_DIR/.env"
-    else
-        echo "`$DEPLOY_DIR/.env is missing. Pass -EnvFile on the first deploy." >&2
-        exit 1
-    fi
+if [ -f "`$ENV_UPLOAD" ]; then
+    install -m 600 "`$ENV_UPLOAD" "`$DEPLOY_DIR/.env"
+elif [ ! -f "`$DEPLOY_DIR/.env" ]; then
+    echo "`$DEPLOY_DIR/.env is missing. Pass -EnvFile on the first deploy." >&2
+    exit 1
 fi
 
 cd "`$DEPLOY_DIR"

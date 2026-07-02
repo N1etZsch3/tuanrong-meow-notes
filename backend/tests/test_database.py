@@ -24,6 +24,24 @@ def test_settings_returns_configured_database_url():
     assert settings.required_database_url == database_url
 
 
+def test_settings_reads_bom_prefixed_env_file(tmp_path, monkeypatch):
+    from app.core.config import Settings
+
+    monkeypatch.delenv("CATMAP_TENCENT_COS_SECRET_ID", raising=False)
+    env_file = tmp_path / ".env"
+    env_file.write_bytes(
+        "\ufeffCATMAP_TENCENT_COS_SECRET_ID=secret-id-from-env\n"
+        "CATMAP_TENCENT_COS_SECRET_KEY=secret-key-from-env\n"
+        "CATMAP_TENCENT_COS_BUCKET=catmap-test\n".encode()
+    )
+
+    settings = Settings(_env_file=env_file)
+
+    assert settings.tencent_cos_secret_id == "secret-id-from-env"
+    assert settings.tencent_cos_secret_key == "secret-key-from-env"
+    assert settings.tencent_cos_bucket == "catmap-test"
+
+
 def test_session_dependency_yields_session_and_closes(monkeypatch):
     import app.db.session as session_module
 

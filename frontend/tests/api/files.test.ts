@@ -9,7 +9,7 @@ describe("files api", () => {
 
   it("builds a mini-program image-safe asset content url", () => {
     expect(buildFileAssetContentUrl("asset-1", "task_list_cover")).toBe(
-      "http://localhost:8000/api/v1/files/assets/asset-1/content?scene=task_list_cover",
+      "https://catmap.example.com/api/v1/files/assets/asset-1/content?scene=task_list_cover",
     );
   });
 
@@ -17,7 +17,7 @@ describe("files api", () => {
     vi.stubGlobal("URLSearchParams", undefined);
 
     expect(buildFileAssetContentUrl("asset-1", "task detail full")).toBe(
-      "http://localhost:8000/api/v1/files/assets/asset-1/content?scene=task%20detail%20full",
+      "https://catmap.example.com/api/v1/files/assets/asset-1/content?scene=task%20detail%20full",
     );
   });
 

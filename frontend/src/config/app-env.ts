@@ -1,4 +1,4 @@
-const DEFAULT_API_BASE_URL = "http://localhost:8000/api/v1";
+const DEFAULT_API_BASE_URL = "https://catmap.example.com/api/v1";
 const DEFAULT_AMAP_WEB_KEY = "replace-with-amap-web-key";
 const DEFAULT_AMAP_SECURITY_JS_CODE = "replace-with-amap-security-js-code";
 

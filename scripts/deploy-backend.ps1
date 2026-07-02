@@ -18,7 +18,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $backendDir = Join-Path $repoRoot "backend"
 $nginxConfig = Join-Path $repoRoot "deploy\nginx\catmap.conf"
 $systemdService = Join-Path $repoRoot "deploy\systemd\catmap-backend.service"
-$healthUrl = "https://catmap.example.com/api/v1/health"
+$healthUrl = "http://203.0.113.10/api/v1/health"
 
 function Invoke-Native {
     param(
@@ -167,11 +167,6 @@ if [ -f "`$CERT_UPLOAD" ] && [ -f "`$KEY_UPLOAD" ]; then
     install -m 600 "`$KEY_UPLOAD" /etc/nginx/ssl/catmap/origin.key
 fi
 
-if [ ! -f /etc/nginx/ssl/catmap/origin.pem ] || [ ! -f /etc/nginx/ssl/catmap/origin.key ]; then
-    echo 'Cloudflare origin certificate files are missing on the server.' >&2
-    exit 1
-fi
-
 rm -rf /tmp/catmap-backend-new
 mkdir -p /tmp/catmap-backend-new
 tar -xf "`$ARCHIVE" -C /tmp/catmap-backend-new
@@ -258,7 +253,33 @@ rm -f "`$ARCHIVE" "`$ENV_UPLOAD" "`$NGINX_UPLOAD" "`$SERVICE_UPLOAD" "`$CERT_UPL
     }
 
     Invoke-Remote "bash /tmp/catmap-remote-deploy.sh"
-    Invoke-Native "curl.exe" @("--noproxy", "*", "--retry", "3", "--retry-delay", "2", "--max-time", "30", "-fsS", $healthUrl)
+
+    $healthBody = ""
+    $healthStatusCode = ""
+    $healthOutput = Join-Path $tempDir "health-response.json"
+    for ($attempt = 1; $attempt -le 8; $attempt++) {
+        $healthStatusCode = & curl.exe --noproxy "*" --max-time 10 -sS -o $healthOutput -w "%{http_code}" $healthUrl
+        $curlExitCode = $LASTEXITCODE
+        $healthBody = if (Test-Path -LiteralPath $healthOutput) {
+            (Get-Content -LiteralPath $healthOutput -Raw -Encoding UTF8).Trim()
+        } else {
+            ""
+        }
+
+        if ($curlExitCode -eq 0 -and $healthStatusCode -eq "200" -and $healthBody.Contains('"code":0')) {
+            break
+        }
+
+        if ($attempt -lt 8) {
+            Start-Sleep -Seconds 2
+        }
+    }
+
+    if ($healthStatusCode -ne "200" -or -not $healthBody.Contains('"code":0')) {
+        throw "Health check failed. HTTP $healthStatusCode. Body: $healthBody"
+    }
+
+    Write-Host $healthBody
     Write-Host ""
     Write-Host "Backend deployed and verified: $healthUrl"
 }

@@ -366,9 +366,9 @@ describe("summer feeding task pages", () => {
     ).toEqual({
       file_id: "asset-1",
       file_url:
-        "https://catmap.example.com/api/v1/files/assets/asset-1/content?scene=task_detail_full",
+        "http://203.0.113.10/api/v1/files/assets/asset-1/content?scene=task_detail_full",
       thumbnail_url:
-        "https://catmap.example.com/api/v1/files/assets/asset-1/content?scene=task_list_cover",
+        "http://203.0.113.10/api/v1/files/assets/asset-1/content?scene=task_list_cover",
     });
   });
 

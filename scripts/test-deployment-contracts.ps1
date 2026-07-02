@@ -56,13 +56,18 @@ Assert-NotContains `
 
 Assert-Contains `
     -Content $deployScript `
-    -Needle "https://catmap.example.com/api/v1/health" `
-    -Message "deploy-backend.ps1 must verify the production HTTPS health endpoint."
+    -Needle "http://203.0.113.10/api/v1/health" `
+    -Message "deploy-backend.ps1 must verify the temporary HTTP IP health endpoint."
 
 Assert-Contains `
     -Content $nginxConfig `
-    -Needle "return 301 https://catmap.example.com`$request_uri;" `
-    -Message "Nginx config must redirect HTTP to HTTPS."
+    -Needle "listen 80 default_server;" `
+    -Message "Nginx config must expose the HTTP API on port 80."
+
+Assert-NotContains `
+    -Content $nginxConfig `
+    -Needle "return 301 https://" `
+    -Message "Nginx config must not redirect HTTP to HTTPS for temporary IP access."
 
 Assert-Contains `
     -Content $nginxConfig `
@@ -71,7 +76,7 @@ Assert-Contains `
 
 Assert-Contains `
     -Content $frontendEnv `
-    -Needle 'const DEFAULT_API_BASE_URL = "https://catmap.example.com/api/v1";' `
-    -Message "Frontend default API base URL must point to the production HTTPS domain."
+    -Needle 'const DEFAULT_API_BASE_URL = "http://203.0.113.10/api/v1";' `
+    -Message "Frontend default API base URL must point to the temporary HTTP IP endpoint."
 
 Write-Host "Deployment contract checks passed."

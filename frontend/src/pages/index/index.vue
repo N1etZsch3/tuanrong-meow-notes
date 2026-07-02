@@ -25,10 +25,9 @@
         class="native-map"
         :longitude="mapCenter.lng"
         :latitude="mapCenter.lat"
-        :scale="Math.round(campusMapConfig.default_zoom)"
+        :scale="mapScale"
         :markers="nativeMapMarkers"
         :polyline="nativeMapPolylines"
-        :include-points="nativeMapIncludePoints"
         :min-scale="Math.round(campusMapConfig.min_zoom)"
         :max-scale="Math.round(campusMapConfig.max_zoom)"
         :show-location="Boolean(userLocation)"
@@ -175,12 +174,44 @@
 
         <view v-else-if="selectedSummary" class="summary-card">
           <view class="summary-card-head">
-            <view class="summary-icon" :class="`item-icon-${summaryType}`">
+            <image
+              v-if="summaryAvatarUrl"
+              class="summary-avatar-image"
+              :src="summaryAvatarUrl"
+              mode="aspectFill"
+              @tap="previewSummaryAvatar"
+            />
+            <view v-else class="summary-icon" :class="`item-icon-${summaryType}`">
               <text>{{ getItemSymbol(summaryType) }}</text>
             </view>
             <view class="summary-main">
-              <text class="summary-title">{{ selectedSummary.title }}</text>
-              <text class="summary-subtitle">{{ selectedSummary.subtitle || selectedSummary.location_name || "校园点位" }}</text>
+              <view class="summary-title-row">
+                <text class="summary-title">{{ selectedSummary.title }}</text>
+                <text v-if="summaryTypeTag" class="summary-type-badge">
+                  {{ summaryTypeTag }}
+                </text>
+              </view>
+              <text class="summary-subtitle">{{ summarySubtitleText }}</text>
+            </view>
+          </view>
+          <view v-if="summaryPreviewPhotos.length" class="summary-photo-strip">
+            <view
+              class="summary-photo-grid"
+              :class="`count-${summaryPreviewPhotos.length}`"
+            >
+              <button
+                v-for="photo in summaryPreviewPhotos"
+                :key="photo.photo_id"
+                class="summary-photo-cell"
+                hover-class="summary-photo-hover"
+                @tap="previewSummaryPhoto(photo)"
+              >
+                <image
+                  class="summary-photo-thumb"
+                  :src="getSummaryPhotoThumb(photo)"
+                  mode="aspectFill"
+                />
+              </button>
             </view>
           </view>
           <view v-if="selectedSummary.tags.length" class="summary-tags">
@@ -192,19 +223,16 @@
               {{ tag }}
             </text>
           </view>
-          <text v-if="selectedSummary.description" class="summary-desc">
-            {{ selectedSummary.description }}
+          <text v-if="summaryDescriptionText" class="summary-desc">
+            {{ summaryDescriptionText }}
           </text>
-          <view class="summary-location">
-            <text>{{ selectedSummary.location_name || "点位位置" }}</text>
-            <text v-if="selectedSummary.distance_meters !== null">
-              · 距离 {{ formatDistance(selectedSummary.distance_meters) }}
-            </text>
+          <view v-if="summaryLocationText" class="summary-location">
+            <text>{{ summaryLocationText }}</text>
           </view>
-          <view v-if="associatedPoi" class="summary-poi">
-            <text class="summary-poi-title">公共地点：{{ associatedPoi.name }}</text>
-            <text class="summary-poi-desc">
-              {{ associatedPoi.category || "腾讯地图点位" }} · {{ associatedPoi.address || "暂无地址" }}
+          <view v-if="showSummaryPoi" class="summary-poi">
+            <text v-if="summaryPoiTitleText" class="summary-poi-title">{{ summaryPoiTitleText }}</text>
+            <text v-if="summaryPoiDescriptionText" class="summary-poi-desc">
+              {{ summaryPoiDescriptionText }}
             </text>
           </view>
           <text v-if="selectedSummary.route_instruction" class="summary-route">
@@ -238,16 +266,22 @@
             hover-class="content-row-hover"
             @tap="selectShellItem(item)"
           >
-            <view class="item-icon" :class="`item-icon-${item.type}`">
+            <image
+              v-if="item.cover_photo_url"
+              class="item-cover"
+              :src="item.cover_photo_url"
+              mode="aspectFill"
+            />
+            <view v-else class="item-icon" :class="`item-icon-${item.type}`">
               <text>{{ getItemSymbol(item.type) }}</text>
             </view>
             <view class="item-main">
               <text class="item-title">{{ item.title }}</text>
               <view class="item-meta">
-                <text>· 距离 {{ formatDistance(item.distance_meters) }}</text>
+                <text>{{ getShellItemMetaText(item) }}</text>
               </view>
             </view>
-            <text class="item-status" :class="`status-${item.type}`">
+            <text class="item-status" :class="`status-${getShellItemStatusTone(item)}`">
               {{ item.status_label || "查看" }}
             </text>
           </button>
@@ -261,6 +295,13 @@
     </view>
 
     <AppTabBar active-key="map" />
+    <ImagePreviewModal
+      :visible="imagePreviewVisible"
+      :images="imagePreviewUrls"
+      :current-index="imagePreviewIndex"
+      @change="setImagePreviewIndex"
+      @close="closeImagePreview"
+    />
   </view>
 </template>
 
@@ -284,11 +325,18 @@ import {
   type MapInitResponse,
   type MapNavigationResponse,
   type MapPointMarkerDto,
+  type MapPointPhotoDto,
   type MapPointSummaryResponse,
 } from "@/api/map";
 import { updateAdminMapPointLocation } from "@/api/admin-map";
 import AppTabBar from "@/components/AppTabBar.vue";
+import ImagePreviewModal from "@/components/ImagePreviewModal.vue";
 import { ApiBusinessError, isRequestCanceledError } from "@/services/request";
+import {
+  getCachedUserLocation,
+  preloadUserLocation,
+  subscribeUserLocation,
+} from "@/services/user-location";
 import { useUserStore } from "@/stores/user";
 
 import allMarkerPointIcon from "../../../素材/svg/地图点/全部.svg";
@@ -319,18 +367,23 @@ import {
   clampLngLatToBounds,
   expandLngLatBounds,
   formatDistance,
+  getMarkerDisplayMode,
   getMapFilterLabel,
   getMapPointQueryByFilter,
   isFiniteLngLat,
+  isFiniteLngLatBounds,
   isLngLatInsideBounds,
   isMapShellItemVisibleByFilter,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
   mapSearchResultToShellItem,
   normalizeMapFilterOptions,
+  shouldQueryMapScaleFromRegionChange,
+  shouldSyncMapScaleFromRegionChange,
   type MapFilterOption,
   resolveMapShellItemType,
   type MapFilterKey,
+  type MapMarkerDisplayMode,
   type CampusMapConfig,
   type LngLat,
   type MapShellItem,
@@ -350,6 +403,7 @@ interface NavigationRouteState {
 
 interface PendingMapNavigation {
   source?: string;
+  focus_only?: boolean;
   task_id?: string;
   title?: string;
   map_point?: {
@@ -367,27 +421,45 @@ interface PendingMapNavigation {
   route_instruction?: string | null;
 }
 
-type WxLocationResult = {
-  longitude: number;
-  latitude: number;
+type NativeRoutePoint = { longitude: number; latitude: number };
+type NativeRegionChangeDetail = {
+  type?: string;
+  causedBy?: string;
+  scale?: number;
+  centerLocation?: { longitude?: number; latitude?: number };
 };
 
-type WxLike = {
-  getSetting?: (options: {
-    success?: (settings: { authSetting: Record<string, boolean | undefined> }) => void;
-    fail?: () => void;
-  }) => void;
-  authorize?: (options: {
-    scope: string;
+interface NativeMapMarker {
+  id: number;
+  longitude: number;
+  latitude: number;
+  iconPath: string;
+  width: number;
+  height: number;
+  anchor?: { x: number; y: number };
+  callout?: {
+    content: string;
+    color: string;
+    fontSize: number;
+    borderRadius: number;
+    bgColor: string;
+    padding: number;
+    display: "BYCLICK" | "ALWAYS";
+    textAlign?: "left" | "right" | "center";
+  };
+}
+
+type NativeMapContext = {
+  includePoints?: (options: {
+    points: NativeRoutePoint[];
+    padding?: number[];
     success?: () => void;
     fail?: () => void;
   }) => void;
-  getLocation?: (options: {
-    type?: string;
-    isHighAccuracy?: boolean;
-    highAccuracyExpireTime?: number;
-    success?: (location: WxLocationResult) => void;
+  getScale?: (options: {
+    success?: (result: { scale?: number }) => void;
     fail?: () => void;
+    complete?: () => void;
   }) => void;
 };
 
@@ -406,15 +478,21 @@ const contentLoadState = ref<ContentLoadState>("idle");
 const contentErrorMessage = ref("");
 const campusMapConfig = ref<CampusMapConfig>(HBNU_CAMPUS);
 const mapCenter = ref<LngLat>({ ...HBNU_CAMPUS.center });
+const mapScale = ref(Math.round(HBNU_CAMPUS.default_zoom));
 const userLocation = ref<LngLat | null>(null);
 const mapPointMarkers = ref<MapPointMarkerDto[]>([]);
-const nativeRoutePoints = ref<Array<{ longitude: number; latitude: number }>>([]);
+const nativeRoutePoints = ref<NativeRoutePoint[]>([]);
 const navigationRoute = ref<NavigationRouteState | null>(null);
-const simulatedNavigationMarker = ref<LngLat | null>(null);
-const navigationSimulationRunning = ref(false);
 const bottomContentItems = ref<MapShellItem[]>([]);
 const searchResultItems = ref<MapShellItem[]>([]);
 const selectedSummary = ref<MapPointSummaryResponse | null>(null);
+const imagePreviewVisible = ref(false);
+const imagePreviewUrls = ref<string[]>([]);
+const imagePreviewIndex = ref(0);
+const selectedPoiMarker = ref<MapPointMarkerDto | null>(null);
+const pendingPoiResolveKey = ref<string | null>(null);
+const lastResolvedPoiTapKey = ref<string | null>(null);
+const nativePoiTapSuppressedUntil = ref(0);
 const mapPointEditMode = ref(false);
 const editedPointLocation = ref<LngLat | null>(null);
 const editableMarkerScreenPosition = ref<{ x: number; y: number } | null>(null);
@@ -431,11 +509,18 @@ const MAP_FILTER_ICON_SRC: Record<string, string> = {
   filter_none: filterDefaultIcon,
 };
 const MARKER_LONG_PRESS_HIT_METERS = 60;
+const MAP_CENTER_ANIMATION_DURATION_MS = 320;
+const MAP_CENTER_ANIMATION_STEPS = 12;
+const MAP_CENTER_SYNC_EPSILON_METERS = 0.75;
+const MAP_SCALE_SYNC_EPSILON = 0.01;
+const MAP_POINT_FOCUS_SCALE = 18;
+const USER_LOCATION_FOCUS_SCALE = 18;
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let mapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
-let navigationSimulationTimer: ReturnType<typeof setInterval> | null = null;
-let navigationSimulationIndex = 0;
+let mapCenterAnimationTimer: ReturnType<typeof setTimeout> | null = null;
+let unsubscribeUserLocation: (() => void) | null = null;
+let poiResolveRequestSeq = 0;
 
 const isPageVisible = ref(true);
 const isSearchMode = computed(() => searchKeyword.value.trim().length > 0);
@@ -477,6 +562,31 @@ const summaryType = computed<MapShellItemType>(() => {
     ? resolveMapShellItemType(summary.point_type, summary.business_type)
     : "landmark";
 });
+function getSummaryPhotoThumb(photo: MapPointPhotoDto): string {
+  return photo.thumbnail_url || photo.file_url;
+}
+
+function getSummaryPhotoFullUrl(photo: MapPointPhotoDto): string {
+  return photo.file_url || photo.thumbnail_url || "";
+}
+
+const summaryPhotos = computed(() =>
+  (selectedSummary.value?.photos || []).filter((photo) => getSummaryPhotoThumb(photo)),
+);
+const summaryAvatarUrl = computed(() => {
+  const firstPhoto = summaryPhotos.value[0];
+  return firstPhoto
+    ? getSummaryPhotoThumb(firstPhoto)
+    : selectedSummary.value?.cover_photo_url || "";
+});
+const summaryPreviewPhotos = computed(() => summaryPhotos.value.slice(1, 4));
+const summaryPreviewUrls = computed(() => {
+  const urls = summaryPhotos.value
+    .map((photo) => getSummaryPhotoFullUrl(photo))
+    .filter((url) => url);
+  return urls.length || !summaryAvatarUrl.value ? urls : [summaryAvatarUrl.value];
+});
+const summaryTypeTag = computed(() => selectedSummary.value?.tags[0] || "");
 const summaryActions = computed<CardActionDto[]>(() => {
   if (!selectedSummary.value) {
     return [];
@@ -484,6 +594,176 @@ const summaryActions = computed<CardActionDto[]>(() => {
   return selectedSummary.value.actions;
 });
 const associatedPoi = computed(() => selectedSummary.value?.associated_poi || null);
+function normalizeSummaryText(value: string | null | undefined): string {
+  return (value || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/[·:：,，。.;；-]/g, "")
+    .toLowerCase();
+}
+
+function isDuplicateSummaryText(
+  value: string | null | undefined,
+  candidates: Array<string | null | undefined>,
+): boolean {
+  const normalized = normalizeSummaryText(value);
+  if (!normalized) {
+    return true;
+  }
+
+  return candidates.some((candidate) => {
+    const normalizedCandidate = normalizeSummaryText(candidate);
+    return (
+      normalizedCandidate.length > 0 &&
+      (normalizedCandidate === normalized ||
+        normalizedCandidate.includes(normalized) ||
+        normalized.includes(normalizedCandidate))
+    );
+  });
+}
+
+function firstDistinctSummaryText(
+  values: Array<string | null | undefined>,
+  candidates: Array<string | null | undefined>,
+): string {
+  for (const value of values) {
+    const text = value?.trim();
+    if (text && !isDuplicateSummaryText(text, candidates)) {
+      return text;
+    }
+  }
+  return "";
+}
+
+const summarySubtitleText = computed(() => {
+  const summary = selectedSummary.value;
+  if (!summary) {
+    return "";
+  }
+
+  return (
+    firstDistinctSummaryText(
+      [summary.subtitle, summary.location_name, summary.location_detail],
+      [summary.title],
+    ) || "校园点位"
+  );
+});
+const summaryDescriptionText = computed(() => {
+  const summary = selectedSummary.value;
+  if (!summary) {
+    return "";
+  }
+  const poi = associatedPoi.value;
+  return firstDistinctSummaryText(
+    [summary.description],
+    [
+      summary.title,
+      summarySubtitleText.value,
+      summary.location_name,
+      summary.location_detail,
+      poi?.name,
+      poi?.category,
+      poi?.address,
+    ],
+  );
+});
+const summaryLocationText = computed(() => {
+  const summary = selectedSummary.value;
+  if (!summary) {
+    return "";
+  }
+  const parts: string[] = [];
+  const locationText = firstDistinctSummaryText(
+    [summary.location_name, summary.location_detail],
+    [summary.title, summarySubtitleText.value, summaryDescriptionText.value],
+  );
+  if (locationText) {
+    parts.push(locationText);
+  }
+  if (summary.distance_meters !== null) {
+    parts.push(`距离 ${formatDistance(summary.distance_meters)}`);
+  }
+  return parts.join(" · ");
+});
+const summaryPoiTitleText = computed(() => {
+  const summary = selectedSummary.value;
+  const poi = associatedPoi.value;
+  if (!summary || !poi) {
+    return "";
+  }
+  const poiName = firstDistinctSummaryText(
+    [poi.name],
+    [summary.title, summary.location_name, summary.location_detail],
+  );
+  return poiName ? `公共地点：${poiName}` : "";
+});
+const summaryPoiDescriptionText = computed(() => {
+  const summary = selectedSummary.value;
+  const poi = associatedPoi.value;
+  if (!summary || !poi) {
+    return "";
+  }
+  const parts: string[] = [];
+  const category = firstDistinctSummaryText(
+    [poi.category],
+    [summary.title, summarySubtitleText.value, summaryDescriptionText.value],
+  );
+  if (category) {
+    parts.push(category);
+  }
+  const address = firstDistinctSummaryText(
+    [poi.address],
+    [
+      summary.title,
+      summarySubtitleText.value,
+      summaryDescriptionText.value,
+      summary.location_name,
+      ...parts,
+    ],
+  );
+  if (address) {
+    parts.push(address);
+  }
+  return parts.join(" · ");
+});
+const showSummaryPoi = computed(() =>
+  Boolean(associatedPoi.value && (summaryPoiTitleText.value || summaryPoiDescriptionText.value)),
+);
+
+function previewSummaryPhoto(photo: MapPointPhotoDto) {
+  const current = getSummaryPhotoFullUrl(photo);
+  if (!current) {
+    return;
+  }
+  openImagePreview(summaryPreviewUrls.value, current);
+}
+
+function previewSummaryAvatar() {
+  const firstPhoto = summaryPhotos.value[0];
+  const current = firstPhoto ? getSummaryPhotoFullUrl(firstPhoto) : summaryAvatarUrl.value;
+  if (!current) {
+    return;
+  }
+  openImagePreview(summaryPreviewUrls.value, current);
+}
+
+function openImagePreview(urls: string[], current: string) {
+  const uniqueUrls = Array.from(new Set(urls.filter((url) => url)));
+  const resolvedUrls = uniqueUrls.length ? uniqueUrls : [current];
+  const currentIndex = Math.max(0, resolvedUrls.indexOf(current));
+  imagePreviewUrls.value = resolvedUrls;
+  imagePreviewIndex.value = currentIndex;
+  imagePreviewVisible.value = true;
+}
+
+function closeImagePreview() {
+  imagePreviewVisible.value = false;
+}
+
+function setImagePreviewIndex(index: number) {
+  imagePreviewIndex.value = index;
+}
+
 const navigationRouteDistance = computed(() =>
   navigationRoute.value ? formatDistance(navigationRoute.value.distance_meters) : "未知",
 );
@@ -525,6 +805,10 @@ const contentSectionTitle = computed(() => {
     return "搜索结果";
   }
 
+  if (activeFilter.value) {
+    return activeFilterLabel.value;
+  }
+
   return "最新任务";
 });
 const contentSectionAction = computed(() => {
@@ -542,6 +826,10 @@ const contentSectionAction = computed(() => {
 
   if (isSearchMode.value) {
     return `${visibleItems.value.length} 个结果`;
+  }
+
+  if (activeFilter.value) {
+    return `${visibleItems.value.length} 个点位`;
   }
 
   return "后端实时数据";
@@ -562,52 +850,210 @@ const emptyDescription = computed(() => {
     ? "可以换个关键词，例如“北门”“小橘”“猫粮”。"
     : "后端暂时没有返回最新任务。";
 });
-const nativeMarkerSourceMarkers = computed(() =>
-  mapPointMarkers.value.filter((marker) =>
+function isExternalPoiMarker(marker: MapPointMarkerDto): boolean {
+  return marker.business_type === "tencent_poi" || marker.extra.is_external_poi === true;
+}
+
+function isSamePoiMarker(a: MapPointMarkerDto, b: MapPointMarkerDto): boolean {
+  return (
+    a.point_id === b.point_id ||
+    (isExternalPoiMarker(a) &&
+      isExternalPoiMarker(b) &&
+      Math.abs(a.lng - b.lng) < 0.000001 &&
+      Math.abs(a.lat - b.lat) < 0.000001)
+  );
+}
+
+function getPoiTapKey(input: { lng: number; lat: number; keyword?: string }): string {
+  const lng = input.lng.toFixed(5);
+  const lat = input.lat.toFixed(5);
+  const keyword = (input.keyword || "").trim().toLowerCase();
+  return `${lng},${lat}:${keyword}`;
+}
+
+function isSameSelectedPoiTap(input: { lng: number; lat: number; keyword?: string }): boolean {
+  const summary = selectedSummary.value;
+  if (summary?.business_type !== "tencent_poi") {
+    return false;
+  }
+
+  const tappedPoint = { lng: input.lng, lat: input.lat };
+  const selectedPoint = { lng: summary.lng, lat: summary.lat };
+  const keyword = (input.keyword || "").trim();
+  const titleMatched = keyword ? summary.title === keyword || summary.location_name === keyword : true;
+  const distance = distanceMetersBetween(tappedPoint, selectedPoint);
+  return distance <= 8 || (titleMatched && distance <= 30);
+}
+
+function shouldSkipPoiResolve(
+  poiTapKey: string,
+  input?: { lng: number; lat: number; keyword?: string },
+): boolean {
+  if (pendingPoiResolveKey.value !== null) {
+    return true;
+  }
+  if (input && isSameSelectedPoiTap(input)) {
+    return true;
+  }
+
+  return (
+    lastResolvedPoiTapKey.value === poiTapKey &&
+    selectedSummary.value?.business_type === "tencent_poi" &&
+    selectedPoiMarker.value !== null
+  );
+}
+
+function suppressNativePoiTaps(durationMs = MAP_CENTER_ANIMATION_DURATION_MS + 400) {
+  nativePoiTapSuppressedUntil.value = Date.now() + durationMs;
+}
+
+function isNativePoiTapSuppressed(): boolean {
+  return Date.now() < nativePoiTapSuppressedUntil.value;
+}
+
+function startPoiResolve(poiTapKey: string): number {
+  poiResolveRequestSeq += 1;
+  pendingPoiResolveKey.value = poiTapKey;
+  return poiResolveRequestSeq;
+}
+
+function isCurrentPoiResolve(resolveRequestId: number): boolean {
+  return resolveRequestId === poiResolveRequestSeq;
+}
+
+function finishPoiResolve(resolveRequestId: number, poiTapKey: string) {
+  if (isCurrentPoiResolve(resolveRequestId) && pendingPoiResolveKey.value === poiTapKey) {
+    pendingPoiResolveKey.value = null;
+  }
+}
+
+function clearNativePoiSelection() {
+  poiResolveRequestSeq += 1;
+  pendingPoiResolveKey.value = null;
+  lastResolvedPoiTapKey.value = null;
+  selectedPoiMarker.value = null;
+  if (selectedSummary.value?.business_type === "tencent_poi") {
+    selectedSummary.value = null;
+  }
+}
+
+function getNativeMarkerDisplayMode(marker: MapPointMarkerDto): MapMarkerDisplayMode {
+  if (isExternalPoiMarker(marker)) {
+    return "icon";
+  }
+
+  const selectedPointId = selectedSummary.value?.point_id;
+  if (selectedPointId && selectedPointId !== marker.point_id) return "icon";
+
+  return getMarkerDisplayMode({
+    zoom: mapScale.value,
+    visibleMarkerCount: nativeMarkerSourceMarkers.value.length,
+    previewEnabled: marker.preview_enabled || Boolean(marker.cover_photo_url),
+    labelMinZoom: marker.label_min_zoom,
+    previewMinZoom: marker.preview_min_zoom,
+    selected: selectedPointId === marker.point_id,
+  });
+}
+
+const nativeMarkerSourceMarkers = computed(() => {
+  const markers = mapPointMarkers.value.filter((marker) =>
     isFiniteLngLat({ lng: marker.lng, lat: marker.lat }),
-  ),
-);
+  );
+  const selectedPoi = selectedPoiMarker.value;
+
+  if (
+    selectedPoi &&
+    isFiniteLngLat({ lng: selectedPoi.lng, lat: selectedPoi.lat }) &&
+    !markers.some((marker) => isSamePoiMarker(marker, selectedPoi))
+  ) {
+    markers.push(selectedPoi);
+  }
+
+  return markers;
+});
+
+function hashNativeMarkerKey(key: string): number {
+  let hash = 0;
+  for (let index = 0; index < key.length; index += 1) {
+    hash = (hash * 31 + key.charCodeAt(index)) >>> 0;
+  }
+  return hash;
+}
+
+function getNativeMarkerStableId(marker: MapPointMarkerDto): number {
+  const key =
+    marker.point_id ||
+    marker.business_id ||
+    `${marker.point_type}:${marker.business_type}:${marker.lng.toFixed(6)},${marker.lat.toFixed(6)}:${marker.name}`;
+  return 1000 + (hashNativeMarkerKey(key) % 800000);
+}
+
+function findNativeMarkerByStableId(markerId: number): MapPointMarkerDto | null {
+  const usedMarkerIds = new Set<number>();
+  for (const marker of nativeMarkerSourceMarkers.value) {
+    let stableId = getNativeMarkerStableId(marker);
+    while (usedMarkerIds.has(stableId)) {
+      stableId += 1;
+    }
+    usedMarkerIds.add(stableId);
+    if (stableId === markerId) {
+      return marker;
+    }
+  }
+  return null;
+}
+
+function buildNativeMarkerTitleCallout(title: string): NonNullable<NativeMapMarker["callout"]> {
+  if (!title.trim()) {
+    return {
+      content: "",
+      color: "#111827",
+      fontSize: 1,
+      borderRadius: 0,
+      bgColor: "#ffffff",
+      padding: 0,
+      display: "BYCLICK",
+      textAlign: "center",
+    };
+  }
+
+  return {
+    content: title,
+    color: "#111827",
+    fontSize: 12,
+    borderRadius: 8,
+    bgColor: "#ffffff",
+    padding: 8,
+    display: "ALWAYS",
+    textAlign: "center",
+  };
+}
+
 const nativeMapMarkers = computed(() => {
-  const markers = nativeMarkerSourceMarkers.value.map((marker, index) => {
+  const usedMarkerIds = new Set<number>();
+  const markers: NativeMapMarker[] = nativeMarkerSourceMarkers.value.map((marker) => {
     const type = resolveMapShellItemType(marker.point_type, marker.business_type);
+    const displayMode = getNativeMarkerDisplayMode(marker);
+    let markerId = getNativeMarkerStableId(marker);
+    while (usedMarkerIds.has(markerId)) {
+      markerId += 1;
+    }
+    usedMarkerIds.add(markerId);
 
     return {
-      id: index + 1,
+      id: markerId,
       longitude: marker.lng,
       latitude: marker.lat,
       iconPath: getNativeMarkerIcon(type, marker),
       width: 34,
       height: 34,
-      callout: {
-        content: marker.name,
-        color: "#111827",
-        fontSize: 12,
-        borderRadius: 8,
-        bgColor: "#ffffff",
-        padding: 8,
-        display: "BYCLICK",
-      },
+      anchor: { x: 0.5, y: 1 },
+      callout:
+        displayMode === "label"
+          ? buildNativeMarkerTitleCallout(marker.name)
+          : buildNativeMarkerTitleCallout(""),
     };
   });
-  if (simulatedNavigationMarker.value) {
-    markers.push({
-      id: 900001,
-      longitude: simulatedNavigationMarker.value.lng,
-      latitude: simulatedNavigationMarker.value.lat,
-      iconPath: locationIcon,
-      width: 32,
-      height: 32,
-      callout: {
-        content: "当前位置",
-        color: "#267b2f",
-        fontSize: 12,
-        borderRadius: 8,
-        bgColor: "#ffffff",
-        padding: 8,
-        display: "BYCLICK",
-      },
-    });
-  }
   if (mapPointEditMode.value && editedPointLocation.value) {
     markers.push({
       id: 900002,
@@ -616,6 +1062,7 @@ const nativeMapMarkers = computed(() => {
       iconPath: locationIcon,
       width: 38,
       height: 38,
+      anchor: { x: 0.5, y: 1 },
       callout: {
         content: "编辑位置",
         color: "#111827",
@@ -637,8 +1084,8 @@ const nativeMapPolylines = computed(() => {
   return [
     {
       points: nativeRoutePoints.value,
-      color: "#267b2fCC",
-      width: 6,
+      color: "#267b2f",
+      width: 8,
       dottedLine: false,
       arrowLine: true,
       borderColor: "#ffffff",
@@ -646,25 +1093,11 @@ const nativeMapPolylines = computed(() => {
     },
   ];
 });
-const nativeMapIncludePoints = computed(() => {
-  if (nativeRoutePoints.value.length) {
-    return nativeRoutePoints.value.filter(
-      (point) =>
-        Number.isFinite(point.longitude) && Number.isFinite(point.latitude),
-    );
-  }
-
-  return nativeMarkerSourceMarkers.value
-    .map((marker) => toNativeMapPoint(marker))
-    .filter(
-      (point): point is { longitude: number; latitude: number } =>
-        Boolean(point),
-    );
-});
-
 function selectFilter(option: MapFilterOption) {
-  activeFilter.value = option.key === NO_MAP_FILTER_KEY ? null : option.key;
   filterMenuOpen.value = false;
+  selectedSummary.value = null;
+  selectedPoiMarker.value = null;
+  activeFilter.value = option.key === NO_MAP_FILTER_KEY ? null : option.key;
 }
 
 function toggleFilterMenu() {
@@ -686,6 +1119,7 @@ function clearSearch() {
   searchKeyword.value = "";
   searchResultItems.value = [];
   selectedSummary.value = null;
+  selectedPoiMarker.value = null;
   clearSearchResultMarkers();
 }
 
@@ -706,15 +1140,18 @@ function selectFirstSearchResult() {
 
 function selectShellItem(item: MapShellItem) {
   if (isFiniteLngLat(item)) {
-    centerMapToPoint(item);
+    focusMapToPoint(item);
   }
 
   if (item.map_point_id) {
+    selectedPoiMarker.value = null;
     void loadPointSummary(item.map_point_id);
     return;
   }
 
-  selectedSummary.value = buildExternalSummaryFromItem(item);
+  const summary = buildExternalSummaryFromItem(item);
+  selectedSummary.value = summary;
+  selectedPoiMarker.value = summary ? buildSelectedPoiMarker(summary) : null;
 }
 
 function getItemSymbol(type: MapShellItemType): string {
@@ -729,6 +1166,32 @@ function getItemSymbol(type: MapShellItemType): string {
   return symbols[type];
 }
 
+function isTaskShellItem(item: MapShellItem): boolean {
+  return item.type === "daily_task" || item.type === "emergency_task";
+}
+
+function getShellItemMetaText(item: MapShellItem): string {
+  if (isTaskShellItem(item)) {
+    return item.description || item.subtitle || "暂无位置补充说明";
+  }
+
+  return `· 距离 ${formatDistance(item.distance_meters)}`;
+}
+
+function getShellItemStatusTone(item: MapShellItem): string {
+  if (!isTaskShellItem(item)) {
+    return item.type;
+  }
+
+  if (item.status_key === "completed" || item.status_label === "已完成") {
+    return "completed";
+  }
+  if (item.status_key === "in_progress" || item.status_label === "进行中") {
+    return "in_progress";
+  }
+  return item.type;
+}
+
 function getFeedingMarkerIcon(marker: MapPointMarkerDto): string {
   return marker.extra.feeding_status === "completed"
     ? completedTaskMarkerIcon
@@ -739,6 +1202,10 @@ function getNativeMarkerIcon(
   type: MapShellItemType,
   marker?: MapPointMarkerDto,
 ): string {
+  if (marker && (marker.icon_key === "landmark" || marker.business_type === "tencent_poi")) {
+    return landmarkPointIcon;
+  }
+
   if (marker && marker.business_type === "feeding") {
     return getFeedingMarkerIcon(marker);
   }
@@ -748,7 +1215,7 @@ function getNativeMarkerIcon(
     daily_task: taskMarkerIcon,
     cat: catMarkerIcon,
     supply: supplyMarkerIcon,
-    landmark: locationIcon,
+    landmark: landmarkPointIcon,
   };
 
   return icons[type];
@@ -782,195 +1249,202 @@ function handleMapError(error: unknown, fallbackMessage: string) {
   contentErrorMessage.value = fallbackMessage;
 }
 
-function centerMapToPoint(point: LngLat) {
-  mapCenter.value = clampLngLatToBounds(point, campusMapConfig.value.limit_bounds);
+function stopMapCenterAnimation() {
+  if (!mapCenterAnimationTimer) {
+    return;
+  }
+  clearTimeout(mapCenterAnimationTimer);
+  mapCenterAnimationTimer = null;
+}
+
+function animateMapCenterToPoint(nextCenter: LngLat) {
+  stopMapCenterAnimation();
+
+  const startCenter = { ...mapCenter.value };
+  const deltaLng = nextCenter.lng - startCenter.lng;
+  const deltaLat = nextCenter.lat - startCenter.lat;
+  if (Math.abs(deltaLng) < 0.000001 && Math.abs(deltaLat) < 0.000001) {
+    mapCenter.value = nextCenter;
+    return;
+  }
+
+  let step = 0;
+  const tick = () => {
+    step += 1;
+    const progress = Math.min(step / MAP_CENTER_ANIMATION_STEPS, 1);
+    const easedProgress = 1 - (1 - progress) ** 3;
+    mapCenter.value = {
+      lng: startCenter.lng + deltaLng * easedProgress,
+      lat: startCenter.lat + deltaLat * easedProgress,
+    };
+
+    if (progress >= 1) {
+      mapCenter.value = nextCenter;
+      mapCenterAnimationTimer = null;
+      return;
+    }
+
+    mapCenterAnimationTimer = setTimeout(
+      tick,
+      MAP_CENTER_ANIMATION_DURATION_MS / MAP_CENTER_ANIMATION_STEPS,
+    );
+  };
+
+  tick();
+}
+
+function centerMapToPoint(point: LngLat, options: { smooth?: boolean } = {}) {
+  const nextCenter = clampLngLatToBounds(point, campusMapConfig.value.limit_bounds);
+  if (options.smooth) {
+    animateMapCenterToPoint(nextCenter);
+    return;
+  }
+  stopMapCenterAnimation();
+  mapCenter.value = nextCenter;
 }
 
 function centerMapToCampus() {
   centerMapToPoint(campusMapConfig.value.center);
 }
 
-function setUserLocation(point: LngLat) {
-  userLocation.value = point;
+function syncUserLocation(point: LngLat | null) {
+  userLocation.value = point ? { lng: point.lng, lat: point.lat } : null;
 }
 
-function getWxApi(): WxLike | null {
-  return (globalThis as unknown as { wx?: WxLike }).wx || null;
+function focusMapToPoint(point: LngLat) {
+  mapScale.value = getMapPointFocusScale();
+  centerMapToPoint(point, { smooth: true });
 }
 
-function requestUserLocation(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const wx = getWxApi();
-    const getSetting = wx?.getSetting;
-    const authorize = wx?.authorize;
-    if (!getSetting || !authorize) {
-      uni.getSetting({
-        success: (settings) => {
-          if (settings.authSetting["scope.userLocation"]) {
-            resolve(true);
-            return;
-          }
-          uni.authorize({
-            scope: "scope.userLocation",
-            success: () => resolve(true),
-            fail: () => resolve(false),
-          });
-        },
-        fail: () => resolve(true),
-      });
+function isSameMapCenter(a: LngLat, b: LngLat): boolean {
+  return distanceMetersBetween(a, b) <= MAP_CENTER_SYNC_EPSILON_METERS;
+}
+
+function syncMapCenterFromNative(nextCenter: LngLat) {
+  if (!isSameMapCenter(mapCenter.value, nextCenter)) {
+    mapCenter.value = nextCenter;
+  }
+}
+
+function syncMapScaleFromNative(nextScale: number) {
+  const minScale = Math.round(campusMapConfig.value.min_zoom);
+  const maxScale = Math.round(campusMapConfig.value.max_zoom);
+  const clampedScale = Math.min(Math.max(nextScale, minScale), maxScale);
+  if (Math.abs(mapScale.value - clampedScale) >= MAP_SCALE_SYNC_EPSILON) {
+    mapScale.value = clampedScale;
+  }
+}
+
+function syncMapScaleFromContext(onComplete?: () => void) {
+  const mapContext = uni.createMapContext("campus-map") as unknown as NativeMapContext;
+  if (typeof mapContext.getScale !== "function") {
+    onComplete?.();
+    return;
+  }
+  let completed = false;
+  const completeOnce = () => {
+    if (completed) {
       return;
     }
-
-    getSetting({
-      success: (settings) => {
-        if (settings.authSetting["scope.userLocation"]) {
-          resolve(true);
-          return;
-        }
-        authorize({
-          scope: "scope.userLocation",
-          success: () => resolve(true),
-          fail: () => resolve(false),
-        });
-      },
-      fail: () => resolve(true),
-    });
+    completed = true;
+    onComplete?.();
+  };
+  mapContext.getScale({
+    success: (result) => {
+      syncMapScaleFromNative(Number(result.scale));
+      completeOnce();
+    },
+    fail: completeOnce,
+    complete: completeOnce,
   });
+  setTimeout(completeOnce, 120);
 }
 
-function getCampusFallbackLocation(): LngLat {
-  return { ...campusMapConfig.value.center };
+function getClampedMapScale(targetScale: number): number {
+  const minScale = Math.round(campusMapConfig.value.min_zoom);
+  const maxScale = Math.round(campusMapConfig.value.max_zoom);
+  return Math.min(Math.max(targetScale, minScale), maxScale);
 }
 
-function getWechatMiniProgramLocation(): Promise<LngLat | null> {
-  const wx = getWxApi();
-  return new Promise((resolve) => {
-    const handleSuccess = (location: WxLocationResult) => {
-      const point = {
-        lng: location.longitude,
-        lat: location.latitude,
-      };
-      resolve(isFiniteLngLat(point) ? point : null);
-    };
-
-    const locationOptions = {
-      type: "gcj02",
-      isHighAccuracy: true,
-      highAccuracyExpireTime: 4000,
-      success: handleSuccess,
-      fail: () => resolve(null),
-    };
-
-    if (wx?.getLocation) {
-      wx.getLocation(locationOptions);
-      return;
-    }
-
-    uni.getLocation(locationOptions as UniNamespace.GetLocationOptions & {
-      isHighAccuracy?: boolean;
-      highAccuracyExpireTime?: number;
-    });
-  });
+function getMapPointFocusScale(): number {
+  return getClampedMapScale(MAP_POINT_FOCUS_SCALE);
 }
 
-async function getLocationWithFallback(
-  options: { silent?: boolean; allowFallback?: boolean } = {},
-): Promise<LngLat | null> {
-  if (userLocation.value) {
-    return userLocation.value;
-  }
-
-  const authorized = await requestUserLocation();
-  if (!authorized) {
-    if (options.allowFallback === false) {
-      return null;
-    }
-    const fallback = getCampusFallbackLocation();
-    setUserLocation(fallback);
-    if (!options.silent) {
-      uni.showToast({ title: "无法获取当前位置", icon: "none" });
-    }
-    return fallback;
-  }
-
-  const point = await getWechatMiniProgramLocation();
-  if (point) {
-    setUserLocation(point);
-    return point;
-  }
-
-  if (options.allowFallback === false) {
-    return null;
-  }
-
-  const fallback = getCampusFallbackLocation();
-  setUserLocation(fallback);
-  if (!options.silent) {
-    uni.showToast({ title: "无法获取当前位置", icon: "none" });
-  }
-  return fallback;
+function getUserLocationFocusScale(): number {
+  return getClampedMapScale(USER_LOCATION_FOCUS_SCALE);
 }
 
-function getCurrentLocationForNavigation(): Promise<LngLat | null> {
-  return getLocationWithFallback({ silent: true, allowFallback: false });
+async function getCurrentLocationForNavigation(): Promise<LngLat | null> {
+  const cached = userLocation.value || getCachedUserLocation();
+  if (cached) {
+    return { lng: cached.lng, lat: cached.lat };
+  }
+
+  const point = await preloadUserLocation({ silent: true });
+  return point ? { lng: point.lng, lat: point.lat } : null;
 }
 
 function clearNativeRoute() {
   nativeRoutePoints.value = [];
   navigationRoute.value = null;
-  simulatedNavigationMarker.value = null;
-  stopNavigationTracking();
+}
+
+function fitNativeMapToRoute(points: NativeRoutePoint[]): boolean {
+  if (points.length < 2) {
+    return false;
+  }
+
+  const mapContext = uni.createMapContext("campus-map") as unknown as NativeMapContext;
+  if (typeof mapContext.includePoints !== "function") {
+    return false;
+  }
+
+  mapContext.includePoints({
+    points,
+    padding: [72, 72, 280, 72],
+  });
+  return true;
 }
 
 function renderNativeRoute(from: LngLat, destination: LngLat, routePoints?: LngLat[]) {
   clearNativeRoute();
   const routeLngLatPoints = (routePoints && routePoints.length >= 2 ? routePoints : [from, destination])
-    .filter(isFiniteLngLat)
-    .map((point) => clampLngLatToBounds(point, campusMapConfig.value.limit_bounds));
+    .filter(isFiniteLngLat);
   nativeRoutePoints.value = routeLngLatPoints
     .map((point) => toNativeMapPoint(point))
     .filter(
-      (point): point is { longitude: number; latitude: number } =>
+      (point): point is NativeRoutePoint =>
         Boolean(point),
     );
-  simulatedNavigationMarker.value = routeLngLatPoints[0] || from;
-  centerMapToPoint({
-    lng: (from.lng + destination.lng) / 2,
-    lat: (from.lat + destination.lat) / 2,
-  });
+  const routeFitted = fitNativeMapToRoute(nativeRoutePoints.value);
+  if (!routeFitted) {
+    centerMapToPoint({
+      lng: (from.lng + destination.lng) / 2,
+      lat: (from.lat + destination.lat) / 2,
+    }, { smooth: true });
+  }
 }
 
-function startNavigationTracking() {
-  if (!navigationRoute.value || navigationRoute.value.points.length < 2) {
-    return;
-  }
-
-  stopNavigationTracking();
-  navigationSimulationRunning.value = true;
-  navigationSimulationIndex = 0;
-  simulatedNavigationMarker.value = navigationRoute.value.points[0];
-  navigationSimulationTimer = setInterval(() => {
-    if (!navigationRoute.value) {
-      stopNavigationTracking();
-      return;
-    }
-    navigationSimulationIndex += 1;
-    const routePoint = navigationRoute.value.points[navigationSimulationIndex];
-    if (!routePoint) {
-      stopNavigationTracking();
-      return;
-    }
-    simulatedNavigationMarker.value = routePoint;
-    setUserLocation(routePoint);
-  }, 1000);
+function isSameRoutePoint(a: LngLat, b: LngLat): boolean {
+  return Math.abs(a.lng - b.lng) < 0.000001 && Math.abs(a.lat - b.lat) < 0.000001;
 }
 
-function stopNavigationTracking() {
-  if (navigationSimulationTimer) {
-    clearInterval(navigationSimulationTimer);
-    navigationSimulationTimer = null;
+function buildDisplayRoutePoints(
+  from: LngLat,
+  destination: LngLat,
+  routePoints: LngLat[],
+): LngLat[] {
+  const displayRoutePoints: LngLat[] = [];
+  for (const point of [from, ...routePoints, destination]) {
+    if (!isFiniteLngLat(point)) {
+      continue;
+    }
+    const lastPoint = displayRoutePoints[displayRoutePoints.length - 1];
+    if (!lastPoint || !isSameRoutePoint(lastPoint, point)) {
+      displayRoutePoints.push(point);
+    }
   }
-  navigationSimulationRunning.value = false;
+  return displayRoutePoints;
 }
 
 function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | null {
@@ -994,6 +1468,8 @@ function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | nul
         : item.type === "daily_task"
           ? "daily"
           : null;
+  const markerIconKey =
+    businessType === "tencent_poi" ? "landmark" : item.icon_key || item.type;
 
   return {
     point_id: item.map_point_id || item.id,
@@ -1007,14 +1483,14 @@ function mapSearchShellItemToMarker(item: MapShellItem): MapPointMarkerDto | nul
     lat: item.lat,
     area_id: null,
     area_name: null,
-    marker_key: item.icon_key || item.type,
-    icon_key: item.icon_key || item.type,
+    marker_key: markerIconKey,
+    icon_key: isExternalPoi ? "landmark" : markerIconKey,
     display_level: 80,
     visibility: "public",
     status: "active",
     cover_photo_url: item.cover_photo_url || null,
-    preview_enabled: true,
-    preview_min_zoom: 15,
+    preview_enabled: !isExternalPoi,
+    preview_min_zoom: 18,
     label_min_zoom: 16,
     distance_meters: item.distance_meters,
     extra: {
@@ -1075,7 +1551,7 @@ function buildExternalSummaryFromMarker(marker: MapPointMarkerDto): MapPointSumm
     business_id: marker.business_id,
     title: marker.name,
     subtitle: marker.subtitle,
-    cover_photo_url: null,
+    cover_photo_url: marker.cover_photo_url || null,
     tags: ["地图点位"],
     description: marker.subtitle,
     location_name: marker.name,
@@ -1103,8 +1579,57 @@ function buildExternalSummaryFromMarker(marker: MapPointMarkerDto): MapPointSumm
   };
 }
 
+function buildSelectedPoiMarker(
+  summary: MapPointSummaryResponse,
+): MapPointMarkerDto | null {
+  if (
+    summary.business_type !== "tencent_poi" ||
+    !isFiniteLngLat({ lng: summary.lng, lat: summary.lat }) ||
+    !isLngLatInsideBounds(
+      { lng: summary.lng, lat: summary.lat },
+      campusMapConfig.value.limit_bounds,
+    )
+  ) {
+    return null;
+  }
+
+  return {
+    point_id: summary.point_id,
+    point_type: "landmark",
+    point_scope: "search_result",
+    business_type: "tencent_poi",
+    business_id: summary.business_id || summary.point_id,
+    name: summary.title,
+    subtitle: summary.subtitle || summary.location_detail,
+    lng: summary.lng,
+    lat: summary.lat,
+    area_id: null,
+    area_name: null,
+    marker_key: "landmark",
+    icon_key: "landmark",
+    display_level: 90,
+    visibility: "public",
+    status: "active",
+    cover_photo_url: summary.cover_photo_url || null,
+    preview_enabled: false,
+    preview_min_zoom: 18,
+    label_min_zoom: 16,
+    distance_meters: summary.distance_meters,
+    extra: {
+      source: "selected_poi",
+      is_external_poi: true,
+      associated_poi: summary.associated_poi || null,
+    },
+  };
+}
+
 function applyMapInit(data: MapInitResponse) {
-  const coreBounds = HBNU_CAMPUS_CORE_BOUNDS;
+  const coreBounds = isFiniteLngLatBounds(data.campus.core_bounds)
+    ? data.campus.core_bounds
+    : HBNU_CAMPUS_CORE_BOUNDS;
+  const limitBounds = isFiniteLngLatBounds(data.campus.limit_bounds)
+    ? data.campus.limit_bounds
+    : expandLngLatBounds(coreBounds, 0.35);
   campusMapConfig.value = {
     id: data.campus.campus_id,
     name: data.campus.name,
@@ -1116,8 +1641,9 @@ function applyMapInit(data: MapInitResponse) {
     min_zoom: data.campus.min_zoom || HBNU_CAMPUS.min_zoom,
     max_zoom: data.campus.max_zoom || HBNU_CAMPUS.max_zoom,
     core_bounds: coreBounds,
-    limit_bounds: expandLngLatBounds(coreBounds, 0.35),
+    limit_bounds: limitBounds,
   };
+  mapScale.value = Math.round(campusMapConfig.value.default_zoom);
   centerMapToPoint(campusMapConfig.value.center);
   applyMapFilterOptions(data);
 }
@@ -1147,8 +1673,14 @@ async function refreshMapPoints() {
     return;
   }
 
-  if (!activeFilter.value) {
+  const filterKey = activeFilter.value;
+  const filterOption = activeFilterOption.value;
+
+  if (!filterKey) {
     mapPointMarkers.value = [];
+    if (!isSearchMode.value) {
+      await loadBottomContent();
+    }
     return;
   }
 
@@ -1157,18 +1689,30 @@ async function refreshMapPoints() {
     return;
   }
 
+  if (!isSearchMode.value) {
+    contentLoadState.value = "loading";
+  }
+
   try {
     const data = await getMapPoints(token, {
       campus_id: campusMapConfig.value.id,
-      ...getMapPointQueryByFilter(activeFilter.value, activeFilterOption.value),
+      ...getMapPointQueryByFilter(filterKey, filterOption),
       ...getViewportQuery(),
     });
+    if (activeFilter.value !== filterKey) {
+      return;
+    }
     mapPointMarkers.value = data.items.filter(
       (marker) =>
         isFiniteLngLat({ lng: marker.lng, lat: marker.lat }) &&
         isLngLatInsideBounds(marker, campusMapConfig.value.limit_bounds),
     );
+    if (activeFilter.value && !isSearchMode.value) {
+      bottomContentItems.value = mapPointMarkers.value.map(mapMarkerToShellItem);
+      contentLoadState.value = "ready";
+    }
   } catch (error) {
+    contentLoadState.value = "error";
     handleMapError(error, "地图点位加载失败");
   }
 }
@@ -1205,6 +1749,7 @@ async function runSearch(keyword: string) {
   const normalizedKeyword = keyword.trim();
   if (!normalizedKeyword) {
     searchResultItems.value = [];
+    selectedPoiMarker.value = null;
     contentLoadState.value = "ready";
     return;
   }
@@ -1216,6 +1761,7 @@ async function runSearch(keyword: string) {
 
   contentLoadState.value = "loading";
   selectedSummary.value = null;
+  selectedPoiMarker.value = null;
   try {
     const filterQuery = activeFilter.value
       ? getMapPointQueryByFilter(activeFilter.value, activeFilterOption.value)
@@ -1259,6 +1805,7 @@ async function loadPointSummary(pointId: string) {
   }
 
   contentLoadState.value = "loading";
+  selectedPoiMarker.value = null;
   try {
     selectedSummary.value = await getMapPointSummary(token, pointId);
     const summaryPoint = {
@@ -1266,7 +1813,7 @@ async function loadPointSummary(pointId: string) {
       lat: selectedSummary.value.lat,
     };
     if (isFiniteLngLat(summaryPoint)) {
-      centerMapToPoint(summaryPoint);
+      focusMapToPoint(summaryPoint);
     }
     contentLoadState.value = "ready";
   } catch (error) {
@@ -1407,6 +1954,55 @@ function buildPendingNavigationSummary(
   };
 }
 
+function summaryToFocusedMarker(summary: MapPointSummaryResponse): MapPointMarkerDto {
+  return {
+    point_id: summary.point_id,
+    point_type: summary.point_type,
+    point_scope: "temporary",
+    business_type: summary.business_type,
+    business_id: summary.business_id || summary.point_id,
+    name: summary.title,
+    subtitle: summary.subtitle || summary.location_name,
+    lng: summary.lng,
+    lat: summary.lat,
+    area_id: null,
+    area_name: null,
+    marker_key: summary.business_type || summary.point_type,
+    icon_key: summary.business_type || summary.point_type,
+    display_level: 100,
+    visibility: "public",
+    status: "active",
+    cover_photo_url: summary.cover_photo_url || null,
+    preview_enabled: true,
+    preview_min_zoom: 15,
+    label_min_zoom: 16,
+    distance_meters: summary.distance_meters,
+    extra: {
+      source: "task_detail_focus",
+      associated_poi: summary.associated_poi || null,
+    },
+  };
+}
+
+function upsertFocusedMapMarker(marker: MapPointMarkerDto) {
+  if (mapPointMarkers.value.some((item) => item.point_id === marker.point_id)) {
+    return;
+  }
+
+  mapPointMarkers.value = [...mapPointMarkers.value, marker];
+}
+
+function focusPendingMapPoint(summary: MapPointSummaryResponse) {
+  clearNativeRoute();
+  const marker = summaryToFocusedMarker(summary);
+  upsertFocusedMapMarker(marker);
+  bottomContentItems.value = mapPointMarkers.value.map(mapMarkerToShellItem);
+  selectedSummary.value = summary;
+  selectedPoiMarker.value = null;
+  contentLoadState.value = "ready";
+  focusMapToPoint({ lng: summary.lng, lat: summary.lat });
+}
+
 function consumePendingNavigation() {
   const pending = uni.getStorageSync(MAP_PENDING_NAVIGATION_STORAGE_KEY) as
     | PendingMapNavigation
@@ -1420,12 +2016,7 @@ function consumePendingNavigation() {
     return;
   }
 
-  selectedSummary.value = summary;
-  centerMapToPoint({ lng: summary.lng, lat: summary.lat });
-  const action = summary.actions.find((item) => item.key === "navigate");
-  if (action) {
-    void handleSummaryAction(action);
-  }
+  focusPendingMapPoint(summary);
 }
 
 async function loadInitialMapData() {
@@ -1472,16 +2063,19 @@ function handleNativeMarkerTap(event: Event) {
     return;
   }
 
-  const marker = nativeMarkerSourceMarkers.value[markerId - 1];
+  const marker = findNativeMarkerByStableId(markerId);
   if (!marker) {
     return;
   }
 
-  centerMapToPoint({ lng: marker.lng, lat: marker.lat });
+  focusMapToPoint({ lng: marker.lng, lat: marker.lat });
   handleMapMarkerSelected(marker);
 }
 
 async function handleNativePoiTap(event: Event) {
+  if (isNativePoiTapSuppressed()) {
+    return;
+  }
   const detail = (event as CustomEvent<Record<string, any>>).detail || {};
   const rawPoi = detail.poi || {};
   const lng = Number(detail.longitude ?? detail.lng ?? rawPoi.longitude ?? rawPoi.lng);
@@ -1489,11 +2083,20 @@ async function handleNativePoiTap(event: Event) {
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
     return;
   }
-  const token = await getAccessToken();
-  if (!token) {
+  if (!isLngLatInsideBounds({ lng, lat }, campusMapConfig.value.limit_bounds)) {
     return;
   }
   const keyword = String(detail.name || detail.title || rawPoi.name || rawPoi.title || "");
+  const poiTapKey = getPoiTapKey({ lng, lat, keyword });
+  if (shouldSkipPoiResolve(poiTapKey, { lng, lat, keyword })) {
+    return;
+  }
+  const resolveRequestId = startPoiResolve(poiTapKey);
+  const token = await getAccessToken();
+  if (!token) {
+    finishPoiResolve(resolveRequestId, poiTapKey);
+    return;
+  }
   try {
     const data = await resolveMapPoi(token, {
       keyword,
@@ -1501,6 +2104,17 @@ async function handleNativePoiTap(event: Event) {
       lat,
     });
     const poi = data.matched_poi;
+    if (
+      !isLngLatInsideBounds(
+        { lng: poi.lng, lat: poi.lat },
+        campusMapConfig.value.limit_bounds,
+      )
+    ) {
+      return;
+    }
+    if (!isCurrentPoiResolve(resolveRequestId)) {
+      return;
+    }
     const item: MapShellItem = {
       id: `tencent:${poi.poi_id || `${poi.name}-${poi.lng}-${poi.lat}`}`,
       type: "landmark",
@@ -1515,16 +2129,20 @@ async function handleNativePoiTap(event: Event) {
       icon_key: "landmark",
       associated_poi: poi,
     };
-    const marker = mapSearchShellItemToMarker(item);
-    if (marker) {
-      mapPointMarkers.value = [marker];
-      selectedSummary.value = buildExternalSummaryFromMarker(marker);
-      centerMapToPoint({ lng: marker.lng, lat: marker.lat });
+    const summary = buildExternalSummaryFromItem(item);
+    if (summary) {
+      selectedSummary.value = summary;
+      selectedPoiMarker.value = buildSelectedPoiMarker(summary);
+      lastResolvedPoiTapKey.value = poiTapKey;
+      suppressNativePoiTaps();
+      focusMapToPoint({ lng: summary.lng, lat: summary.lat });
       contentLoadState.value = "ready";
     }
   } catch (error) {
     handleMapError(error, "地图点位解析失败");
     uni.showToast({ title: contentErrorMessage.value, icon: "none" });
+  } finally {
+    finishPoiResolve(resolveRequestId, poiTapKey);
   }
 }
 
@@ -1534,7 +2152,7 @@ function handleNativeMarkerLongPress(event: Event) {
     return;
   }
 
-  const marker = nativeMarkerSourceMarkers.value[markerId - 1];
+  const marker = findNativeMarkerByStableId(markerId);
   if (marker) {
     void enterMapPointEditMode(marker);
   }
@@ -1594,7 +2212,7 @@ async function enterMapPointEditMode(marker: MapPointMarkerDto, location?: LngLa
     );
     editableMarkerScreenPosition.value = null;
     mapPointEditMode.value = true;
-    centerMapToPoint(editedPointLocation.value);
+    centerMapToPoint(editedPointLocation.value, { smooth: true });
     uni.showToast({ title: "已进入点位编辑模式", icon: "none" });
   } catch (error) {
     handleMapError(error, "点位详情加载失败");
@@ -1621,12 +2239,42 @@ function handleMarkerLongPress(event: Event) {
   void enterMapPointEditMode(marker, pressPoint);
 }
 
+function getMapRegionChangeDetail(event: Event): NativeRegionChangeDetail {
+  const rawEvent = event as Event & Record<string, any>;
+  const detail = (rawEvent.detail || {}) as Record<string, any>;
+  const nestedDetail = (detail.detail || {}) as Record<string, any>;
+  const rawType = [detail.type, nestedDetail.type, rawEvent.type].find(
+    (value) => value === "begin" || value === "end",
+  );
+  const rawCausedBy = detail.causedBy ?? nestedDetail.causedBy ?? rawEvent.causedBy;
+  const rawScale = detail.scale ?? nestedDetail.scale ?? rawEvent.scale;
+  const scale = Number(rawScale);
+  const centerLocation =
+    detail.centerLocation ?? nestedDetail.centerLocation ?? rawEvent.centerLocation;
+
+  return {
+    type: typeof rawType === "string" ? rawType : undefined,
+    causedBy: typeof rawCausedBy === "string" ? rawCausedBy : undefined,
+    scale: Number.isFinite(scale) ? scale : undefined,
+    centerLocation:
+      typeof centerLocation?.longitude === "number" &&
+      typeof centerLocation?.latitude === "number"
+        ? centerLocation
+        : undefined,
+  };
+}
+
 function handleMapRegionChange(event: Event) {
-  const detail = (event as CustomEvent<{
-    type?: string;
-    centerLocation?: { longitude?: number; latitude?: number };
-  }>).detail;
+  const detail = getMapRegionChangeDetail(event);
+  if (shouldSyncMapScaleFromRegionChange(detail)) {
+    syncMapScaleFromNative(Number(detail.scale));
+  } else if (shouldQueryMapScaleFromRegionChange(detail)) {
+    syncMapScaleFromContext();
+  }
   if (detail?.type && detail.type !== "end") {
+    if (detail.causedBy === "drag") {
+      stopMapCenterAnimation();
+    }
     return;
   }
   const center = detail?.centerLocation;
@@ -1639,7 +2287,13 @@ function handleMapRegionChange(event: Event) {
     campusMapConfig.value.limit_bounds,
   );
   if (nextCenter.lng !== center.longitude || nextCenter.lat !== center.latitude) {
-    centerMapToPoint(nextCenter);
+    if (!isSameMapCenter(mapCenter.value, nextCenter)) {
+      centerMapToPoint(nextCenter, { smooth: true });
+    }
+  } else if (detail.causedBy === "update") {
+    // Programmatic center changes already flow through mapCenter; echoing them here can retrigger native map movement.
+  } else if (!mapCenterAnimationTimer) {
+    syncMapCenterFromNative(nextCenter);
   }
 
   if (!mapPointEditMode.value || editableMarkerScreenPosition.value) {
@@ -1734,9 +2388,11 @@ function finishDraggingEditedPoint(event: Event) {
 
 function handleMapMarkerSelected(marker: MapPointMarkerDto) {
   if (marker.point_scope === "search_result" && marker.extra.is_external_poi) {
+    selectedPoiMarker.value = marker;
     selectedSummary.value = buildExternalSummaryFromMarker(marker);
     return;
   }
+  selectedPoiMarker.value = null;
   void loadPointSummary(marker.point_id);
 }
 
@@ -1779,7 +2435,7 @@ async function saveEditedPointLocation() {
         ? { ...marker, lng: updated.lng, lat: updated.lat, name: updated.name }
         : marker,
     );
-    centerMapToPoint({ lng: updated.lng, lat: updated.lat });
+    centerMapToPoint({ lng: updated.lng, lat: updated.lat }, { smooth: true });
     cancelMapPointEditMode();
     uni.showToast({ title: "点位位置已更新", icon: "none" });
   } catch (error) {
@@ -1796,37 +2452,49 @@ function renderInAppRoute(
     lng: navigation.destination.lng,
     lat: navigation.destination.lat,
   };
+  if (navigation.route.fallback) {
+    clearNativeRoute();
+    navigationRoute.value = {
+      title: navigation.title,
+      distance_meters: navigation.route.distance_meters,
+      duration_seconds: navigation.route.duration_seconds,
+      points: [],
+      steps: navigation.route.steps,
+    };
+    centerMapToPoint(destination, { smooth: true });
+    uni.showToast({ title: "路线规划暂不可用，已定位到目的地", icon: "none" });
+    return;
+  }
   const routePoints = navigation.route.points.length
     ? navigation.route.points
     : [from, destination];
-  const safeRoutePoints = routePoints
-    .filter(isFiniteLngLat)
-    .map((point) => clampLngLatToBounds(point, campusMapConfig.value.limit_bounds));
-  renderNativeRoute(from, destination, safeRoutePoints);
+  const safeRoutePoints = routePoints.filter(isFiniteLngLat);
+  const displayRoutePoints = buildDisplayRoutePoints(from, destination, safeRoutePoints);
+  renderNativeRoute(from, destination, displayRoutePoints);
   navigationRoute.value = {
     title: navigation.title,
     distance_meters: navigation.route.distance_meters,
     duration_seconds: navigation.route.duration_seconds,
-    points: safeRoutePoints,
+    points: displayRoutePoints,
     steps: navigation.route.steps,
   };
-  startNavigationTracking();
 }
 
-async function locateMe() {
-  userLocation.value = null;
-  const point = await getLocationWithFallback({ silent: true, allowFallback: false });
+function locateMe() {
+  const point = userLocation.value || getCachedUserLocation();
   if (!point) {
     uni.showToast({ title: "无法获取当前位置", icon: "none" });
     return;
   }
-  centerMapToPoint(point);
-  setUserLocation(point);
-  void refreshMapPoints();
+  clearNativePoiSelection();
+  suppressNativePoiTaps();
+  mapScale.value = getUserLocationFocusScale();
+  centerMapToPoint(point, { smooth: true });
 }
 
 watch(activeFilter, () => {
   selectedSummary.value = null;
+  selectedPoiMarker.value = null;
   void refreshMapPoints();
   if (isSearchMode.value) {
     void runSearch(searchKeyword.value);
@@ -1835,6 +2503,7 @@ watch(activeFilter, () => {
 
 watch(searchKeyword, (keyword) => {
   selectedSummary.value = null;
+  selectedPoiMarker.value = null;
   if (searchTimer) {
     clearTimeout(searchTimer);
   }
@@ -1856,6 +2525,8 @@ watch(searchKeyword, (keyword) => {
 });
 
 onMounted(() => {
+  unsubscribeUserLocation = subscribeUserLocation(syncUserLocation);
+  void preloadUserLocation({ silent: true });
   void loadInitialMapData();
 });
 
@@ -1874,6 +2545,10 @@ onHide(() => {
 });
 
 onBeforeUnmount(() => {
+  unsubscribeUserLocation?.();
+  unsubscribeUserLocation = null;
+  stopMapCenterAnimation();
+
   if (searchTimer) {
     clearTimeout(searchTimer);
   }
@@ -1988,7 +2663,7 @@ onBeforeUnmount(() => {
   position: absolute;
   z-index: 7;
   left: 52rpx;
-  top: 300rpx;
+  top: 380rpx;
   width: 360rpx;
   pointer-events: none;
 }
@@ -2021,8 +2696,8 @@ onBeforeUnmount(() => {
 .my-location-btn::after,
 .clear-search::after,
 .navigation-end-button::after,
-.navigation-control::after,
-.map-edit-button::after {
+.map-edit-button::after,
+.summary-photo-cell::after {
   border: 0;
 }
 
@@ -2204,7 +2879,6 @@ onBeforeUnmount(() => {
   line-height: 1.35;
 }
 
-.navigation-control,
 .navigation-end-button,
 .map-edit-button {
   height: 58rpx;
@@ -2223,7 +2897,6 @@ onBeforeUnmount(() => {
   width: 96rpx;
 }
 
-.navigation-control.is-secondary,
 .map-edit-button.is-ghost {
   background: #edf8e8;
   color: #267b2f;
@@ -2462,6 +3135,15 @@ onBeforeUnmount(() => {
   box-shadow: 0 9rpx 18rpx rgba(17, 24, 39, 0.12);
 }
 
+.summary-avatar-image {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 18rpx;
+  overflow: hidden;
+  background: #edf8e8;
+  box-shadow: 0 9rpx 18rpx rgba(17, 24, 39, 0.12);
+}
+
 .summary-main {
   min-width: 0;
   display: flex;
@@ -2469,11 +3151,39 @@ onBeforeUnmount(() => {
   gap: 8rpx;
 }
 
+.summary-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
 .summary-title {
+  flex: 1;
+  min-width: 0;
   color: #111827;
   font-size: 29rpx;
   font-weight: 900;
   line-height: 1.15;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.summary-type-badge {
+  flex-shrink: 0;
+  max-width: 156rpx;
+  box-sizing: border-box;
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  background: #edf8e8;
+  color: #267b2f;
+  font-size: 20rpx;
+  font-weight: 900;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .summary-subtitle,
@@ -2496,6 +3206,49 @@ onBeforeUnmount(() => {
   color: #267b2f;
   font-size: 20rpx;
   font-weight: 900;
+}
+
+.summary-photo-strip {
+  width: 100%;
+}
+
+.summary-photo-grid {
+  display: grid;
+  gap: 10rpx;
+}
+
+.summary-photo-grid.count-1 {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.summary-photo-grid.count-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.summary-photo-grid.count-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.summary-photo-cell {
+  height: 118rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 18rpx;
+  background: #edf8e8;
+  overflow: hidden;
+  line-height: 1;
+}
+
+.summary-photo-thumb {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.summary-photo-hover {
+  opacity: 0.9;
+  transform: translateY(2rpx);
 }
 
 .summary-desc,
@@ -2600,6 +3353,15 @@ onBeforeUnmount(() => {
   box-shadow: 0 9rpx 18rpx rgba(17, 24, 39, 0.12);
 }
 
+.item-cover {
+  width: 60rpx;
+  height: 60rpx;
+  border-radius: 18rpx;
+  overflow: hidden;
+  background: #edf8e8;
+  box-shadow: 0 9rpx 18rpx rgba(17, 24, 39, 0.12);
+}
+
 .item-icon-emergency_task {
   background: #ef3038;
 }
@@ -2657,6 +3419,14 @@ onBeforeUnmount(() => {
 
 .status-daily_task {
   color: #2276ff;
+}
+
+.status-completed {
+  color: #267b2f;
+}
+
+.status-in_progress {
+  color: #ef3038;
 }
 
 .status-cat,

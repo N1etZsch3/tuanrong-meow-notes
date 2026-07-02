@@ -1,3 +1,4 @@
+import hashlib
 import json
 from datetime import date
 from decimal import Decimal
@@ -13,7 +14,7 @@ from app.core.config import get_settings
 from app.core.errors import APIError, ErrorCode
 from app.modules.auth.models import User
 from app.modules.map.models import Campus, CampusArea, MapMarkerConfig, MapPoint, MapPointPhoto
-from app.modules.tasks.models import Task
+from app.modules.tasks.models import Task, TaskPhoto
 
 EARTH_RADIUS_METERS = 6_371_000
 AMAP_REST_BASE_URL = "https://restapi.amap.com"
@@ -22,6 +23,38 @@ HBNU_CAMPUS_SEARCH_BOUNDS = {
     "south_west": {"lng": 115.0558, "lat": 30.2248},
     "north_east": {"lng": 115.0693, "lat": 30.2342},
 }
+HBNU_CAMPUS_BOUNDS_PADDING_RATIO = 0.35
+ALL_MARKER_FILTER_OPTION = {
+    "key": "all",
+    "label": "全部标记",
+    "description": "展示所有已发布地图点位",
+    "icon_key": "all",
+    "point_types": [],
+    "business_types": [],
+}
+POINT_TYPE_FILTER_META = {
+    "task": {
+        "label": "任务点",
+        "description": "已发布的任务点位",
+        "icon_key": "daily_task",
+    },
+    "cat": {
+        "label": "猫咪点",
+        "description": "常驻猫咪和高频出现点",
+        "icon_key": "cat",
+    },
+    "supply": {
+        "label": "物资点",
+        "description": "猫粮、航空箱、诱捕笼等物资点",
+        "icon_key": "supply",
+    },
+    "landmark": {
+        "label": "地标",
+        "description": "校门、教学楼、食堂等位置",
+        "icon_key": "landmark",
+    },
+}
+POINT_TYPE_FILTER_ORDER = ("task", "cat", "supply", "landmark")
 
 
 def as_float(value) -> float | None:
@@ -45,6 +78,30 @@ def format_coord(value: float | Decimal | None) -> str:
 
 def point_wkt(lng: float | Decimal, lat: float | Decimal) -> str:
     return f"POINT({float(lng):.7f} {float(lat):.7f})"
+
+
+def expand_lng_lat_bounds(bounds: dict, padding_ratio: float) -> dict:
+    south_west = bounds["south_west"]
+    north_east = bounds["north_east"]
+    lng_span = north_east["lng"] - south_west["lng"]
+    lat_span = north_east["lat"] - south_west["lat"]
+    safe_ratio = max(padding_ratio, 0)
+    return {
+        "south_west": {
+            "lng": round(south_west["lng"] - lng_span * safe_ratio, 7),
+            "lat": round(south_west["lat"] - lat_span * safe_ratio, 7),
+        },
+        "north_east": {
+            "lng": round(north_east["lng"] + lng_span * safe_ratio, 7),
+            "lat": round(north_east["lat"] + lat_span * safe_ratio, 7),
+        },
+    }
+
+
+HBNU_CAMPUS_LIMIT_BOUNDS = expand_lng_lat_bounds(
+    HBNU_CAMPUS_SEARCH_BOUNDS,
+    HBNU_CAMPUS_BOUNDS_PADDING_RATIO,
+)
 
 
 def distance_meters(
@@ -80,9 +137,17 @@ def _request_tencent_json(path: str, params: dict) -> dict:
     if not key:
         return {}
     query = {**params, "key": key}
+    secret_key = settings.tencent_map_secret_key.strip()
+    if secret_key:
+        query["sig"] = tencent_webservice_signature(path, query, secret_key)
     url = f"{TENCENT_MAP_REST_BASE_URL}{path}?{urlencode(query)}"
     with urlopen(url, timeout=settings.tencent_map_service_timeout_seconds) as response:
         return json.loads(response.read().decode("utf-8"))
+
+
+def tencent_webservice_signature(path: str, params: dict, secret_key: str) -> str:
+    query = "&".join(f"{key}={params[key]}" for key in sorted(params))
+    return hashlib.md5(f"{path}?{query}{secret_key}".encode()).hexdigest()
 
 
 def parse_lng_lat_pair(value: str | None) -> tuple[float, float] | None:
@@ -124,13 +189,16 @@ def parse_tencent_polyline(polyline) -> list[dict]:
         return points
     if not isinstance(polyline, list) or len(polyline) < 2:
         return []
-    values = [int(value) for value in polyline]
+    values = [float(value) for value in polyline]
+    if abs(values[0]) > 90 or abs(values[1]) > 180:
+        values[0] = values[0] / 1_000_000
+        values[1] = values[1] / 1_000_000
     for index in range(2, len(values)):
-        values[index] = values[index - 2] + values[index]
+        values[index] = values[index - 2] + values[index] / 1_000_000
     points = []
     for index in range(0, len(values) - 1, 2):
-        lat = round(values[index] / 1_000_000, 7)
-        lng = round(values[index + 1] / 1_000_000, 7)
+        lat = round(values[index], 7)
+        lng = round(values[index + 1], 7)
         point = {"lng": lng, "lat": lat}
         if not points or points[-1] != point:
             points.append(point)
@@ -251,6 +319,8 @@ def campus_payload(campus: Campus) -> dict:
         "min_zoom": campus.min_zoom,
         "max_zoom": campus.max_zoom,
         "boundary": None,
+        "core_bounds": HBNU_CAMPUS_SEARCH_BOUNDS,
+        "limit_bounds": HBNU_CAMPUS_LIMIT_BOUNDS,
     }
 
 
@@ -290,6 +360,19 @@ def marker_config_payload(config: MapMarkerConfig) -> dict:
 def point_cover_photo(point: MapPoint) -> str | None:
     photos = [photo for photo in point.photos if photo.deleted_at is None]
     cover = next((photo for photo in photos if photo.photo_type == "cover"), None)
+    if cover:
+        return cover.thumbnail_url or cover.file_url
+    first_photo = min(photos, key=lambda photo: photo.sort_order, default=None)
+    if first_photo is None:
+        return None
+    return first_photo.thumbnail_url or first_photo.file_url
+
+
+def task_cover_photo(task: Task | None) -> str | None:
+    if task is None:
+        return None
+    photos = [photo for photo in task.photos if photo.deleted_at is None]
+    cover = next((photo for photo in photos if photo.is_cover), None)
     if cover:
         return cover.thumbnail_url or cover.file_url
     first_photo = min(photos, key=lambda photo: photo.sort_order, default=None)
@@ -441,7 +524,7 @@ def task_by_map_point_ids(db: Session, points: list[MapPoint]) -> dict[UUID, Tas
         return {}
     tasks = db.scalars(
         select(Task)
-        .options(selectinload(Task.execution_dates))
+        .options(selectinload(Task.execution_dates), selectinload(Task.photos))
         .where(Task.map_point_id.in_(point_ids), Task.deleted_at.is_(None))
     ).all()
     return {task.map_point_id: task for task in tasks}
@@ -494,11 +577,27 @@ def feeding_task_marker_status(task: Task | None) -> str | None:
     return "pending"
 
 
+def task_status_label(task: Task | None) -> str | None:
+    if task is None:
+        return None
+    feeding_status = feeding_task_marker_status(task)
+    if feeding_status == "completed" or task.status == "completed":
+        return "已完成"
+    if task.status == "in_progress":
+        return "进行中"
+    if task.status == "cancelled":
+        return "已取消"
+    if task.status == "archived":
+        return "已归档"
+    return task.status
+
+
 def task_marker_extra(task: Task | None) -> dict:
     if task is None:
         return {}
     extra = {
         "task_status": task.status,
+        "task_status_label": task_status_label(task),
         "next_execute_date": next_task_execution_date(task),
         "today_status": today_task_execution_status(task),
     }
@@ -534,6 +633,10 @@ def point_marker_payload(
     associated_poi = associated_poi_payload(point)
     if associated_poi:
         extra["associated_poi"] = associated_poi
+    if point.location_name:
+        extra["location_name"] = point.location_name
+    if point.location_detail:
+        extra["location_detail"] = point.location_detail
     return {
         "point_id": point.id,
         "point_type": point.point_type,
@@ -551,7 +654,7 @@ def point_marker_payload(
         "display_level": point.display_level,
         "visibility": point.visibility,
         "status": point.status,
-        "cover_photo_url": point_cover_photo(point),
+        "cover_photo_url": task_cover_photo(task) or point_cover_photo(point),
         "preview_enabled": point.preview_enabled,
         "preview_min_zoom": point.preview_min_zoom,
         "label_min_zoom": point.label_min_zoom,
@@ -614,6 +717,26 @@ def map_filter_options(
 ) -> list[dict]:
     points = db.scalars(visible_points_statement().where(MapPoint.campus_id == campus.id)).all()
     task_lookup = task_by_map_point_ids(db, points)
+    point_types = {
+        point.point_type
+        for point in points
+        if not (
+            point.point_type == "task"
+            and point_business_type(point, configs) == "feeding"
+        )
+    }
+    marker_options = [
+        point_type_filter_option(point_type)
+        for point_type in sorted(
+            point_types,
+            key=lambda value: (
+                POINT_TYPE_FILTER_ORDER.index(value)
+                if value in POINT_TYPE_FILTER_ORDER
+                else len(POINT_TYPE_FILTER_ORDER),
+                value,
+            ),
+        )
+    ]
     feeding_statuses = {
         status
         for point in points
@@ -653,7 +776,37 @@ def map_filter_options(
                 "business_types": ["feeding"],
             }
         )
+    published_options = [*marker_options, *options[1:]]
+    options = [options[0]]
+    if len(published_options) >= 2:
+        options.append(all_marker_filter_option(published_options))
+    options.extend(published_options)
     return options
+
+
+def all_marker_filter_option(marker_options: list[dict]) -> dict:
+    option = dict(ALL_MARKER_FILTER_OPTION)
+    point_types = {
+        point_type
+        for marker_option in marker_options
+        for point_type in marker_option.get("point_types", [])
+    }
+    if point_types == {"task"}:
+        option["label"] = "全部任务类型"
+        option["description"] = "展示所有任务类型"
+    return option
+
+
+def point_type_filter_option(point_type: str) -> dict:
+    meta = POINT_TYPE_FILTER_META.get(point_type, {})
+    return {
+        "key": point_type,
+        "label": meta.get("label", point_type),
+        "description": meta.get("description", ""),
+        "icon_key": meta.get("icon_key", point_type),
+        "point_types": [point_type],
+        "business_types": [],
+    }
 
 
 def visible_points_statement():
@@ -706,10 +859,30 @@ def map_points(
         statement = statement.where(MapPoint.point_type.in_(type_filter))
     if area_id:
         statement = statement.where(MapPoint.area_id == area_id)
-    if min_lng is not None and max_lng is not None:
-        statement = statement.where(MapPoint.lng >= min_lng, MapPoint.lng <= max_lng)
-    if min_lat is not None and max_lat is not None:
-        statement = statement.where(MapPoint.lat >= min_lat, MapPoint.lat <= max_lat)
+    campus_limit_south_west = HBNU_CAMPUS_LIMIT_BOUNDS["south_west"]
+    campus_limit_north_east = HBNU_CAMPUS_LIMIT_BOUNDS["north_east"]
+    effective_min_lng = max(
+        min_lng if min_lng is not None else campus_limit_south_west["lng"],
+        campus_limit_south_west["lng"],
+    )
+    effective_max_lng = min(
+        max_lng if max_lng is not None else campus_limit_north_east["lng"],
+        campus_limit_north_east["lng"],
+    )
+    effective_min_lat = max(
+        min_lat if min_lat is not None else campus_limit_south_west["lat"],
+        campus_limit_south_west["lat"],
+    )
+    effective_max_lat = min(
+        max_lat if max_lat is not None else campus_limit_north_east["lat"],
+        campus_limit_north_east["lat"],
+    )
+    statement = statement.where(
+        MapPoint.lng >= effective_min_lng,
+        MapPoint.lng <= effective_max_lng,
+        MapPoint.lat >= effective_min_lat,
+        MapPoint.lat <= effective_max_lat,
+    )
 
     points = db.scalars(
         statement.order_by(MapPoint.display_level.desc(), MapPoint.created_at.desc())
@@ -956,13 +1129,15 @@ def search(
             "business_type": item["business_type"],
             "title": item["name"],
             "subtitle": item["subtitle"],
-            "description": points_by_id[item["point_id"]].description,
+            "description": item["extra"].get("location_detail")
+            or points_by_id[item["point_id"]].description,
             "icon_key": item["icon_key"],
             "cover_photo_url": item["cover_photo_url"],
             "lng": item["lng"],
             "lat": item["lat"],
             "distance_meters": item["distance_meters"],
-            "status_label": point_label_for_type(item["point_type"], item["business_type"]),
+            "status_label": item["extra"].get("task_status_label")
+            or point_label_for_type(item["point_type"], item["business_type"]),
             "highlight_text": normalized_keyword,
             "sort_score": item["sort_score"],
         }
@@ -1022,7 +1197,7 @@ def get_visible_point(db: Session, point_id: UUID) -> MapPoint:
     return point
 
 
-def photo_payload(photo: MapPointPhoto) -> dict:
+def photo_payload(photo: MapPointPhoto | TaskPhoto) -> dict:
     return {
         "photo_id": photo.id,
         "photo_type": photo.photo_type,
@@ -1032,6 +1207,23 @@ def photo_payload(photo: MapPointPhoto) -> dict:
         "sort_order": photo.sort_order,
         "created_at": photo.created_at,
     }
+
+
+def summary_photos(point: MapPoint, task: Task | None) -> list[dict]:
+    if task is not None:
+        task_photos = [
+            photo
+            for photo in sorted(task.photos, key=lambda item: item.sort_order)
+            if photo.deleted_at is None
+        ]
+        if task_photos:
+            return [photo_payload(photo) for photo in task_photos]
+
+    return [
+        photo_payload(photo)
+        for photo in sorted(point.photos, key=lambda item: item.sort_order)
+        if photo.deleted_at is None
+    ]
 
 
 def summary(
@@ -1055,7 +1247,7 @@ def summary(
         "business_id": task.id if task else point.id,
         "title": point.name,
         "subtitle": point.subtitle,
-        "cover_photo_url": point_cover_photo(point),
+        "cover_photo_url": task_cover_photo(task) or point_cover_photo(point),
         "tags": list(dict.fromkeys(tag for tag in tags if tag)),
         "description": point.description,
         "location_name": point.location_name,
@@ -1072,11 +1264,7 @@ def summary(
             to_lat=lat,
         ),
         "associated_poi": associated_poi_payload(point),
-        "photos": [
-            photo_payload(photo)
-            for photo in sorted(point.photos, key=lambda item: item.sort_order)
-            if photo.deleted_at is None
-        ],
+        "photos": summary_photos(point, task),
         "business_summary": task_marker_extra(task),
         "actions": [
             {
@@ -1187,15 +1375,21 @@ def bottom_content(db: Session, *, mode: str = "auto", limit: int = 10) -> dict:
                 else "daily_task",
                 "title": task_lookup[point.id].title if point.id in task_lookup else point.name,
                 "subtitle": point.subtitle,
-                "description": task_lookup[point.id].description
-                if point.id in task_lookup
-                else point.description,
+                "description": point.location_detail
+                or (
+                    task_lookup[point.id].description
+                    if point.id in task_lookup
+                    else point.description
+                ),
                 "distance_meters": None,
-                "status_label": point_label_for_type(
+                "status_label": task_status_label(task_lookup.get(point.id))
+                or point_label_for_type(
                     point.point_type,
                     point_business_type(point, configs),
                 ),
                 "tag_label": point_label(point, configs),
+                "cover_photo_url": task_cover_photo(task_lookup.get(point.id))
+                or point_cover_photo(point),
                 "map_point_id": point.id,
                 "lng": as_float(point.lng),
                 "lat": as_float(point.lat),

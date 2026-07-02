@@ -175,7 +175,7 @@ def get_asset_variant(
     current_user: User,
     scene: str | None,
     variant_key: str | None,
-    storage: ObjectStorage,
+    storage: ObjectStorage | None,
 ) -> dict:
     asset = _load_asset(db, asset_id)
     _ensure_asset_access(asset, current_user)
@@ -189,7 +189,7 @@ def get_asset_content_url(
     asset_id: UUID,
     scene: str | None,
     variant_key: str | None,
-    storage: ObjectStorage,
+    storage: ObjectStorage | None,
 ) -> dict:
     asset = _load_asset(db, asset_id)
     if asset.visibility not in {"internal", "public"}:

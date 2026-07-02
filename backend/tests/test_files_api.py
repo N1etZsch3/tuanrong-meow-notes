@@ -3,7 +3,8 @@ from uuid import UUID, uuid4
 
 from PIL import Image
 
-from app.modules.files.dependencies import get_object_storage
+from app.core.errors import APIError, ErrorCode
+from app.modules.files.dependencies import get_object_storage, get_optional_object_storage
 from app.modules.files.models import FileAsset, FileAssetVariant
 from tests.test_auth_api import auth_headers, create_token, create_user
 
@@ -28,6 +29,7 @@ class FakeObjectStorage:
 def install_fake_storage(api_client) -> FakeObjectStorage:
     storage = FakeObjectStorage()
     api_client.app.dependency_overrides[get_object_storage] = lambda: storage
+    api_client.app.dependency_overrides[get_optional_object_storage] = lambda: storage
     return storage
 
 
@@ -41,6 +43,78 @@ def image_bytes(
     buffer = BytesIO()
     image.save(buffer, format=fmt)
     return buffer.getvalue()
+
+
+def create_completed_cat_photo_asset(db_session, user) -> FileAsset:
+    asset_id = uuid4()
+    asset = FileAsset(
+        id=asset_id,
+        storage_provider="tencent_cos",
+        bucket="catmap-test",
+        region="ap-guangzhou",
+        env="test",
+        usage_type="cat_photo",
+        owner_type="temporary",
+        owner_id=None,
+        source_filename="stored-cat.jpg",
+        source_mime_type="image/jpeg",
+        source_size_bytes=2048,
+        source_width=640,
+        source_height=480,
+        source_checksum_sha256="stored-cat-sha256",
+        default_variant_key="display",
+        default_url="https://cos.test/catmap/test/cat/display.jpg",
+        default_thumb_variant_key="thumb_md",
+        default_thumb_url="https://cos.test/catmap/test/cat/thumb_md.jpg",
+        process_preset="normal_photo_v1",
+        process_status="completed",
+        visibility="internal",
+        uploaded_by=user.id,
+    )
+    asset.variants.extend(
+        [
+            FileAssetVariant(
+                variant_key="thumb_md",
+                object_key=f"catmap/test/cat/{asset_id}/thumb_md.jpg",
+                url="https://cos.test/catmap/test/cat/thumb_md.jpg",
+                mime_type="image/jpeg",
+                file_ext="jpg",
+                width=320,
+                height=240,
+                size_bytes=1024,
+                quality=80,
+                resize_mode="fit",
+                checksum_sha256="thumb-md-sha256",
+                sort_order=0,
+            ),
+            FileAssetVariant(
+                variant_key="display",
+                object_key=f"catmap/test/cat/{asset_id}/display.jpg",
+                url="https://cos.test/catmap/test/cat/display.jpg",
+                mime_type="image/jpeg",
+                file_ext="jpg",
+                width=640,
+                height=480,
+                size_bytes=2048,
+                quality=82,
+                resize_mode="fit",
+                checksum_sha256="display-sha256",
+                sort_order=1,
+            ),
+        ]
+    )
+    db_session.add(asset)
+    db_session.commit()
+    db_session.refresh(asset)
+    return asset
+
+
+def raise_cos_config_error():
+    raise APIError(
+        code=ErrorCode.FILE_COS_UPLOAD_FAILED,
+        message="腾讯云 COS 配置未完成",
+        status_code=500,
+    )
 
 
 def test_get_file_upload_config_returns_image_limits(api_client, db_session):
@@ -239,6 +313,33 @@ def test_get_asset_variant_uses_scene_mapping(api_client, db_session):
     assert "/thumb_sm.jpg" in data["url"]
 
 
+def test_get_asset_variant_falls_back_to_stored_url_when_cos_config_missing(
+    api_client,
+    db_session,
+):
+    user = create_user(
+        db_session,
+        student_no="trmx0011",
+        password="trmx0011",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    asset = create_completed_cat_photo_asset(db_session, user)
+    token = create_token(user)
+    api_client.app.dependency_overrides[get_object_storage] = raise_cos_config_error
+    api_client.app.dependency_overrides[get_optional_object_storage] = lambda: None
+
+    response = api_client.get(
+        f"/api/v1/files/assets/{asset.id}/variant?scene=cat_list_cover",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["variant_key"] == "thumb_md"
+    assert data["url"] == "https://cos.test/catmap/test/cat/thumb_md.jpg"
+
+
 def test_get_asset_content_redirects_to_signed_variant_without_auth(api_client, db_session):
     install_fake_storage(api_client)
     user = create_user(
@@ -266,6 +367,30 @@ def test_get_asset_content_redirects_to_signed_variant_without_auth(api_client, 
     assert response.status_code == 307
     assert response.headers["location"].startswith("https://signed.test/")
     assert "/thumb_md.jpg" in response.headers["location"]
+
+
+def test_get_asset_content_falls_back_to_stored_url_when_cos_config_missing(
+    api_client,
+    db_session,
+):
+    user = create_user(
+        db_session,
+        student_no="trmx0012",
+        password="trmx0012",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    asset = create_completed_cat_photo_asset(db_session, user)
+    api_client.app.dependency_overrides[get_object_storage] = raise_cos_config_error
+    api_client.app.dependency_overrides[get_optional_object_storage] = lambda: None
+
+    response = api_client.get(
+        f"/api/v1/files/assets/{asset.id}/content?scene=cat_list_cover",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 307
+    assert response.headers["location"] == "https://cos.test/catmap/test/cat/thumb_md.jpg"
 
 
 def test_bind_temporary_asset_to_owner(api_client, db_session):

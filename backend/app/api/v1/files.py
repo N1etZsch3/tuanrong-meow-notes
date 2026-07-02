@@ -11,7 +11,7 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import require_password_changed
 from app.modules.auth.models import User
 from app.modules.files import service
-from app.modules.files.dependencies import get_object_storage
+from app.modules.files.dependencies import get_object_storage, get_optional_object_storage
 from app.modules.files.presets import upload_config_payload
 from app.modules.files.storage import ObjectStorage
 
@@ -137,7 +137,7 @@ def get_asset_variant(
     scene: str | None = None,
     variant_key: str | None = None,
     db: Session = Depends(get_db),
-    storage: ObjectStorage = Depends(get_object_storage),
+    storage: ObjectStorage | None = Depends(get_optional_object_storage),
     current_user: User = Depends(require_password_changed),
 ):
     data = service.get_asset_variant(
@@ -157,7 +157,7 @@ def get_asset_content(
     scene: str | None = None,
     variant_key: str | None = None,
     db: Session = Depends(get_db),
-    storage: ObjectStorage = Depends(get_object_storage),
+    storage: ObjectStorage | None = Depends(get_optional_object_storage),
 ):
     data = service.get_asset_content_url(
         db=db,

@@ -1,5 +1,15 @@
 import { request } from "@/services/request";
 
+export interface LngLatDto {
+  lng: number;
+  lat: number;
+}
+
+export interface LngLatBoundsDto {
+  south_west: LngLatDto;
+  north_east: LngLatDto;
+}
+
 export interface CampusDto {
   campus_id: string;
   name: string;
@@ -9,6 +19,8 @@ export interface CampusDto {
   min_zoom: number | null;
   max_zoom: number | null;
   boundary: unknown | null;
+  core_bounds?: LngLatBoundsDto | null;
+  limit_bounds?: LngLatBoundsDto | null;
 }
 
 export interface CampusAreaDto {
@@ -165,6 +177,7 @@ export interface MapBottomContentItemDto {
   distance_meters: number | null;
   status_label: string | null;
   tag_label: string | null;
+  cover_photo_url: string | null;
   lng?: number | null;
   lat?: number | null;
 }

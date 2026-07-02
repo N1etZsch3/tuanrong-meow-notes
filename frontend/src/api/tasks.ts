@@ -117,8 +117,11 @@ export interface TaskListResponse {
 export interface TaskListQuery {
   task_type?: "feeding";
   status?: string;
+  execution_status?: string;
   keyword?: string;
   execute_date?: string;
+  execute_date_start?: string;
+  execute_date_end?: string;
   only_today?: boolean;
   page?: number;
   page_size?: number;

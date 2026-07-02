@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -50,9 +51,19 @@ TASK_ERROR_MAP_POINT_INVALID = 62012
 TASK_ERROR_STATUS_CONFLICT = 62013
 TASK_ERROR_CANCELLED_CANNOT_CHECKIN = 62015
 
+LOCAL_TZ = ZoneInfo("Asia/Shanghai")
+
 
 def _now() -> datetime:
     return datetime.now(tz=UTC)
+
+
+def _today() -> date:
+    return _now().astimezone(LOCAL_TZ).date()
+
+
+def _local_date_text(value: datetime) -> str:
+    return value.astimezone(LOCAL_TZ).date().isoformat()
 
 
 def _start_of_day(value: date) -> datetime:
@@ -182,7 +193,7 @@ def _next_execution(
     execution_dates: list[TaskExecutionDate],
     today: date | None = None,
 ) -> TaskExecutionDate | None:
-    today = today or date.today()
+    today = today or _today()
     active_dates = sorted(
         (item for item in execution_dates if item.deleted_at is None),
         key=lambda item: item.execute_date,
@@ -202,7 +213,7 @@ def _current_execution(
     execution_dates: list[TaskExecutionDate],
     current_date: date | None = None,
 ) -> TaskExecutionDate | None:
-    current_date = current_date or date.today()
+    current_date = current_date or _today()
     active_dates = sorted(
         (item for item in execution_dates if item.deleted_at is None),
         key=lambda item: item.execute_date,
@@ -212,6 +223,65 @@ def _current_execution(
         return exact
     fallback = active_dates[-1] if active_dates else None
     return _next_execution(active_dates, today=current_date) or fallback
+
+
+def _split_statuses(value: str | None) -> list[str]:
+    return [item.strip() for item in value.split(",") if item.strip()] if value else []
+
+
+def _date_in_query_window(
+    value: date,
+    *,
+    execute_date: date | None = None,
+    execute_date_start: date | None = None,
+    execute_date_end: date | None = None,
+) -> bool:
+    if execute_date is not None:
+        return value == execute_date
+    if execute_date_start is not None and value < execute_date_start:
+        return False
+    if execute_date_end is not None and value > execute_date_end:
+        return False
+    return True
+
+
+def _list_display_execution(
+    execution_dates: list[TaskExecutionDate],
+    *,
+    execute_date: date | None = None,
+    execute_date_start: date | None = None,
+    execute_date_end: date | None = None,
+    execution_status: str | None = None,
+    today: date | None = None,
+) -> TaskExecutionDate | None:
+    today = today or _today()
+    active_dates = sorted(
+        (item for item in execution_dates if item.deleted_at is None),
+        key=lambda item: item.execute_date,
+    )
+    statuses = set(_split_statuses(execution_status))
+    has_execution_filter = bool(
+        execute_date or execute_date_start or execute_date_end or statuses
+    )
+    if not has_execution_filter:
+        return _current_execution(active_dates, current_date=today)
+
+    matching = [
+        item
+        for item in active_dates
+        if _date_in_query_window(
+            item.execute_date,
+            execute_date=execute_date,
+            execute_date_start=execute_date_start,
+            execute_date_end=execute_date_end,
+        )
+        and (not statuses or item.status in statuses)
+    ]
+    if not matching:
+        return _current_execution(active_dates, current_date=today)
+
+    upcoming = [item for item in matching if item.execute_date >= today]
+    return upcoming[0] if upcoming else matching[-1]
 
 
 def _photo_payload(photo: TaskPhoto) -> dict:
@@ -288,9 +358,25 @@ def _activity_payload(activity: TaskActivityLog) -> dict:
     }
 
 
-def task_list_item_payload(task: Task) -> dict:
-    current_execution = _current_execution(task.execution_dates)
-    next_execution = _next_execution(task.execution_dates)
+def task_list_item_payload(
+    task: Task,
+    *,
+    execute_date: date | None = None,
+    execute_date_start: date | None = None,
+    execute_date_end: date | None = None,
+    execution_status: str | None = None,
+    today: date | None = None,
+) -> dict:
+    today = today or _today()
+    current_execution = _list_display_execution(
+        task.execution_dates,
+        execute_date=execute_date,
+        execute_date_start=execute_date_start,
+        execute_date_end=execute_date_end,
+        execution_status=execution_status,
+        today=today,
+    )
+    next_execution = _next_execution(task.execution_dates, today=today)
     return {
         "task_id": task.id,
         "title": task.title,
@@ -315,6 +401,25 @@ def task_list_item_payload(task: Task) -> dict:
     }
 
 
+def _checkin_disabled_reason(
+    task: Task,
+    current_execution: TaskExecutionDate | None,
+    *,
+    today: date,
+) -> str | None:
+    if task.status != "in_progress":
+        return "任务当前状态不可完成"
+    if current_execution is None:
+        return "暂无执行日期"
+    if current_execution.status == "completed":
+        return "该日期已完成"
+    if current_execution.status not in {"pending", "missed"}:
+        return "该日期不可完成"
+    if current_execution.execute_date > today:
+        return "未到任务日期"
+    return None
+
+
 def task_detail_payload(
     task: Task,
     *,
@@ -322,8 +427,14 @@ def task_detail_payload(
     activity_limit: int = 20,
     can_admin_edit: bool = False,
 ) -> dict:
-    current_execution = _current_execution(task.execution_dates, current_date=current_date)
-    next_execution = _next_execution(task.execution_dates, today=current_date)
+    today = current_date or _today()
+    current_execution = _current_execution(task.execution_dates, current_date=today)
+    next_execution = _next_execution(task.execution_dates, today=today)
+    checkin_disabled_reason = _checkin_disabled_reason(
+        task,
+        current_execution,
+        today=today,
+    )
     return {
         "task_id": task.id,
         "task_no": task.task_no,
@@ -358,12 +469,8 @@ def task_detail_payload(
         ],
         "actions": {
             "can_navigate": True,
-            "can_checkin": task.status == "in_progress"
-            and bool(current_execution)
-            and current_execution.status == "pending",
-            "checkin_disabled_reason": None
-            if task.status == "in_progress"
-            else "任务当前状态不可完成",
+            "can_checkin": checkin_disabled_reason is None,
+            "checkin_disabled_reason": checkin_disabled_reason,
             "can_admin_edit": can_admin_edit,
         },
         "published_at": task.published_at,
@@ -389,6 +496,9 @@ def list_tasks(
     status: str | None = "in_progress",
     keyword: str | None = None,
     execute_date: date | None = None,
+    execute_date_start: date | None = None,
+    execute_date_end: date | None = None,
+    execution_status: str | None = None,
     only_today: bool = False,
     page: int = 1,
     page_size: int = 20,
@@ -402,9 +512,10 @@ def list_tasks(
         )
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
+    today = _today()
     statement = _task_statement_for_list(include_private=include_private)
     if status:
-        statuses = [item.strip() for item in status.split(",") if item.strip()]
+        statuses = _split_statuses(status)
         if statuses:
             statement = statement.where(Task.status.in_(statuses))
     normalized_keyword = keyword.strip() if keyword else ""
@@ -416,12 +527,21 @@ def list_tasks(
                 MapPoint.location_detail.contains(normalized_keyword),
             )
         )
-    query_date = date.today() if only_today else execute_date
-    if query_date:
+    query_date = today if only_today else execute_date
+    execution_statuses = _split_statuses(execution_status)
+    if query_date or execute_date_start or execute_date_end or execution_statuses:
         task_ids = select(TaskExecutionDate.task_id).where(
-            TaskExecutionDate.execute_date == query_date,
             TaskExecutionDate.deleted_at.is_(None),
         )
+        if query_date:
+            task_ids = task_ids.where(TaskExecutionDate.execute_date == query_date)
+        else:
+            if execute_date_start:
+                task_ids = task_ids.where(TaskExecutionDate.execute_date >= execute_date_start)
+            if execute_date_end:
+                task_ids = task_ids.where(TaskExecutionDate.execute_date <= execute_date_end)
+        if execution_statuses:
+            task_ids = task_ids.where(TaskExecutionDate.status.in_(execution_statuses))
         statement = statement.where(Task.id.in_(task_ids))
 
     tasks = db.scalars(statement.order_by(Task.start_at.asc(), Task.published_at.desc())).all()
@@ -429,7 +549,17 @@ def list_tasks(
     start = (page - 1) * page_size
     paged = tasks[start : start + page_size]
     return {
-        "items": [task_list_item_payload(task) for task in paged],
+        "items": [
+            task_list_item_payload(
+                task,
+                execute_date=query_date,
+                execute_date_start=execute_date_start,
+                execute_date_end=execute_date_end,
+                execution_status=execution_status,
+                today=today,
+            )
+            for task in paged
+        ],
         "page": page,
         "page_size": page_size,
         "total": total,
@@ -675,7 +805,14 @@ def checkin_task(
             status_code=409,
         )
 
-    execute_date = payload.execute_date or date.today()
+    today = _today()
+    execute_date = payload.execute_date or today
+    if execute_date > today:
+        raise APIError(
+            code=TASK_ERROR_NOT_EXECUTION_DAY,
+            message="未到任务日期",
+            status_code=400,
+        )
     execution = db.scalar(
         select(TaskExecutionDate)
         .where(
@@ -746,13 +883,14 @@ def checkin_task(
         1,
     )
     nickname = user.profile.nickname if user.profile else user.student_no
+    completed_date_text = _local_date_text(now)
     db.add(
         TaskActivityLog(
             task_id=task.id,
             task_execution_date_id=execution.id,
             activity_type="execution_completed",
             title=f"第{sequence}次任务完成",
-            content=f"{nickname} 于 {execute_date.isoformat()} 完成投喂",
+            content=f"{nickname} 于 {completed_date_text} 完成投喂",
             actor_id=user.id,
             activity_metadata={
                 "execute_date": execute_date.isoformat(),

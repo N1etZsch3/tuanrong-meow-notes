@@ -9,9 +9,12 @@ import {
   DEFAULT_REQUIRED_ITEMS,
   buildSummerFeedingTaskPayload,
   buildUploadedTaskPhoto,
+  buildTaskDateFilterQuery,
   createDefaultFeedingTaskDraft,
   formatExecutionDateSummary,
+  getTaskDetailActionState,
   getTaskListStatusLabel,
+  getTaskStatusTone,
   validatePublishDraft,
 } from "@/pages/tasks/task-page";
 
@@ -40,6 +43,16 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain(":circular=\"true\"");
   });
 
+  it("opens task detail photos in the shared in-app zoom preview modal", () => {
+    expect(taskDetailSource).toContain("ImagePreviewModal");
+    expect(taskDetailSource).toContain(":visible=\"imagePreviewVisible\"");
+    expect(taskDetailSource).toContain("@close=\"closeImagePreview\"");
+    expect(taskDetailSource).toContain("@tap=\"openTaskPhotoPreview(photo.photo_id)\"");
+    expect(taskDetailSource).toContain("@tap=\"openCheckinPhotoPreview(photo)\"");
+    expect(taskDetailSource).toContain("openImagePreview");
+    expect(taskDetailSource).not.toContain("uni.previewImage");
+  });
+
   it("shows an admin edit shortcut beside the task detail title", () => {
     expect(taskDetailSource).toContain("canAdminEditTask");
     expect(taskDetailSource).toContain('class="task-edit-button"');
@@ -58,6 +71,123 @@ describe("summer feeding task pages", () => {
     expect(taskIndexSource).toContain("setCachedTaskList");
     expect(taskIndexSource).toContain("silent: true");
     expect(taskDetailSource).toContain("clearTaskListCache");
+  });
+
+  it("adds task search and three picker filters using the cat library filter layout", () => {
+    expect(taskIndexSource).toContain('class="search-box"');
+    expect(taskIndexSource).toContain('placeholder="搜索任务 / 喂食点 / 位置"');
+    expect(taskIndexSource).toContain("handleSearchConfirm");
+    expect(taskIndexSource).toContain('class="filter-card"');
+    expect(taskIndexSource).toContain("taskTypeOptions");
+    expect(taskIndexSource).toContain("taskStatusOptions");
+    expect(taskIndexSource).toContain("dateFilterOptions");
+    expect(taskIndexSource).toContain("selectedTaskTypeLabel");
+    expect(taskIndexSource).toContain("selectedTaskStatusLabel");
+    expect(taskIndexSource).toContain("selectedDateFilterLabel");
+    expect(taskIndexSource).toContain("任务类型");
+    expect(taskIndexSource).toContain("完成状态");
+    expect(taskIndexSource).toContain("日期");
+    expect(taskIndexSource).toContain("本日");
+    expect(taskIndexSource).toContain("本周");
+    expect(taskIndexSource).toContain("本月");
+    expect(taskIndexSource).toContain("特定日期");
+    expect(taskIndexSource).not.toContain("全部任务类型");
+    expect(taskIndexSource).not.toContain("全部完成状态");
+    expect(taskIndexSource).not.toContain("今日任务");
+    expect(taskIndexSource).not.toContain("刷新");
+    expect(taskIndexSource).not.toContain("toggleToday");
+    expect(taskIndexSource).not.toContain("refreshTasks");
+    expect(taskIndexSource).not.toContain("only_today");
+    expect(taskIndexSource).toContain("clearFilters");
+    expect(taskIndexSource).toContain("keyword: searchKeyword.value.trim()");
+    expect(taskIndexSource).toContain("status: DEFAULT_TASK_STATUS_QUERY");
+    expect(taskIndexSource).toContain("execution_status: selectedTaskStatus.value");
+  });
+
+  it("builds task list date filter query parameters", () => {
+    const baseDate = new Date(2026, 6, 2);
+
+    expect(buildTaskDateFilterQuery("", "", baseDate)).toEqual({});
+    expect(buildTaskDateFilterQuery("today", "", baseDate)).toEqual({
+      execute_date: "2026-07-02",
+    });
+    expect(buildTaskDateFilterQuery("week", "", baseDate)).toEqual({
+      execute_date_start: "2026-06-29",
+      execute_date_end: "2026-07-05",
+    });
+    expect(buildTaskDateFilterQuery("month", "", baseDate)).toEqual({
+      execute_date_start: "2026-07-01",
+      execute_date_end: "2026-07-31",
+    });
+    expect(buildTaskDateFilterQuery("specific", "2026-07-16", baseDate)).toEqual({
+      execute_date: "2026-07-16",
+    });
+  });
+
+  it("uses three task detail bottom action states", () => {
+    expect(
+      getTaskDetailActionState({
+        can_checkin: false,
+        checkin_disabled_reason: "未到任务日期",
+        current_execution: {
+          status: "pending",
+          execute_date: "2026-07-09",
+        },
+      }),
+    ).toEqual({
+      label: "未开始",
+      tone: "not_started",
+      disabled: true,
+    });
+
+    expect(
+      getTaskDetailActionState({
+        can_checkin: true,
+        checkin_disabled_reason: null,
+        current_execution: {
+          status: "pending",
+          execute_date: "2026-07-02",
+        },
+      }),
+    ).toEqual({
+      label: "投喂",
+      tone: "ready",
+      disabled: false,
+    });
+
+    expect(
+      getTaskDetailActionState({
+        can_checkin: false,
+        checkin_disabled_reason: "该日期已完成",
+        current_execution: {
+          status: "completed",
+          execute_date: "2026-07-02",
+        },
+      }),
+    ).toEqual({
+      label: "已完成",
+      tone: "completed",
+      disabled: true,
+    });
+  });
+
+  it("colors in-progress and completed task status pills distinctly", () => {
+    expect(taskIndexSource).toContain(":class=\"taskStatusClass(task)\"");
+    expect(taskIndexSource).toContain("task-status-in-progress");
+    expect(taskIndexSource).toContain("task-status-completed");
+
+    expect(
+      getTaskStatusTone({
+        status: "in_progress",
+        status_label: "进行中",
+      }),
+    ).toBe("in_progress");
+    expect(
+      getTaskStatusTone({
+        status: "completed",
+        status_label: "已结束",
+      }),
+    ).toBe("completed");
   });
 
   it("keeps the publish form fields requested for summer feeding tasks", () => {
@@ -101,6 +231,7 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain("goNavigateToTaskPoint");
     expect(taskDetailSource).toContain("MAP_PENDING_NAVIGATION_STORAGE_KEY");
     expect(taskDetailSource).toContain("uni.setStorageSync");
+    expect(taskDetailSource).toContain("focus_only: true");
     expect(taskDetailSource).toContain('uni.switchTab({ url: "/pages/index/index" })');
     expect(taskDetailSource).not.toContain("导航后续接入");
   });
@@ -245,6 +376,7 @@ describe("summer feeding task pages", () => {
     expect(
       getTaskListStatusLabel({
         status_label: "进行中",
+        status: "in_progress",
         current_execution: {
           status: "completed",
         },
@@ -254,10 +386,18 @@ describe("summer feeding task pages", () => {
     expect(
       getTaskListStatusLabel({
         status_label: "进行中",
+        status: "in_progress",
         current_execution: {
           status: "pending",
         },
       }),
     ).toBe("进行中");
+
+    expect(
+      getTaskListStatusLabel({
+        status_label: "已结束",
+        status: "completed",
+      }),
+    ).toBe("已完成");
   });
 });

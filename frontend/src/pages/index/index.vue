@@ -128,9 +128,9 @@
         class="search-box"
         :class="{ 'is-focused': isSearchMode }"
         @tap="focusSearch"
-        @touchstart.stop="drawer.touchstart"
-        @touchmove.stop="drawer.touchmove"
-        @touchend.stop="drawer.touchend"
+        @touchstart="drawer.touchstart"
+        @touchmove="drawer.touchmove"
+        @touchend="drawer.touchend"
       >
         <text class="search-icon">⌕</text>
         <input

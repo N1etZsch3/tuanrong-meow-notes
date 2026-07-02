@@ -302,9 +302,14 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain('class="drawer-grip-area"');
     expect(indexPageSource).toContain('@touchstart="drawer.touchstart"');
     expect(indexPageSource).toContain('class="search-box"');
-    expect(indexPageSource).toContain('@touchstart.stop="drawer.touchstart"');
-    expect(indexPageSource).toContain('@touchmove.stop="drawer.touchmove"');
-    expect(indexPageSource).toContain('@touchend.stop="drawer.touchend"');
+    expect(indexPageSource).toContain('@touchstart="drawer.touchstart"');
+    expect(indexPageSource).toContain('@touchmove="drawer.touchmove"');
+    expect(indexPageSource).toContain('@touchend="drawer.touchend"');
+    expect(indexPageSource).not.toContain('@touchstart.stop="drawer.touchstart"');
+    expect(indexPageSource).not.toContain('@touchmove.stop="drawer.touchmove"');
+    expect(indexPageSource).not.toContain('@touchend.stop="drawer.touchend"');
+    expect(indexPageSource).toContain('class="search-input"');
+    expect(indexPageSource).toContain('@focus="focusSearch"');
   });
 
   it("shows only the title-side summary type badge in selected point detail cards", () => {

@@ -1,4 +1,5 @@
 import { request } from "@/services/request";
+import { API_ENDPOINTS } from "@/api/routes";
 import type { CurrentUser, UserRole, UserStatus } from "@/types/user";
 
 export interface CaptchaResponse {
@@ -79,14 +80,14 @@ export interface ChangePasswordResponse {
 
 export function getCaptcha(): Promise<CaptchaResponse> {
   return request<CaptchaResponse>({
-    url: "/auth/captcha",
+    url: API_ENDPOINTS.auth.captcha,
     method: "GET",
   });
 }
 
 export function login(payload: LoginPayload): Promise<LoginResponse> {
   return request<LoginResponse, LoginPayload & Record<string, unknown>>({
-    url: "/auth/login",
+    url: API_ENDPOINTS.auth.login,
     method: "POST",
     data: { ...payload },
   });
@@ -96,7 +97,7 @@ export function renewAccessToken(
   accessToken: string,
 ): Promise<RenewAccessTokenResponse> {
   return request<RenewAccessTokenResponse>({
-    url: "/auth/renew",
+    url: API_ENDPOINTS.auth.renew,
     method: "POST",
     token: accessToken,
   });
@@ -104,7 +105,7 @@ export function renewAccessToken(
 
 export function getCurrentUser(accessToken: string): Promise<CurrentUserResponse> {
   return request<CurrentUserResponse>({
-    url: "/auth/me",
+    url: API_ENDPOINTS.auth.me,
     method: "GET",
     token: accessToken,
   });
@@ -115,7 +116,7 @@ export function changePassword(
   accessToken: string,
 ): Promise<ChangePasswordResponse> {
   return request<ChangePasswordResponse, ChangePasswordPayload & Record<string, unknown>>({
-    url: "/auth/password",
+    url: API_ENDPOINTS.auth.password,
     method: "PATCH",
     data: { ...payload },
     token: accessToken,
@@ -124,7 +125,7 @@ export function changePassword(
 
 export function logout(accessToken: string): Promise<null> {
   return request<null>({
-    url: "/auth/logout",
+    url: API_ENDPOINTS.auth.logout,
     method: "POST",
     token: accessToken,
   });

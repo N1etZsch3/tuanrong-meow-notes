@@ -10,6 +10,7 @@ import {
   buildSummerFeedingTaskPayload,
   buildUploadedTaskPhoto,
   buildTaskDateFilterQuery,
+  getTaskPhotoDisplayUrl,
   createDefaultFeedingTaskDraft,
   formatExecutionDateSummary,
   getTaskDetailActionState,
@@ -51,6 +52,16 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain("@tap=\"openCheckinPhotoPreview(photo)\"");
     expect(taskDetailSource).toContain("openImagePreview");
     expect(taskDetailSource).not.toContain("uni.previewImage");
+  });
+
+  it("uses a mini-program-safe png arrow in task list filters", () => {
+    expect(taskIndexSource).toContain("地图点/箭头.png");
+    expect(taskIndexSource).not.toContain("地图点/箭头.svg");
+  });
+
+  it("uses a mini-program-safe png marker on the admin location picker map", () => {
+    expect(adminTaskLocationSource).toContain("地图点/失败任务.png");
+    expect(adminTaskLocationSource).not.toContain("地图点/失败任务.svg");
   });
 
   it("shows an admin edit shortcut beside the task detail title", () => {
@@ -360,16 +371,40 @@ describe("summer feeding task pages", () => {
     expect(
       buildUploadedTaskPhoto({
         asset_id: "asset-1",
-        default_url: "/uploads/task/asset-1.jpg",
-        default_thumb_url: "/uploads/task/asset-1-thumb.jpg",
+        default_url: "https://cos.test/catmap/task/asset-1/display.jpg",
+        default_thumb_url: "https://cos.test/catmap/task/asset-1/thumb_md.jpg",
       }),
     ).toEqual({
       file_id: "asset-1",
-      file_url:
-        "http://localhost:8000/api/v1/files/assets/asset-1/content?scene=task_detail_full",
-      thumbnail_url:
-        "http://localhost:8000/api/v1/files/assets/asset-1/content?scene=task_list_cover",
+      file_url: "https://cos.test/catmap/task/asset-1/display.jpg",
+      thumbnail_url: "https://cos.test/catmap/task/asset-1/thumb_md.jpg",
     });
+  });
+
+  it("prefers stored COS task photo urls over derived content endpoints", () => {
+    expect(
+      getTaskPhotoDisplayUrl(
+        {
+          file_id: "asset-1",
+          file_url: "https://cos.test/catmap/task/asset-1/display.jpg",
+          thumbnail_url: "https://cos.test/catmap/task/asset-1/thumb_md.jpg",
+        },
+        "task_detail_full",
+      ),
+    ).toBe("https://cos.test/catmap/task/asset-1/display.jpg");
+  });
+
+  it("does not use the image upload endpoint as a display image fallback", () => {
+    expect(
+      getTaskPhotoDisplayUrl(
+        {
+          file_id: null,
+          file_url: "http://203.0.113.10/api/v1/files/images",
+          thumbnail_url: null,
+        },
+        "task_detail_full",
+      ),
+    ).toBe("");
   });
 
   it("shows completed execution status in the task list status pill", () => {

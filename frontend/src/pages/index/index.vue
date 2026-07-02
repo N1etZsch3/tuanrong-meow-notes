@@ -92,7 +92,7 @@
             <cover-image class="filter-arrow-icon" :src="filterArrowIcon" />
           </cover-view>
         </cover-view>
-        <cover-view class="filter-menu">
+        <cover-view class="filter-menu" :class="{ 'is-open': filterMenuOpen }">
           <cover-view
             v-for="option in filterOptions"
             :key="option.key"
@@ -339,22 +339,18 @@ import {
 } from "@/services/user-location";
 import { useUserStore } from "@/stores/user";
 
-import allMarkerPointIcon from "../../../素材/svg/地图点/全部.svg";
-import catPointMarkerIcon from "../../../素材/svg/地图点/猫咪点.svg";
-import completedTaskMarkerIcon from "../../../素材/svg/地图点/完成任务.svg";
-import dailyTaskPointIcon from "../../../素材/svg/地图点/日常任务.svg";
-import emergencyTaskPointIcon from "../../../素材/svg/地图点/紧急任务.svg";
-import failedTaskMarkerIcon from "../../../素材/svg/地图点/失败任务.svg";
-import filterArrowIcon from "../../../素材/svg/地图点/箭头.svg";
-import filterDefaultIcon from "../../../素材/svg/地图点/筛选.svg";
-import landmarkPointIcon from "../../../素材/svg/地图点/地标.svg";
-import supplyPointMarkerIcon from "../../../素材/svg/地图点/物资点.svg";
-import catMarkerIcon from "../../../素材/svg/默认/暂时不用/cat-marker.svg";
-import emergencyMarkerIcon from "../../../素材/svg/默认/暂时不用/emergency-marker.svg";
-import locationIcon from "../../../素材/svg/菜单/定位.svg";
+import allMarkerPointIcon from "../../../素材/png/地图点/全部.png";
+import catPointMarkerIcon from "../../../素材/png/地图点/猫咪点.png";
+import completedTaskMarkerIcon from "../../../素材/png/地图点/完成任务.png";
+import dailyTaskPointIcon from "../../../素材/png/地图点/日常任务.png";
+import emergencyTaskPointIcon from "../../../素材/png/地图点/紧急任务.png";
+import failedTaskMarkerIcon from "../../../素材/png/地图点/失败任务.png";
+import filterArrowIcon from "../../../素材/png/地图点/箭头.png";
+import filterDefaultIcon from "../../../素材/png/地图点/筛选.png";
+import landmarkPointIcon from "../../../素材/png/地图点/地标.png";
+import supplyPointMarkerIcon from "../../../素材/png/地图点/物资点.png";
+import locationIcon from "../../../素材/png/菜单/定位.png";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
-import supplyMarkerIcon from "../../../素材/svg/默认/暂时不用/supply-marker.svg";
-import taskMarkerIcon from "../../../素材/svg/默认/暂时不用/task_marker.svg";
 import loadingBackground from "../../../素材/加载页素材/加载页背景.jpg";
 import {
   ALL_MAP_FILTER_KEY,
@@ -1211,10 +1207,10 @@ function getNativeMarkerIcon(
   }
 
   const icons: Record<MapShellItemType, string> = {
-    emergency_task: emergencyMarkerIcon,
-    daily_task: taskMarkerIcon,
-    cat: catMarkerIcon,
-    supply: supplyMarkerIcon,
+    emergency_task: emergencyTaskPointIcon,
+    daily_task: dailyTaskPointIcon,
+    cat: catPointMarkerIcon,
+    supply: supplyPointMarkerIcon,
     landmark: landmarkPointIcon,
   };
 
@@ -2757,6 +2753,10 @@ onBeforeUnmount(() => {
   transform: translateY(-8rpx) scaleY(0.96);
   transform-origin: top left;
   pointer-events: none;
+}
+
+.filter-menu.is-open {
+  pointer-events: auto;
 }
 
 .filter-option {

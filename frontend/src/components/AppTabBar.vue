@@ -76,7 +76,7 @@ function handleTabTap(tabKey: AppTabKey) {
   bottom: 0;
   z-index: 20;
   box-sizing: border-box;
-  padding: 0 24rpx calc(env(safe-area-inset-bottom) + 14rpx);
+  padding: 0 24rpx 8rpx;
   pointer-events: none;
 }
 

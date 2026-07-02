@@ -202,6 +202,31 @@ def get_asset_content_url(
     return selected_variant_payload(asset, variant, storage=storage)
 
 
+def get_asset_content_bytes(
+    *,
+    db: Session,
+    asset_id: UUID,
+    scene: str | None,
+    variant_key: str | None,
+    storage: ObjectStorage,
+) -> dict:
+    asset = _load_asset(db, asset_id)
+    if asset.visibility not in {"internal", "public"}:
+        raise APIError(
+            code=ErrorCode.FILE_FORBIDDEN,
+            message="无权访问该文件",
+            status_code=403,
+        )
+    variant = _select_variant(asset=asset, scene=scene, variant_key=variant_key)
+    return {
+        "asset_id": asset.id,
+        "variant_key": variant.variant_key,
+        "body": storage.get_object(variant.object_key),
+        "mime_type": variant.mime_type,
+        "size_bytes": variant.size_bytes,
+    }
+
+
 def list_assets(
     *,
     db: Session,

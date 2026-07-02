@@ -572,25 +572,26 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("return;");
   });
 
-  it("renders marker svg icons and a redesigned arrow in the filter menu", () => {
+  it("renders mini-program-safe png marker icons and arrow in the filter menu", () => {
     expect(indexPageSource).toContain("MAP_FILTER_ICON_SRC");
     expect(indexPageSource).toContain("filter-option-icon");
     expect(indexPageSource).toContain("filterArrowIcon");
     expect(indexPageSource).toContain("filter-arrow-icon");
-    expect(indexPageSource).toContain("../../../素材/svg/地图点/全部.svg");
-    expect(indexPageSource).toContain("../../../素材/svg/地图点/紧急任务.svg");
-    expect(indexPageSource).toContain("../../../素材/svg/地图点/日常任务.svg");
-    expect(indexPageSource).toContain("../../../素材/svg/地图点/猫咪点.svg");
-    expect(indexPageSource).toContain("../../../素材/svg/地图点/物资点.svg");
-    expect(indexPageSource).toContain("../../../素材/svg/地图点/地标.svg");
-    expect(indexPageSource).toContain("../../../素材/svg/地图点/箭头.svg");
-    expect(indexPageSource).toContain("../../../素材/svg/地图点/完成任务.svg");
-    expect(indexPageSource).toContain("../../../素材/svg/地图点/失败任务.svg");
+    expect(indexPageSource).toContain("../../../素材/png/地图点/全部.png");
+    expect(indexPageSource).toContain("../../../素材/png/地图点/紧急任务.png");
+    expect(indexPageSource).toContain("../../../素材/png/地图点/日常任务.png");
+    expect(indexPageSource).toContain("../../../素材/png/地图点/猫咪点.png");
+    expect(indexPageSource).toContain("../../../素材/png/地图点/物资点.png");
+    expect(indexPageSource).toContain("../../../素材/png/地图点/地标.png");
+    expect(indexPageSource).toContain("../../../素材/png/地图点/箭头.png");
+    expect(indexPageSource).toContain("../../../素材/png/地图点/完成任务.png");
+    expect(indexPageSource).toContain("../../../素材/png/地图点/失败任务.png");
+    expect(indexPageSource).not.toContain("素材/svg/地图点");
     expect(indexPageSource).not.toContain("filter-chevron-mark");
     expect(indexPageSource).not.toContain("⌄");
   });
 
-  it("uses completion and failure task svgs for feeding task map markers", () => {
+  it("uses completion and failure task pngs for feeding task map markers", () => {
     expect(indexPageSource).toContain("getFeedingMarkerIcon");
     expect(indexPageSource).toContain("marker.business_type === \"feeding\"");
     expect(indexPageSource).toContain("marker.extra.feeding_status === \"completed\"");
@@ -614,13 +615,22 @@ describe("map page shell behavior", () => {
     expect(layerIndex).toBeLessThan(drawerIndex);
   });
 
-  it("animates the filter menu width and arrow direction with WXS", () => {
+  it("keeps the filter menu animation native-map-safe on iOS", () => {
     expect(filterMenuWxsSource).toContain("filter-chip");
     expect(filterMenuWxsSource).toContain("filter-menu");
     expect(filterMenuWxsSource).toContain("filter-arrow-icon");
     expect(filterMenuWxsSource).toContain("rotate(180deg)");
     expect(filterMenuWxsSource).toContain("rotate(0deg)");
-    expect(filterMenuWxsSource).toContain("width");
+    expect(indexPageSource).toContain(
+      '<cover-view class="filter-menu" :class="{ \'is-open\': filterMenuOpen }">',
+    );
+    expect(indexPageSource).toContain(".filter-menu.is-open");
+    expect(filterMenuWxsSource).toContain("opacity 0.18s ease");
+    expect(filterMenuWxsSource).toContain("transform 0.18s ease");
+    expect(filterMenuWxsSource).not.toContain("transition: trans");
+    expect(filterMenuWxsSource).not.toContain("transition || 'none'");
+    expect(filterMenuWxsSource).not.toContain("pointerEvents");
+    expect(filterMenuWxsSource).not.toContain("scaleY");
   });
 
   it("navigates summary card view-detail actions to the task detail page", () => {

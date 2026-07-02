@@ -180,12 +180,11 @@
 import { onLoad } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
-import { buildFileAssetContentUrl, uploadImage } from "@/api/files";
+import { uploadImage } from "@/api/files";
 import {
   checkinTask,
   getTaskDetail,
   type TaskDetailDto,
-  type TaskPhotoDto,
   type UploadedFileRef,
 } from "@/api/tasks";
 import ImagePreviewModal from "@/components/ImagePreviewModal.vue";
@@ -196,6 +195,7 @@ import {
   buildUploadedTaskPhoto,
   formatTaskDate,
   getTaskDetailActionState,
+  getTaskPhotoDisplayUrl,
 } from "@/pages/tasks/task-page";
 import { clearTaskListCache } from "@/pages/tasks/task-list-cache";
 import { MAP_PENDING_NAVIGATION_STORAGE_KEY } from "@/pages/index/map-page";
@@ -227,7 +227,7 @@ const heroPhotos = computed(() => {
   return task.value.photos
     .map((photo) => ({
       photo_id: photo.photo_id,
-      url: getTaskPhotoUrl(photo, "task_detail_full"),
+      url: getTaskPhotoDisplayUrl(photo, "task_detail_full"),
     }))
     .filter((photo) => photo.url && !failed.has(photo.photo_id));
 });
@@ -269,19 +269,6 @@ async function getAccessToken(): Promise<string | null> {
 
 function formatActivityTime(value: string): string {
   return value ? value.replace("T", " ").slice(0, 16) : "";
-}
-
-function getTaskPhotoUrl(
-  photo: TaskPhotoDto | undefined,
-  scene: "task_detail_full" | "task_list_cover",
-): string {
-  if (!photo) {
-    return "";
-  }
-
-  return photo.file_id
-    ? buildFileAssetContentUrl(photo.file_id, scene)
-    : photo.file_url;
 }
 
 function markHeroPhotoFailed(photoId: string) {

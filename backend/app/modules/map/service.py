@@ -368,17 +368,29 @@ def point_cover_photo(point: MapPoint) -> str | None:
     return first_photo.thumbnail_url or first_photo.file_url
 
 
+def photo_display_urls(photo: MapPointPhoto | TaskPhoto) -> tuple[str, str | None]:
+    asset = getattr(photo, "file_asset", None)
+    if asset is not None and asset.deleted_at is None:
+        return (
+            asset.default_url or photo.file_url,
+            asset.default_thumb_url or photo.thumbnail_url,
+        )
+    return photo.file_url, photo.thumbnail_url
+
+
 def task_cover_photo(task: Task | None) -> str | None:
     if task is None:
         return None
     photos = [photo for photo in task.photos if photo.deleted_at is None]
     cover = next((photo for photo in photos if photo.is_cover), None)
     if cover:
-        return cover.thumbnail_url or cover.file_url
+        file_url, thumbnail_url = photo_display_urls(cover)
+        return thumbnail_url or file_url
     first_photo = min(photos, key=lambda photo: photo.sort_order, default=None)
     if first_photo is None:
         return None
-    return first_photo.thumbnail_url or first_photo.file_url
+    file_url, thumbnail_url = photo_display_urls(first_photo)
+    return thumbnail_url or file_url
 
 
 def associated_poi_payload(point: MapPoint) -> dict | None:
@@ -524,7 +536,10 @@ def task_by_map_point_ids(db: Session, points: list[MapPoint]) -> dict[UUID, Tas
         return {}
     tasks = db.scalars(
         select(Task)
-        .options(selectinload(Task.execution_dates), selectinload(Task.photos))
+        .options(
+            selectinload(Task.execution_dates),
+            selectinload(Task.photos).selectinload(TaskPhoto.file_asset),
+        )
         .where(Task.map_point_id.in_(point_ids), Task.deleted_at.is_(None))
     ).all()
     return {task.map_point_id: task for task in tasks}
@@ -1198,11 +1213,12 @@ def get_visible_point(db: Session, point_id: UUID) -> MapPoint:
 
 
 def photo_payload(photo: MapPointPhoto | TaskPhoto) -> dict:
+    file_url, thumbnail_url = photo_display_urls(photo)
     return {
         "photo_id": photo.id,
         "photo_type": photo.photo_type,
-        "file_url": photo.file_url,
-        "thumbnail_url": photo.thumbnail_url,
+        "file_url": file_url,
+        "thumbnail_url": thumbnail_url,
         "caption": photo.caption,
         "sort_order": photo.sort_order,
         "created_at": photo.created_at,

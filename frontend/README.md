@@ -21,6 +21,20 @@ Read `../AGENTS.md` and the relevant documents under `../docs` before adding fro
 - `npm run test`: run frontend unit tests.
 - `npm run type-check`: run TypeScript checks.
 
+## API Environment
+
+Local development can omit `VITE_API_BASE_URL` and falls back to
+`http://localhost:8000/api/v1`.
+
+WeChat Mini Program production builds must configure a real HTTPS API domain,
+otherwise the build fails instead of silently packaging a localhost request URL.
+Create an ignored `frontend/.env.production` file or set the environment
+variable in CI:
+
+```text
+VITE_API_BASE_URL=https://your-api-domain.example.com/api/v1
+```
+
 ## Source Layout
 
 See `src/README.md` before adding frontend source files.

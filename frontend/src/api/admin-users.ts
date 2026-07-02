@@ -1,4 +1,5 @@
 import { request } from "@/services/request";
+import { API_ENDPOINTS } from "@/api/routes";
 import type { UserRole, UserStatus } from "@/types/user";
 
 export interface AdminUserProfilePayload {
@@ -32,7 +33,7 @@ export function createAdminUser(
   accessToken: string,
 ): Promise<AdminCreateUserResponse> {
   return request<AdminCreateUserResponse, AdminCreateUserPayload & Record<string, unknown>>({
-    url: "/admin/users",
+    url: API_ENDPOINTS.admin.users,
     method: "POST",
     data: { ...payload },
     token: accessToken,

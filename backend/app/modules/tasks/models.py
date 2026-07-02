@@ -118,6 +118,7 @@ class TaskPhoto(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     task: Mapped[Task] = relationship(back_populates="photos")
+    file_asset = relationship("FileAsset", foreign_keys=[file_id])
 
 
 class TaskCheckin(Base):
@@ -171,6 +172,7 @@ class TaskCheckinPhoto(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     checkin: Mapped[TaskCheckin] = relationship(back_populates="photos")
+    file_asset = relationship("FileAsset", foreign_keys=[file_id])
 
 
 class TaskActivityLog(Base):

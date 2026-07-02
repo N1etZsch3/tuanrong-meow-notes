@@ -1,4 +1,5 @@
 import { request } from "@/services/request";
+import { API_ENDPOINTS, compactApiParams } from "@/api/routes";
 
 export interface LngLatDto {
   lng: number;
@@ -344,17 +345,9 @@ export interface WalkingRouteQuery {
 
 export type WalkingRouteResponse = MapNavigationResponse["route"];
 
-function compactQuery<T extends object>(query: T): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(query as Record<string, unknown>).filter(
-      ([, value]) => value !== undefined && value !== null && value !== "",
-    ),
-  );
-}
-
 export function getMapInit(accessToken: string): Promise<MapInitResponse> {
   return request<MapInitResponse>({
-    url: "/map/init",
+    url: API_ENDPOINTS.map.init,
     method: "GET",
     token: accessToken,
   });
@@ -365,9 +358,9 @@ export function getMapPoints(
   query: MapPointQuery = {},
 ): Promise<MapPointsResponse> {
   return request<MapPointsResponse>({
-    url: "/map/points",
+    url: API_ENDPOINTS.map.points,
     method: "GET",
-    data: compactQuery(query),
+    data: compactApiParams(query),
     token: accessToken,
   });
 }
@@ -377,9 +370,9 @@ export function searchMap(
   query: MapSearchQuery,
 ): Promise<MapSearchResponse> {
   return request<MapSearchResponse>({
-    url: "/map/search",
+    url: API_ENDPOINTS.map.search,
     method: "GET",
-    data: compactQuery(query),
+    data: compactApiParams(query),
     token: accessToken,
   });
 }
@@ -389,9 +382,9 @@ export function getMapBottomContent(
   query: MapBottomContentQuery = {},
 ): Promise<MapBottomContentResponse> {
   return request<MapBottomContentResponse>({
-    url: "/map/bottom-content",
+    url: API_ENDPOINTS.map.bottomContent,
     method: "GET",
-    data: compactQuery(query),
+    data: compactApiParams(query),
     token: accessToken,
   });
 }
@@ -402,9 +395,9 @@ export function getMapPointSummary(
   query: Pick<MapPointQuery, "user_lng" | "user_lat"> = {},
 ): Promise<MapPointSummaryResponse> {
   return request<MapPointSummaryResponse>({
-    url: `/map/points/${pointId}/summary`,
+    url: API_ENDPOINTS.map.pointSummary(pointId),
     method: "GET",
-    data: compactQuery(query),
+    data: compactApiParams(query),
     token: accessToken,
   });
 }
@@ -415,9 +408,9 @@ export function getMapPointNavigation(
   query: MapNavigationQuery = {},
 ): Promise<MapNavigationResponse> {
   return request<MapNavigationResponse>({
-    url: `/map/points/${pointId}/navigation`,
+    url: API_ENDPOINTS.map.pointNavigation(pointId),
     method: "GET",
-    data: compactQuery(query),
+    data: compactApiParams(query),
     token: accessToken,
   });
 }
@@ -427,9 +420,9 @@ export function resolveMapPoi(
   query: MapPoiResolveQuery,
 ): Promise<MapPoiResolveResponse> {
   return request<MapPoiResolveResponse>({
-    url: "/map/poi/resolve",
+    url: API_ENDPOINTS.map.poiResolve,
     method: "GET",
-    data: compactQuery(query),
+    data: compactApiParams(query),
     token: accessToken,
   });
 }
@@ -439,9 +432,9 @@ export function getNearbyMapPois(
   query: MapPoiNearbyQuery,
 ): Promise<MapPoiNearbyResponse> {
   return request<MapPoiNearbyResponse>({
-    url: "/map/poi/nearby",
+    url: API_ENDPOINTS.map.poiNearby,
     method: "GET",
-    data: compactQuery(query),
+    data: compactApiParams(query),
     token: accessToken,
   });
 }
@@ -451,9 +444,9 @@ export function getWalkingRoute(
   query: WalkingRouteQuery,
 ): Promise<WalkingRouteResponse> {
   return request<WalkingRouteResponse>({
-    url: "/map/route/walking",
+    url: API_ENDPOINTS.map.walkingRoute,
     method: "GET",
-    data: compactQuery(query),
+    data: compactApiParams(query),
     token: accessToken,
   });
 }

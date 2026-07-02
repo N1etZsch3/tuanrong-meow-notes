@@ -1,12 +1,14 @@
 from datetime import UTC, date, datetime
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
+from app.modules.files.models import FileAsset, FileAssetVariant
 from app.modules.map.models import Campus, MapMarkerConfig
 from app.modules.tasks import service as task_service
+from app.modules.tasks.models import TaskCheckinPhoto, TaskPhoto
 
 
 def create_user(
@@ -75,6 +77,87 @@ def seed_campus(db: Session) -> Campus:
     db.commit()
     db.refresh(campus)
     return campus
+
+
+def create_uploaded_asset(
+    db: Session,
+    user: User,
+    *,
+    asset_id=None,
+    usage_type: str = "map_point_scene",
+    default_url: str | None = None,
+    default_thumb_url: str | None = None,
+) -> FileAsset:
+    asset_id = asset_id or uuid4()
+    display_url = default_url or f"https://cos.test/catmap/test/task/{asset_id}/display.jpg"
+    thumb_url = (
+        default_thumb_url
+        or f"https://cos.test/catmap/test/task/{asset_id}/thumb_md.jpg"
+    )
+    asset = FileAsset(
+        id=asset_id,
+        storage_provider="tencent_cos",
+        bucket="catmap-test",
+        region="ap-guangzhou",
+        env="test",
+        usage_type=usage_type,
+        owner_type="temporary",
+        owner_id=None,
+        source_filename="task.jpg",
+        source_mime_type="image/jpeg",
+        source_size_bytes=2048,
+        source_width=640,
+        source_height=480,
+        source_checksum_sha256=f"sha256-{asset_id}",
+        default_variant_key="display",
+        default_url=display_url,
+        default_thumb_variant_key="thumb_md",
+        default_thumb_url=thumb_url,
+        process_preset="normal_photo_v1",
+        process_status="completed",
+        visibility="internal",
+        uploaded_by=user.id,
+    )
+    asset.variants.extend(
+        [
+            FileAssetVariant(
+                variant_key="thumb_md",
+                object_key=f"catmap/test/task/{asset_id}/thumb_md.jpg",
+                url=thumb_url,
+                mime_type="image/jpeg",
+                file_ext="jpg",
+                width=320,
+                height=240,
+                size_bytes=1024,
+                quality=80,
+                resize_mode="fit",
+                checksum_sha256=f"thumb-{asset_id}",
+                sort_order=0,
+            ),
+            FileAssetVariant(
+                variant_key="display",
+                object_key=f"catmap/test/task/{asset_id}/display.jpg",
+                url=display_url,
+                mime_type="image/jpeg",
+                file_ext="jpg",
+                width=640,
+                height=480,
+                size_bytes=2048,
+                quality=82,
+                resize_mode="fit",
+                checksum_sha256=f"display-{asset_id}",
+                sort_order=1,
+            ),
+        ]
+    )
+    db.add(asset)
+    db.commit()
+    db.refresh(asset)
+    return asset
+
+
+def asset_content_url(asset: FileAsset, scene: str) -> str:
+    return f"http://localhost:8000/api/v1/files/assets/{asset.id}/content?scene={scene}"
 
 
 def publish_payload(campus: Campus) -> dict:
@@ -217,6 +300,98 @@ def test_map_point_summary_uses_uploaded_task_photos_for_detail_thumbnails(
     ]
 
 
+def test_task_photos_use_file_asset_cos_urls_instead_of_client_content_urls(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    asset = create_uploaded_asset(
+        db_session,
+        admin,
+        default_url="https://cos.test/catmap/dev/task/asset/display.jpg",
+        default_thumb_url="https://cos.test/catmap/dev/task/asset/thumb_md.jpg",
+    )
+    payload = publish_payload(campus)
+    payload["photos"] = [
+        {
+            "file_id": str(asset.id),
+            "file_url": asset_content_url(asset, "task_detail_full"),
+            "thumbnail_url": asset_content_url(asset, "task_list_cover"),
+            "photo_type": "cover",
+            "caption": "喂食点现场图",
+            "sort_order": 0,
+            "is_cover": True,
+        }
+    ]
+
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+
+    assert publish_response.status_code == 200
+    published = publish_response.json()["data"]
+    saved_photo = db_session.query(TaskPhoto).filter_by(task_id=UUID(published["task_id"])).one()
+    assert saved_photo.file_url == asset.default_url
+    assert saved_photo.thumbnail_url == asset.default_thumb_url
+
+    detail_response = api_client.get(
+        f"/api/v1/tasks/{published['task_id']}",
+        headers=auth_headers(member),
+    )
+    summary_response = api_client.get(
+        f"/api/v1/map/points/{published['map_point_id']}/summary",
+        headers=auth_headers(member),
+    )
+
+    assert detail_response.status_code == 200
+    detail_photo = detail_response.json()["data"]["photos"][0]
+    assert detail_photo["file_url"] == asset.default_url
+    assert detail_photo["thumbnail_url"] == asset.default_thumb_url
+    assert summary_response.status_code == 200
+    assert summary_response.json()["data"]["cover_photo_url"] == asset.default_thumb_url
+
+
+def test_task_detail_normalizes_legacy_localhost_photo_urls_from_file_asset(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    asset = create_uploaded_asset(db_session, admin)
+    published = publish_task(api_client, admin, campus)
+    saved_photo = db_session.query(TaskPhoto).filter_by(task_id=UUID(published["task_id"])).one()
+    saved_photo.file_id = asset.id
+    saved_photo.file_url = asset_content_url(asset, "task_detail_full")
+    saved_photo.thumbnail_url = asset_content_url(asset, "task_list_cover")
+    db_session.commit()
+
+    detail_response = api_client.get(
+        f"/api/v1/tasks/{published['task_id']}",
+        headers=auth_headers(member),
+    )
+    list_response = api_client.get("/api/v1/tasks", headers=auth_headers(member))
+    summary_response = api_client.get(
+        f"/api/v1/map/points/{published['map_point_id']}/summary",
+        headers=auth_headers(member),
+    )
+
+    assert detail_response.status_code == 200
+    detail_photo = detail_response.json()["data"]["photos"][0]
+    assert detail_photo["file_url"] == asset.default_url
+    assert detail_photo["thumbnail_url"] == asset.default_thumb_url
+    assert list_response.status_code == 200
+    assert list_response.json()["data"]["items"][0]["cover_photo_url"] == asset.default_thumb_url
+    assert summary_response.status_code == 200
+    summary = summary_response.json()["data"]
+    assert summary["cover_photo_url"] == asset.default_thumb_url
+    assert summary["photos"][0]["thumbnail_url"] == asset.default_thumb_url
+
+
 def test_member_list_and_detail_include_dates_photos_location_materials_and_activities(
     api_client,
     db_session,
@@ -338,6 +513,50 @@ def test_member_checkin_completes_one_execution_date_without_completing_parent_t
     assert detail["date_range"]["pending_count"] == 2
     assert detail["execution_dates"][0]["status"] == "completed"
     assert detail["activities"][0]["activity_type"] == "execution_completed"
+
+
+def test_task_checkin_photos_use_file_asset_cos_urls_instead_of_client_content_urls(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    published = publish_task(api_client, admin, campus)
+    asset = create_uploaded_asset(
+        db_session,
+        member,
+        usage_type="task_checkin_photo",
+        default_url="https://cos.test/catmap/dev/checkin/asset/display.jpg",
+        default_thumb_url="https://cos.test/catmap/dev/checkin/asset/thumb_md.jpg",
+    )
+
+    response = api_client.post(
+        f"/api/v1/tasks/{published['task_id']}/checkins",
+        headers=auth_headers(member),
+        json={
+            "execute_date": "2026-07-02",
+            "is_completed": True,
+            "process_result": "已补充猫粮和水",
+            "remark": "现场正常",
+            "photos": [
+                {
+                    "file_id": str(asset.id),
+                    "file_url": asset_content_url(asset, "task_detail_full"),
+                    "thumbnail_url": asset_content_url(asset, "task_list_cover"),
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    saved_photo = (
+        db_session.query(TaskCheckinPhoto)
+        .filter_by(task_id=UUID(published["task_id"]))
+        .one()
+    )
+    assert saved_photo.file_url == asset.default_url
+    assert saved_photo.thumbnail_url == asset.default_thumb_url
 
 
 def test_member_list_filters_by_execution_status_instead_of_parent_task_status(

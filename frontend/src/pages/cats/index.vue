@@ -231,7 +231,7 @@ import activeStatsIcon from "../../../素材/svg/猫咪库/盾牌.svg";
 import waitingAdoptionStatsIcon from "../../../素材/svg/猫咪库/未领养.svg";
 import neuteredStatsIcon from "../../../素材/svg/猫咪库/领养.svg";
 import graduatedStatsIcon from "../../../素材/svg/猫咪库/星球.svg";
-import filterArrowIcon from "../../../素材/svg/地图点/箭头.svg";
+import filterArrowIcon from "../../../素材/png/地图点/箭头.png";
 import clearFilterIcon from "../../../素材/svg/猫咪库/删除.svg";
 
 type PickerChangeEvent = {

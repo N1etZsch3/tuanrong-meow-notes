@@ -16,28 +16,27 @@ function updateConfig(value) {
   }
 }
 
-function apply(open, ownerInstance, transition) {
-  var trans = transition || 'none';
+var MENU_TRANSITION = 'opacity 0.18s ease, transform 0.18s ease';
+var ARROW_TRANSITION = 'transform 0.18s ease';
+
+function apply(open, ownerInstance) {
   var chipWidth = open ? 336 : 224;
   var hitWidth = open ? 360 : 244;
   var menuOpacity = open ? 1 : 0;
-  var menuPointerEvents = open ? 'auto' : 'none';
-  var menuTransform = open ? 'translateY(0px) scaleY(1)' : 'translateY(' + px(-8) + 'px) scaleY(0.96)';
+  var menuTransform = open ? 'translateY(0px)' : 'translateY(' + px(-8) + 'px)';
   var arrowTransform = open ? 'rotate(0deg)' : 'rotate(180deg)';
 
   var hitLayer = ownerInstance.selectComponent('.filter-panel-hit-layer');
   if (hitLayer) {
     hitLayer.setStyle({
-      width: px(hitWidth) + 'px',
-      transition: trans
+      width: px(hitWidth) + 'px'
     });
   }
 
   var chip = ownerInstance.selectComponent('.filter-chip');
   if (chip) {
     chip.setStyle({
-      width: px(chipWidth) + 'px',
-      transition: trans
+      width: px(chipWidth) + 'px'
     });
   }
 
@@ -45,9 +44,8 @@ function apply(open, ownerInstance, transition) {
   if (menu) {
     menu.setStyle({
       opacity: menuOpacity,
-      pointerEvents: menuPointerEvents,
       transform: menuTransform,
-      transition: trans
+      transition: MENU_TRANSITION
     });
   }
 
@@ -55,14 +53,14 @@ function apply(open, ownerInstance, transition) {
   if (arrow) {
     arrow.setStyle({
       transform: arrowTransform,
-      transition: trans
+      transition: ARROW_TRANSITION
     });
   }
 }
 
 function sync(newValue, oldValue, ownerInstance, instance) {
   updateConfig(newValue);
-  apply(getOpenFromState(newValue), ownerInstance, 'all 0.22s cubic-bezier(0.25, 1, 0.5, 1)');
+  apply(getOpenFromState(newValue), ownerInstance);
 }
 
 module.exports = {

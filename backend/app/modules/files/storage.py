@@ -8,6 +8,9 @@ class ObjectStorage(Protocol):
     def put_object(self, *, object_key: str, body: bytes, content_type: str) -> str:
         ...
 
+    def get_object(self, object_key: str) -> bytes:
+        ...
+
     def presign_get_object(self, object_key: str, *, expires: int = 3600) -> str:
         ...
 
@@ -77,6 +80,24 @@ class TencentCosObjectStorage:
             self._client.delete_object(Bucket=self._bucket, Key=object_key)
         except Exception:
             return
+
+    def get_object(self, object_key: str) -> bytes:
+        try:
+            response = self._client.get_object(Bucket=self._bucket, Key=object_key)
+            body = response.get("Body")
+            stream = body.get_raw_stream() if hasattr(body, "get_raw_stream") else body
+            content = stream.read()
+        except Exception as exc:
+            raise APIError(
+                code=ErrorCode.FILE_COS_UPLOAD_FAILED,
+                message="读取 COS 图片失败",
+                status_code=500,
+            ) from exc
+        if isinstance(content, bytes):
+            return content
+        if isinstance(content, bytearray):
+            return bytes(content)
+        return str(content).encode()
 
     def presign_get_object(self, object_key: str, *, expires: int = 3600) -> str:
         try:

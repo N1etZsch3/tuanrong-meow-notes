@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import APIError
 from app.modules.auth.models import AdminOperationLog, User
+from app.modules.files.models import FileAsset
 from app.modules.map.models import MapPoint
 from app.modules.map.service import associated_poi_payload, get_default_campus
 from app.modules.tasks.models import (
@@ -117,7 +118,7 @@ def _task_base_statement():
     return select(Task).options(
         selectinload(Task.map_point),
         selectinload(Task.publisher).selectinload(User.profile),
-        selectinload(Task.photos),
+        selectinload(Task.photos).selectinload(TaskPhoto.file_asset),
         selectinload(Task.execution_dates).selectinload(TaskExecutionDate.completed_user),
         selectinload(Task.activities).selectinload(TaskActivityLog.actor).selectinload(User.profile),
     )
@@ -284,12 +285,40 @@ def _list_display_execution(
     return upcoming[0] if upcoming else matching[-1]
 
 
+def _asset_backed_photo_urls(photo: TaskPhoto | TaskCheckinPhoto) -> tuple[str, str | None]:
+    asset = getattr(photo, "file_asset", None)
+    if asset is not None and asset.deleted_at is None:
+        return (
+            asset.default_url or photo.file_url,
+            asset.default_thumb_url or photo.thumbnail_url,
+        )
+    return photo.file_url, photo.thumbnail_url
+
+
+def _resolve_uploaded_file_urls(
+    db: Session,
+    photo: UploadedFileRef,
+) -> tuple[str, str | None]:
+    if photo.file_id is None:
+        return photo.file_url, photo.thumbnail_url
+
+    asset = db.get(FileAsset, photo.file_id)
+    if asset is None or asset.deleted_at is not None:
+        return photo.file_url, photo.thumbnail_url
+
+    return (
+        asset.default_url or photo.file_url,
+        asset.default_thumb_url or photo.thumbnail_url,
+    )
+
+
 def _photo_payload(photo: TaskPhoto) -> dict:
+    file_url, thumbnail_url = _asset_backed_photo_urls(photo)
     return {
         "photo_id": photo.id,
         "file_id": photo.file_id,
-        "file_url": photo.file_url,
-        "thumbnail_url": photo.thumbnail_url,
+        "file_url": file_url,
+        "thumbnail_url": thumbnail_url,
         "cos_object_key": photo.cos_object_key,
         "photo_type": photo.photo_type,
         "caption": photo.caption,
@@ -303,9 +332,13 @@ def _cover_photo_url(task: Task) -> str | None:
     photos = [photo for photo in task.photos if photo.deleted_at is None]
     cover = next((photo for photo in photos if photo.is_cover), None)
     if cover:
-        return cover.thumbnail_url or cover.file_url
+        file_url, thumbnail_url = _asset_backed_photo_urls(cover)
+        return thumbnail_url or file_url
     first_photo = min(photos, key=lambda item: item.sort_order, default=None)
-    return (first_photo.thumbnail_url or first_photo.file_url) if first_photo else None
+    if first_photo is None:
+        return None
+    file_url, thumbnail_url = _asset_backed_photo_urls(first_photo)
+    return thumbnail_url or file_url
 
 
 def _map_point_payload(point: MapPoint) -> dict:
@@ -645,7 +678,8 @@ def _add_task_photos(
     created: list[TaskPhoto] = []
     cover_exists = any(photo.is_cover for photo in photos)
     for index, photo in enumerate(photos):
-        if not photo.file_url:
+        file_url, thumbnail_url = _resolve_uploaded_file_urls(db, photo)
+        if not file_url:
             raise APIError(
                 code=TASK_ERROR_PHOTO_INVALID,
                 message="任务图片参数不合法",
@@ -655,8 +689,8 @@ def _add_task_photos(
         task_photo = TaskPhoto(
             task_id=task.id,
             file_id=photo.file_id,
-            file_url=photo.file_url,
-            thumbnail_url=photo.thumbnail_url,
+            file_url=file_url,
+            thumbnail_url=thumbnail_url,
             cos_object_key=photo.cos_object_key,
             photo_type="cover" if is_cover else photo.photo_type,
             caption=photo.caption,
@@ -771,13 +805,14 @@ def _checkin_photo(
     uploaded_by: User,
     sort_order: int,
 ) -> None:
+    file_url, thumbnail_url = _resolve_uploaded_file_urls(db, photo)
     db.add(
         TaskCheckinPhoto(
             checkin_id=checkin_id,
             task_id=task_id,
             file_id=photo.file_id,
-            file_url=photo.file_url,
-            thumbnail_url=photo.thumbnail_url,
+            file_url=file_url,
+            thumbnail_url=thumbnail_url,
             sort_order=sort_order,
             uploaded_by=uploaded_by.id,
         )

@@ -1,4 +1,5 @@
 import { appEnv } from "@/config/app-env";
+import { API_ENDPOINTS } from "@/api/routes";
 import {
   ApiBusinessError,
   ApiHttpError,
@@ -31,19 +32,11 @@ export function buildFileAssetContentUrl(
   scene: string,
   variantKey?: string,
 ): string {
-  const suffix = buildQueryString({
+  const path = API_ENDPOINTS.files.assetContent(assetId, {
     scene,
     variant_key: variantKey,
   });
-  const path = `/files/assets/${assetId}/content${suffix ? `?${suffix}` : ""}`;
   return buildRequestUrl(appEnv.apiBaseUrl, path);
-}
-
-function buildQueryString(params: Record<string, string | undefined>): string {
-  return Object.entries(params)
-    .filter(([, value]) => value !== undefined && value !== "")
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value || "")}`)
-    .join("&");
 }
 
 function compactFormData(data: UploadImageOptions): Record<string, string> {
@@ -67,7 +60,7 @@ export function uploadImage(
 ): Promise<UploadedImageAsset> {
   return new Promise((resolve, reject) => {
     uni.uploadFile({
-      url: buildRequestUrl(appEnv.apiBaseUrl, "/files/images"),
+      url: buildRequestUrl(appEnv.apiBaseUrl, API_ENDPOINTS.files.images),
       filePath,
       name: "file",
       header: createAuthorizationHeader(accessToken),

@@ -1,4 +1,5 @@
 import { request } from "@/services/request";
+import { API_ENDPOINTS } from "@/api/routes";
 import type { UserRole } from "@/types/user";
 
 export type ProfileNextAction = "enter_app";
@@ -37,7 +38,7 @@ export interface CompleteProfileResponse {
 
 export function getMyProfile(accessToken: string): Promise<MyProfileResponse> {
   return request<MyProfileResponse>({
-    url: "/profile/me",
+    url: API_ENDPOINTS.profile.me,
     method: "GET",
     token: accessToken,
   });
@@ -48,7 +49,7 @@ export function completeProfile(
   accessToken: string,
 ): Promise<CompleteProfileResponse> {
   return request<CompleteProfileResponse, CompleteProfilePayload & Record<string, unknown>>({
-    url: "/profile/me/complete",
+    url: API_ENDPOINTS.profile.complete,
     method: "POST",
     data: { ...payload },
     token: accessToken,
@@ -60,7 +61,7 @@ export function updateMyProfile(
   accessToken: string,
 ): Promise<MyProfileResponse> {
   return request<MyProfileResponse, UpdateProfilePayload & Record<string, unknown>>({
-    url: "/profile/me",
+    url: API_ENDPOINTS.profile.me,
     method: "PATCH",
     data: { ...payload },
     token: accessToken,

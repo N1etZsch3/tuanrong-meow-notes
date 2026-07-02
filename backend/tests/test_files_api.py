@@ -21,6 +21,9 @@ class FakeObjectStorage:
     def presign_get_object(self, object_key: str, *, expires: int = 3600) -> str:
         return f"https://signed.test/{object_key}?expires={expires}"
 
+    def get_object(self, object_key: str) -> bytes:
+        return self.objects[object_key]
+
     def delete_object(self, object_key: str) -> None:
         self.deleted_keys.append(object_key)
         self.objects.pop(object_key, None)
@@ -340,7 +343,10 @@ def test_get_asset_variant_falls_back_to_stored_url_when_cos_config_missing(
     assert data["url"] == "https://cos.test/catmap/test/cat/thumb_md.jpg"
 
 
-def test_get_asset_content_redirects_to_signed_variant_without_auth(api_client, db_session):
+def test_get_asset_content_streams_cos_variant_without_redirect_for_mini_program(
+    api_client,
+    db_session,
+):
     install_fake_storage(api_client)
     user = create_user(
         db_session,
@@ -364,9 +370,10 @@ def test_get_asset_content_redirects_to_signed_variant_without_auth(api_client, 
         follow_redirects=False,
     )
 
-    assert response.status_code == 307
-    assert response.headers["location"].startswith("https://signed.test/")
-    assert "/thumb_md.jpg" in response.headers["location"]
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert "location" not in response.headers
+    Image.open(BytesIO(response.content)).verify()
 
 
 def test_get_asset_content_falls_back_to_stored_url_when_cos_config_missing(

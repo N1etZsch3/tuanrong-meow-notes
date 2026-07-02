@@ -37,8 +37,9 @@ describe("cats page behavior", () => {
     expect(catsPageSource).not.toContain("hero-icon-shell");
   });
 
-  it("uses svg filter controls and lazy list loading", () => {
-    expect(catsPageSource).toContain("地图点/箭头.svg");
+  it("uses mini-program-safe filter controls and lazy list loading", () => {
+    expect(catsPageSource).toContain("地图点/箭头.png");
+    expect(catsPageSource).not.toContain("地图点/箭头.svg");
     expect(catsPageSource).toContain("picker-arrow-icon");
     expect(catsPageSource).toContain("activePicker");
     expect(catsPageSource).toContain("clear-filter-icon");

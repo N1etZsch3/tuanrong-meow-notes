@@ -1,4 +1,5 @@
 import { request } from "@/services/request";
+import { API_ENDPOINTS, compactApiParams } from "@/api/routes";
 
 export interface CatStatsResponse {
   total_cats: number;
@@ -68,17 +69,9 @@ export interface CatListQuery {
   [key: string]: unknown;
 }
 
-function compactQuery<T extends object>(query: T): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(query as Record<string, unknown>).filter(
-      ([, value]) => value !== undefined && value !== null && value !== "",
-    ),
-  );
-}
-
 export function getCatStats(accessToken: string): Promise<CatStatsResponse> {
   return request<CatStatsResponse>({
-    url: "/cats/stats",
+    url: API_ENDPOINTS.cats.stats,
     method: "GET",
     token: accessToken,
   });
@@ -88,7 +81,7 @@ export function getCatFilterOptions(
   accessToken: string,
 ): Promise<CatFilterOptionsResponse> {
   return request<CatFilterOptionsResponse>({
-    url: "/cats/filter-options",
+    url: API_ENDPOINTS.cats.filterOptions,
     method: "GET",
     token: accessToken,
   });
@@ -99,9 +92,9 @@ export function getCats(
   query: CatListQuery = {},
 ): Promise<CatListResponse> {
   return request<CatListResponse>({
-    url: "/cats",
+    url: API_ENDPOINTS.cats.list,
     method: "GET",
-    data: compactQuery(query),
+    data: compactApiParams(query),
     token: accessToken,
   });
 }

@@ -1,5 +1,6 @@
 import type {
   SummerFeedingTaskCreatePayload,
+  TaskPhotoDto,
   TaskPhotoPayload,
   UploadedFileRef,
 } from "@/api/tasks";
@@ -202,9 +203,48 @@ export function validatePublishDraft(draft: FeedingTaskDraft): ValidationResult 
 export function buildUploadedTaskPhoto(asset: UploadedImageAsset): UploadedFileRef {
   return {
     file_id: asset.asset_id,
-    file_url: buildFileAssetContentUrl(asset.asset_id, "task_detail_full"),
-    thumbnail_url: buildFileAssetContentUrl(asset.asset_id, "task_list_cover"),
+    file_url: asset.default_url,
+    thumbnail_url: asset.default_thumb_url,
   };
+}
+
+type TaskPhotoDisplayScene = "task_detail_full" | "task_list_cover";
+type TaskPhotoDisplaySource = Pick<TaskPhotoDto, "file_id" | "file_url" | "thumbnail_url">;
+
+function isImageUploadEndpointUrl(url: string): boolean {
+  const pathname = url.trim().split(/[?#]/)[0].replace(/\/+$/, "");
+
+  return pathname.endsWith("/files/images");
+}
+
+export function normalizeTaskImageDisplayUrl(url?: string | null): string {
+  const normalizedUrl = url?.trim() ?? "";
+  if (!normalizedUrl || isImageUploadEndpointUrl(normalizedUrl)) {
+    return "";
+  }
+
+  return normalizedUrl;
+}
+
+export function getTaskPhotoDisplayUrl(
+  photo: TaskPhotoDisplaySource | undefined,
+  scene: TaskPhotoDisplayScene,
+): string {
+  if (!photo) {
+    return "";
+  }
+
+  const fallbackUrl =
+    scene === "task_list_cover"
+      ? photo.thumbnail_url || photo.file_url
+      : photo.file_url || photo.thumbnail_url;
+
+  const displayUrl = normalizeTaskImageDisplayUrl(fallbackUrl);
+  if (displayUrl) {
+    return displayUrl;
+  }
+
+  return photo.file_id ? buildFileAssetContentUrl(photo.file_id, scene) : "";
 }
 
 interface TaskListStatusSource {

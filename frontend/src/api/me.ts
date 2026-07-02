@@ -1,4 +1,5 @@
 import { request } from "@/services/request";
+import { API_ENDPOINTS, compactApiParams } from "@/api/routes";
 import type { UserRole } from "@/types/user";
 
 export interface MeDashboardProfile {
@@ -48,20 +49,9 @@ interface PageQuery {
   page_size?: number;
 }
 
-function buildPageUrl(path: string, query: PageQuery = {}): string {
-  const suffix = Object.entries({
-    page: query.page ? String(query.page) : undefined,
-    page_size: query.page_size ? String(query.page_size) : undefined,
-  })
-    .filter(([, value]) => value !== undefined)
-    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value || "")}`)
-    .join("&");
-  return suffix ? `${path}?${suffix}` : path;
-}
-
 export function getMeDashboard(accessToken: string): Promise<MeDashboardResponse> {
   return request<MeDashboardResponse>({
-    url: "/me/dashboard",
+    url: API_ENDPOINTS.me.dashboard,
     method: "GET",
     token: accessToken,
   });
@@ -72,8 +62,9 @@ export function getMyTasks(
   query?: PageQuery,
 ): Promise<EmptyRecordPage> {
   return request<EmptyRecordPage>({
-    url: buildPageUrl("/me/tasks", query),
+    url: API_ENDPOINTS.me.tasks,
     method: "GET",
+    data: compactApiParams(query || {}),
     token: accessToken,
   });
 }
@@ -83,8 +74,9 @@ export function getMyCheckins(
   query?: PageQuery,
 ): Promise<EmptyRecordPage> {
   return request<EmptyRecordPage>({
-    url: buildPageUrl("/me/checkins", query),
+    url: API_ENDPOINTS.me.checkins,
     method: "GET",
+    data: compactApiParams(query || {}),
     token: accessToken,
   });
 }
@@ -94,8 +86,9 @@ export function getMyObservations(
   query?: PageQuery,
 ): Promise<EmptyRecordPage> {
   return request<EmptyRecordPage>({
-    url: buildPageUrl("/me/observations", query),
+    url: API_ENDPOINTS.me.observations,
     method: "GET",
+    data: compactApiParams(query || {}),
     token: accessToken,
   });
 }
@@ -105,8 +98,9 @@ export function getFavoriteCats(
   query?: PageQuery,
 ): Promise<EmptyRecordPage> {
   return request<EmptyRecordPage>({
-    url: buildPageUrl("/me/favorite-cats", query),
+    url: API_ENDPOINTS.me.favoriteCats,
     method: "GET",
+    data: compactApiParams(query || {}),
     token: accessToken,
   });
 }

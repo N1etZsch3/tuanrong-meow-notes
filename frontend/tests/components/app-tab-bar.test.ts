@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import appTabBarSource from "../../src/components/AppTabBar.vue?raw";
 import {
   APP_TAB_ITEMS,
   getActiveTabKey,
@@ -49,5 +50,10 @@ describe("app tab bar navigation", () => {
     expect(otherItems.every((item) => !item.preserveActiveIconColor)).toBe(
       true,
     );
+  });
+
+  it("keeps the floating tab bar close to the bottom on iOS", () => {
+    expect(appTabBarSource).toContain("padding: 0 24rpx 8rpx;");
+    expect(appTabBarSource).not.toContain("safe-area-inset-bottom");
   });
 });

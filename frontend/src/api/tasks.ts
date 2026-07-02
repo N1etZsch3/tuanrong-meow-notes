@@ -1,4 +1,5 @@
 import { request } from "@/services/request";
+import { API_ENDPOINTS, compactApiParams } from "@/api/routes";
 import type { TencentPoiDto } from "@/api/map";
 
 export interface UploadedFileRef {
@@ -214,22 +215,14 @@ export interface TaskStatusUpdateResponse {
   updated_at: string;
 }
 
-function compactQuery<T extends object>(query: T): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(query as Record<string, unknown>).filter(
-      ([, value]) => value !== undefined && value !== null && value !== "",
-    ),
-  );
-}
-
 export function getTasks(
   accessToken: string,
   query: TaskListQuery = {},
 ): Promise<TaskListResponse> {
   return request<TaskListResponse>({
-    url: "/tasks",
+    url: API_ENDPOINTS.tasks.list,
     method: "GET",
-    data: compactQuery(query),
+    data: compactApiParams(query),
     token: accessToken,
   });
 }
@@ -239,7 +232,7 @@ export function getTaskDetail(
   taskId: string,
 ): Promise<TaskDetailDto> {
   return request<TaskDetailDto>({
-    url: `/tasks/${taskId}`,
+    url: API_ENDPOINTS.tasks.detail(taskId),
     method: "GET",
     token: accessToken,
   });
@@ -250,7 +243,7 @@ export function getAdminTaskDetail(
   taskId: string,
 ): Promise<TaskDetailDto> {
   return request<TaskDetailDto>({
-    url: `/admin/tasks/${taskId}`,
+    url: API_ENDPOINTS.admin.task(taskId),
     method: "GET",
     token: accessToken,
   });
@@ -264,7 +257,7 @@ export function publishSummerFeedingTask(
     SummerFeedingTaskCreateResponse,
     SummerFeedingTaskCreatePayload & Record<string, unknown>
   >({
-    url: "/admin/tasks/summer-feeding",
+    url: API_ENDPOINTS.admin.summerFeedingTask,
     method: "POST",
     data: { ...payload },
     token: accessToken,
@@ -280,7 +273,7 @@ export function updateSummerFeedingTask(
     SummerFeedingTaskUpdateResponse,
     SummerFeedingTaskCreatePayload & Record<string, unknown>
   >({
-    url: `/admin/tasks/${taskId}`,
+    url: API_ENDPOINTS.admin.task(taskId),
     method: "PATCH",
     data: { ...payload },
     token: accessToken,
@@ -296,7 +289,7 @@ export function updateSummerFeedingTaskStatus(
     TaskStatusUpdateResponse,
     TaskStatusUpdatePayload & Record<string, unknown>
   >({
-    url: `/admin/tasks/${taskId}/status`,
+    url: API_ENDPOINTS.admin.taskStatus(taskId),
     method: "PATCH",
     data: { ...payload },
     token: accessToken,
@@ -309,7 +302,7 @@ export function checkinTask(
   payload: TaskCheckinPayload,
 ): Promise<TaskCheckinResponse> {
   return request<TaskCheckinResponse, TaskCheckinPayload & Record<string, unknown>>({
-    url: `/tasks/${taskId}/checkins`,
+    url: API_ENDPOINTS.tasks.checkins(taskId),
     method: "POST",
     data: { ...payload },
     token: accessToken,

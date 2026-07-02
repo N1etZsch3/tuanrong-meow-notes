@@ -1,4 +1,5 @@
 import { request } from "@/services/request";
+import { API_ENDPOINTS, compactDefinedApiParams } from "@/api/routes";
 import type { TencentPoiDto } from "@/api/map";
 
 export interface AdminMapPointPhotoDto {
@@ -86,20 +87,12 @@ export interface AdminMapPointLocationPayload {
   lat: number;
 }
 
-function compactPayload<T extends object>(payload: T): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(payload as Record<string, unknown>).filter(
-      ([, value]) => value !== undefined,
-    ),
-  );
-}
-
 export function getAdminMapPoint(
   accessToken: string,
   pointId: string,
 ): Promise<AdminMapPointDto> {
   return request<AdminMapPointDto>({
-    url: `/admin/map/points/${pointId}`,
+    url: API_ENDPOINTS.admin.mapPoint(pointId),
     method: "GET",
     token: accessToken,
   });
@@ -111,9 +104,9 @@ export function updateAdminMapPoint(
   payload: AdminMapPointUpdatePayload,
 ): Promise<AdminMapPointDto> {
   return request<AdminMapPointDto>({
-    url: `/admin/map/points/${pointId}`,
+    url: API_ENDPOINTS.admin.mapPoint(pointId),
     method: "PATCH",
-    data: compactPayload(payload),
+    data: compactDefinedApiParams(payload),
     token: accessToken,
   });
 }
@@ -124,7 +117,7 @@ export function updateAdminMapPointLocation(
   payload: AdminMapPointLocationPayload,
 ): Promise<AdminMapPointDto> {
   return request<AdminMapPointDto>({
-    url: `/admin/map/points/${pointId}/location`,
+    url: API_ENDPOINTS.admin.mapPointLocation(pointId),
     method: "PATCH",
     data: { ...payload },
     token: accessToken,

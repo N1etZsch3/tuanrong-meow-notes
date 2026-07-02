@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildFileAssetContentUrl, uploadImage } from "@/api/files";
+import { appEnv } from "@/config/app-env";
 
 describe("files api", () => {
   afterEach(() => {
@@ -9,7 +10,7 @@ describe("files api", () => {
 
   it("builds a mini-program image-safe asset content url", () => {
     expect(buildFileAssetContentUrl("asset-1", "task_list_cover")).toBe(
-      "http://203.0.113.10/api/v1/files/assets/asset-1/content?scene=task_list_cover",
+      `${appEnv.apiBaseUrl}/files/assets/asset-1/content?scene=task_list_cover`,
     );
   });
 
@@ -17,7 +18,7 @@ describe("files api", () => {
     vi.stubGlobal("URLSearchParams", undefined);
 
     expect(buildFileAssetContentUrl("asset-1", "task detail full")).toBe(
-      "http://203.0.113.10/api/v1/files/assets/asset-1/content?scene=task%20detail%20full",
+      `${appEnv.apiBaseUrl}/files/assets/asset-1/content?scene=task%20detail%20full`,
     );
   });
 

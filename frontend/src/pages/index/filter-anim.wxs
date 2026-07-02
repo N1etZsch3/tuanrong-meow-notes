@@ -1,0 +1,36 @@
+module.exports = {
+  onMenuStateChange: function(newValue, oldValue, ownerInstance, instance) {
+    var arrow = ownerInstance.selectComponent('.filter-chevron-mark');
+    var menu = ownerInstance.selectComponent('.filter-menu');
+
+    if (newValue) {
+      if (arrow) {
+        arrow.setStyle({
+          transform: 'translateX(24rpx) rotate(90deg)',
+          transition: 'transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+        });
+      }
+      if (menu) {
+        menu.setStyle({
+          opacity: 1,
+          transform: 'translateY(0) scale(1)',
+          transition: 'all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)'
+        });
+      }
+    } else {
+      if (arrow) {
+        arrow.setStyle({
+          transform: 'translateX(0) rotate(0deg)',
+          transition: 'transform 0.25s ease-out'
+        });
+      }
+      if (menu) {
+        menu.setStyle({
+          opacity: 0,
+          transform: 'translateY(-16rpx) scale(0.95)',
+          transition: 'all 0.25s ease-out'
+        });
+      }
+    }
+  }
+}

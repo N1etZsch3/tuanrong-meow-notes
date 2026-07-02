@@ -102,3 +102,14 @@ def update_task_status(
 ):
     data = service.update_task_status(db, task_id=task_id, admin=admin, payload=payload)
     return api_success(data=data, trace_id=request.state.trace_id, message="任务状态已更新")
+
+
+@router.delete("/{task_id}", summary="Soft delete a summer feeding task")
+def soft_delete_task(
+    task_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    data = service.soft_delete_task(db, task_id=task_id, admin=admin)
+    return api_success(data=data, trace_id=request.state.trace_id, message="任务已删除")

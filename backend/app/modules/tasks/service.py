@@ -33,7 +33,7 @@ from app.modules.tasks.schemas import (
 TASK_STATUS_LABELS = {
     "pending": "待发布",
     "in_progress": "进行中",
-    "completed": "已结束",
+    "completed": "已完成",
     "cancelled": "已取消",
     "archived": "已归档",
 }
@@ -600,6 +600,38 @@ def list_tasks(
     }
 
 
+def _sync_task_map_point_status(
+    db: Session,
+    *,
+    task: Task,
+    admin: User,
+    now: datetime,
+    soft_deleted: bool = False,
+) -> None:
+    point = db.get(MapPoint, task.map_point_id)
+    if point is None:
+        return
+
+    point.updated_by = admin.id
+    point.updated_at = now
+    if soft_deleted:
+        point.visibility = "hidden"
+        point.status = "deleted"
+        point.deleted_at = now
+        return
+
+    if point.deleted_at is not None:
+        return
+
+    if task.status in {"cancelled", "archived"}:
+        point.visibility = "hidden"
+        point.status = "active"
+        return
+
+    point.visibility = "public" if task.is_public else "admin_only"
+    point.status = "active"
+
+
 def _create_map_point(
     db: Session,
     *,
@@ -1060,9 +1092,14 @@ def update_task_status(
     now = _now()
     if payload.status == "cancelled":
         task.cancelled_at = now
+    else:
+        task.cancelled_at = None
     if payload.status == "completed":
         task.completed_at = now
+    elif payload.status in {"in_progress", "cancelled"}:
+        task.completed_at = None
     task.updated_at = now
+    _sync_task_map_point_status(db, task=task, admin=admin, now=now)
     db.add(
         TaskActivityLog(
             task_id=task.id,
@@ -1076,3 +1113,40 @@ def update_task_status(
     )
     db.commit()
     return {"task_id": task.id, "status": task.status, "updated_at": task.updated_at}
+
+
+def soft_delete_task(
+    db: Session,
+    *,
+    task_id: UUID,
+    admin: User,
+) -> dict:
+    task = get_task_or_raise(db, task_id, include_private=True)
+    now = _now()
+    task.deleted_at = now
+    task.updated_at = now
+    _sync_task_map_point_status(db, task=task, admin=admin, now=now, soft_deleted=True)
+    admin_name = admin.profile.nickname if admin.profile else admin.student_no
+    db.add(
+        TaskActivityLog(
+            task_id=task.id,
+            activity_type="deleted",
+            title="任务已删除",
+            content=f"{admin_name} 删除了任务",
+            actor_id=admin.id,
+            created_at=now,
+        )
+    )
+    db.add(
+        AdminOperationLog(
+            admin_id=admin.id,
+            operation_type="delete",
+            target_type="task",
+            target_id=task.id,
+            summary=f"删除暑假喂食任务：{task.title}",
+            before_data={"task_id": str(task.id), "map_point_id": str(task.map_point_id)},
+            after_data={"deleted_at": now.isoformat()},
+        )
+    )
+    db.commit()
+    return {"task_id": task.id, "deleted_at": task.deleted_at}

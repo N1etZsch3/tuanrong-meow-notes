@@ -124,7 +124,14 @@
         <view class="drawer-grip" />
       </view>
 
-      <view class="search-box" :class="{ 'is-focused': isSearchMode }" @tap="focusSearch">
+      <view
+        class="search-box"
+        :class="{ 'is-focused': isSearchMode }"
+        @tap="focusSearch"
+        @touchstart.stop="drawer.touchstart"
+        @touchmove.stop="drawer.touchmove"
+        @touchend.stop="drawer.touchend"
+      >
         <text class="search-icon">⌕</text>
         <input
           v-model="searchKeyword"
@@ -213,15 +220,6 @@
                 />
               </button>
             </view>
-          </view>
-          <view v-if="selectedSummary.tags.length" class="summary-tags">
-            <text
-              v-for="tag in selectedSummary.tags"
-              :key="tag"
-              class="summary-tag"
-            >
-              {{ tag }}
-            </text>
           </view>
           <text v-if="summaryDescriptionText" class="summary-desc">
             {{ summaryDescriptionText }}
@@ -1140,6 +1138,7 @@ function selectShellItem(item: MapShellItem) {
   }
 
   if (item.map_point_id) {
+    upsertShellItemMapMarker(item);
     selectedPoiMarker.value = null;
     void loadPointSummary(item.map_point_id);
     return;
@@ -1148,6 +1147,92 @@ function selectShellItem(item: MapShellItem) {
   const summary = buildExternalSummaryFromItem(item);
   selectedSummary.value = summary;
   selectedPoiMarker.value = summary ? buildSelectedPoiMarker(summary) : null;
+}
+
+function shellItemPointType(item: MapShellItem): string {
+  if (item.type === "daily_task" || item.type === "emergency_task") {
+    return "task";
+  }
+  return item.type;
+}
+
+function shellItemBusinessType(item: MapShellItem): string | null {
+  if (item.type === "daily_task") {
+    return "feeding";
+  }
+  if (item.type === "emergency_task") {
+    return "emergency";
+  }
+  return null;
+}
+
+function shellItemMarkerExtra(item: MapShellItem): Record<string, unknown> {
+  const extra: Record<string, unknown> = {};
+  if (isTaskShellItem(item)) {
+    extra.task_status = item.status_key || null;
+    extra.task_status_label = item.status_label || null;
+    extra.location_detail = item.description || null;
+    if (item.status_key === "completed") {
+      extra.feeding_status = "completed";
+    } else if (item.status_key === "in_progress") {
+      extra.feeding_status = "pending";
+    }
+  }
+  if (item.associated_poi) {
+    extra.associated_poi = item.associated_poi;
+  }
+  return extra;
+}
+
+function shellItemMarkerKey(item: MapShellItem): string | null {
+  if (item.icon_key) {
+    return item.icon_key;
+  }
+  if (item.type === "daily_task") {
+    return "task_feeding";
+  }
+  if (item.type === "emergency_task") {
+    return "task_emergency";
+  }
+  return item.type;
+}
+
+function buildMapMarkerFromShellItem(item: MapShellItem): MapPointMarkerDto | null {
+  if (!item.map_point_id || !isFiniteLngLat(item)) {
+    return null;
+  }
+
+  return {
+    point_id: item.map_point_id,
+    point_type: shellItemPointType(item),
+    point_scope: "long_term",
+    business_type: shellItemBusinessType(item),
+    business_id: item.id,
+    name: item.title,
+    subtitle: item.subtitle,
+    lng: item.lng,
+    lat: item.lat,
+    area_id: null,
+    area_name: null,
+    marker_key: shellItemMarkerKey(item),
+    icon_key: shellItemMarkerKey(item),
+    display_level: 85,
+    visibility: "public",
+    status: "active",
+    cover_photo_url: item.cover_photo_url || null,
+    preview_enabled: Boolean(item.cover_photo_url),
+    preview_min_zoom: 16,
+    label_min_zoom: 16,
+    distance_meters: item.distance_meters,
+    extra: shellItemMarkerExtra(item),
+  };
+}
+
+function upsertShellItemMapMarker(item: MapShellItem) {
+  const marker = buildMapMarkerFromShellItem(item);
+  if (marker) {
+    upsertFocusedMapMarker(marker);
+  }
 }
 
 function getItemSymbol(type: MapShellItemType): string {
@@ -1184,6 +1269,12 @@ function getShellItemStatusTone(item: MapShellItem): string {
   }
   if (item.status_key === "in_progress" || item.status_label === "进行中") {
     return "in_progress";
+  }
+  if (item.status_key === "cancelled" || item.status_label === "已取消") {
+    return "cancelled";
+  }
+  if (item.status_key === "archived" || item.status_label === "已归档") {
+    return "archived";
   }
   return item.type;
 }
@@ -3193,21 +3284,6 @@ onBeforeUnmount(() => {
   font-weight: 800;
 }
 
-.summary-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
-}
-
-.summary-tag {
-  padding: 6rpx 12rpx;
-  border-radius: 999rpx;
-  background: #edf8e8;
-  color: #267b2f;
-  font-size: 20rpx;
-  font-weight: 900;
-}
-
 .summary-photo-strip {
   width: 100%;
 }
@@ -3426,7 +3502,15 @@ onBeforeUnmount(() => {
 }
 
 .status-in_progress {
+  color: #d5a108;
+}
+
+.status-cancelled {
   color: #ef3038;
+}
+
+.status-archived {
+  color: #2276ff;
 }
 
 .status-cat,

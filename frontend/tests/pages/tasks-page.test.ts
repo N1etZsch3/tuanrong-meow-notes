@@ -96,14 +96,14 @@ describe("summer feeding task pages", () => {
     expect(taskIndexSource).toContain("selectedTaskStatusLabel");
     expect(taskIndexSource).toContain("selectedDateFilterLabel");
     expect(taskIndexSource).toContain("任务类型");
-    expect(taskIndexSource).toContain("完成状态");
+    expect(taskIndexSource).toContain("任务状态");
     expect(taskIndexSource).toContain("日期");
     expect(taskIndexSource).toContain("本日");
     expect(taskIndexSource).toContain("本周");
     expect(taskIndexSource).toContain("本月");
     expect(taskIndexSource).toContain("特定日期");
     expect(taskIndexSource).not.toContain("全部任务类型");
-    expect(taskIndexSource).not.toContain("全部完成状态");
+    expect(taskIndexSource).not.toContain("全部任务状态");
     expect(taskIndexSource).not.toContain("今日任务");
     expect(taskIndexSource).not.toContain("刷新");
     expect(taskIndexSource).not.toContain("toggleToday");
@@ -111,8 +111,8 @@ describe("summer feeding task pages", () => {
     expect(taskIndexSource).not.toContain("only_today");
     expect(taskIndexSource).toContain("clearFilters");
     expect(taskIndexSource).toContain("keyword: searchKeyword.value.trim()");
-    expect(taskIndexSource).toContain("status: DEFAULT_TASK_STATUS_QUERY");
-    expect(taskIndexSource).toContain("execution_status: selectedTaskStatus.value");
+    expect(taskIndexSource).toContain("status: selectedTaskStatus.value || DEFAULT_TASK_STATUS_QUERY");
+    expect(taskIndexSource).not.toContain("execution_status: selectedTaskStatus.value");
   });
 
   it("builds task list date filter query parameters", () => {
@@ -182,15 +182,20 @@ describe("summer feeding task pages", () => {
     });
   });
 
-  it("colors in-progress and completed task status pills distinctly", () => {
+  it("filters and colors task status pills by parent task status", () => {
     expect(taskIndexSource).toContain(":class=\"taskStatusClass(task)\"");
     expect(taskIndexSource).toContain("task-status-in-progress");
     expect(taskIndexSource).toContain("task-status-completed");
+    expect(taskIndexSource).toContain("task-status-cancelled");
+    expect(taskIndexSource).toContain("task-status-archived");
+    expect(taskIndexSource).toContain('{ label: "已取消", value: "cancelled" }');
+    expect(taskIndexSource).toContain('{ label: "已归档", value: "archived" }');
 
     expect(
       getTaskStatusTone({
         status: "in_progress",
         status_label: "进行中",
+        current_execution: { status: "completed" },
       }),
     ).toBe("in_progress");
     expect(
@@ -199,6 +204,18 @@ describe("summer feeding task pages", () => {
         status_label: "已结束",
       }),
     ).toBe("completed");
+    expect(
+      getTaskStatusTone({
+        status: "cancelled",
+        status_label: "已取消",
+      }),
+    ).toBe("cancelled");
+    expect(
+      getTaskStatusTone({
+        status: "archived",
+        status_label: "已归档",
+      }),
+    ).toBe("archived");
   });
 
   it("keeps the publish form fields requested for summer feeding tasks", () => {
@@ -277,7 +294,9 @@ describe("summer feeding task pages", () => {
     expect(adminTaskLocationSource).toContain("确认此位置");
     expect(adminTaskLocationSource).toContain("getNearbyMapPois");
     expect(adminTaskLocationSource).toContain("associatedPoiCandidates");
-    expect(adminTaskLocationSource).toContain("associateSelectedPoi");
+    expect(adminTaskLocationSource).toContain('class="poi-list"');
+    expect(adminTaskLocationSource).toContain("selectAssociatedPoi");
+    expect(adminTaskLocationSource).toContain('<scroll-view class="selected-card" scroll-y');
     expect(adminTaskLocationSource).toContain("clearAssociatedPoi");
     expect(adminTaskLocationSource).not.toContain("自选喂食点");
     expect(adminTaskLocationSource).not.toContain("请补充具体参照物");
@@ -407,7 +426,7 @@ describe("summer feeding task pages", () => {
     ).toBe("");
   });
 
-  it("shows completed execution status in the task list status pill", () => {
+  it("shows parent task status in the task list status pill", () => {
     expect(
       getTaskListStatusLabel({
         status_label: "进行中",
@@ -416,7 +435,7 @@ describe("summer feeding task pages", () => {
           status: "completed",
         },
       }),
-    ).toBe("已完成");
+    ).toBe("进行中");
 
     expect(
       getTaskListStatusLabel({
@@ -430,9 +449,21 @@ describe("summer feeding task pages", () => {
 
     expect(
       getTaskListStatusLabel({
-        status_label: "已结束",
+        status_label: "已完成",
         status: "completed",
       }),
     ).toBe("已完成");
+    expect(
+      getTaskListStatusLabel({
+        status_label: "已取消",
+        status: "cancelled",
+      }),
+    ).toBe("已取消");
+    expect(
+      getTaskListStatusLabel({
+        status_label: "已归档",
+        status: "archived",
+      }),
+    ).toBe("已归档");
   });
 });

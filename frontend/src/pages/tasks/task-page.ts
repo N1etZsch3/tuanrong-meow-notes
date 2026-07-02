@@ -255,10 +255,15 @@ interface TaskListStatusSource {
   } | null;
 }
 
-export type TaskStatusTone = "completed" | "in_progress" | "cancelled" | "default";
+export type TaskStatusTone =
+  | "completed"
+  | "in_progress"
+  | "cancelled"
+  | "archived"
+  | "default";
 
 export function getTaskStatusTone(task: TaskListStatusSource): TaskStatusTone {
-  if (task.current_execution?.status === "completed" || task.status === "completed") {
+  if (task.status === "completed") {
     return "completed";
   }
   if (task.status === "in_progress") {
@@ -266,6 +271,9 @@ export function getTaskStatusTone(task: TaskListStatusSource): TaskStatusTone {
   }
   if (task.status === "cancelled") {
     return "cancelled";
+  }
+  if (task.status === "archived") {
+    return "archived";
   }
   return "default";
 }
@@ -280,6 +288,9 @@ export function getTaskListStatusLabel(task: TaskListStatusSource): string {
   }
   if (tone === "cancelled") {
     return "已取消";
+  }
+  if (tone === "archived") {
+    return "已归档";
   }
 
   return task.status_label;

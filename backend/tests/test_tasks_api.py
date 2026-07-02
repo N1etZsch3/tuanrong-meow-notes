@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
 from app.modules.files.models import FileAsset, FileAssetVariant
-from app.modules.map.models import Campus, MapMarkerConfig
+from app.modules.map.models import Campus, MapMarkerConfig, MapPoint
 from app.modules.tasks import service as task_service
-from app.modules.tasks.models import TaskCheckinPhoto, TaskPhoto
+from app.modules.tasks.models import Task, TaskCheckinPhoto, TaskPhoto
 
 
 def create_user(
@@ -244,6 +244,107 @@ def test_admin_can_publish_summer_feeding_task_and_map_marker_is_visible(
     assert marker["extra"]["task_status_label"] == "进行中"
     assert marker["extra"]["next_execute_date"] == "2026-07-02"
     assert marker["extra"]["associated_poi"]["poi_id"] == "7554185223751732838"
+
+
+def test_cancelled_task_is_filterable_but_hidden_from_map_markers(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    data = publish_task(api_client, admin, campus)
+
+    cancel_response = api_client.patch(
+        f"/api/v1/admin/tasks/{data['task_id']}/status",
+        headers=auth_headers(admin),
+        json={"status": "cancelled", "reason": "临时取消"},
+    )
+
+    assert cancel_response.status_code == 200
+    db_session.expire_all()
+    point = db_session.get(MapPoint, UUID(data["map_point_id"]))
+    assert point is not None
+    assert point.status == "active"
+    assert point.visibility == "hidden"
+    assert point.deleted_at is None
+
+    cancelled_list_response = api_client.get(
+        "/api/v1/tasks?status=cancelled",
+        headers=auth_headers(member),
+    )
+    assert cancelled_list_response.status_code == 200
+    cancelled_items = cancelled_list_response.json()["data"]["items"]
+    assert [item["task_id"] for item in cancelled_items] == [data["task_id"]]
+    assert cancelled_items[0]["status_label"] == "已取消"
+
+    hidden_marker_response = api_client.get(
+        "/api/v1/map/points?point_types=task&business_types=feeding",
+        headers=auth_headers(member),
+    )
+    assert hidden_marker_response.status_code == 200
+    assert hidden_marker_response.json()["data"]["items"] == []
+
+    restore_response = api_client.patch(
+        f"/api/v1/admin/tasks/{data['task_id']}/status",
+        headers=auth_headers(admin),
+        json={"status": "in_progress", "reason": "恢复任务"},
+    )
+
+    assert restore_response.status_code == 200
+    db_session.expire_all()
+    point = db_session.get(MapPoint, UUID(data["map_point_id"]))
+    assert point is not None
+    assert point.status == "active"
+    assert point.visibility == "public"
+
+    restored_marker_response = api_client.get(
+        "/api/v1/map/points?point_types=task&business_types=feeding",
+        headers=auth_headers(member),
+    )
+    assert restored_marker_response.status_code == 200
+    restored_marker = restored_marker_response.json()["data"]["items"][0]
+    assert restored_marker["business_id"] == data["task_id"]
+
+
+def test_admin_soft_deletes_task_and_removes_its_map_marker(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    data = publish_task(api_client, admin, campus)
+
+    delete_response = api_client.delete(
+        f"/api/v1/admin/tasks/{data['task_id']}",
+        headers=auth_headers(admin),
+    )
+
+    assert delete_response.status_code == 200
+    db_session.expire_all()
+    task = db_session.get(Task, UUID(data["task_id"]))
+    point = db_session.get(MapPoint, UUID(data["map_point_id"]))
+    assert task is not None
+    assert point is not None
+    assert task.deleted_at is not None
+    assert point.deleted_at is not None
+    assert point.status == "deleted"
+    assert point.visibility == "hidden"
+
+    list_response = api_client.get(
+        "/api/v1/tasks?status=in_progress,completed,cancelled,archived",
+        headers=auth_headers(member),
+    )
+    assert list_response.status_code == 200
+    assert list_response.json()["data"]["items"] == []
+
+    map_response = api_client.get(
+        "/api/v1/map/points?point_types=task&business_types=feeding",
+        headers=auth_headers(member),
+    )
+    assert map_response.status_code == 200
+    assert map_response.json()["data"]["items"] == []
 
 
 def test_map_point_summary_uses_uploaded_task_photos_for_detail_thumbnails(

@@ -31,7 +31,7 @@
         </button>
       </view>
 
-      <view class="selected-card">
+      <scroll-view class="selected-card" scroll-y :show-scrollbar="false">
         <text class="card-label">已选位置</text>
         <input
           v-model.trim="selectedLocation.location_name"
@@ -70,25 +70,35 @@
           <text class="poi-title">正在查找附近公共地点</text>
           <text class="poi-desc">请稍候</text>
         </view>
-        <view v-else-if="recommendedPoi" class="poi-card">
-          <text class="poi-title">附近公共地点：{{ recommendedPoi.name }}</text>
-          <text class="poi-desc">
-            {{ recommendedPoi.category || "腾讯地图点位" }} · 距离 {{ recommendedPoi.distance_meters ?? "未知" }}m
-          </text>
-          <view class="poi-actions">
-            <button class="poi-button" hover-class="button-hover" @tap="associateSelectedPoi">
-              关联
-            </button>
-            <button class="poi-ghost-button" hover-class="button-hover" @tap="switchAssociatedPoi">
-              换一个
-            </button>
-            <button class="poi-ghost-button" hover-class="button-hover" @tap="clearAssociatedPoi">
-              不关联
+        <view v-else-if="associatedPoiCandidates.length" class="poi-card">
+          <text class="poi-title">附近公共地点</text>
+          <view class="poi-list">
+            <button
+              v-for="poi in associatedPoiCandidates"
+              :key="poi.poi_id || `${poi.name}-${poi.lng}-${poi.lat}`"
+              class="poi-option"
+              hover-class="button-hover"
+              @tap="selectAssociatedPoi(poi)"
+            >
+              <view class="poi-option-copy">
+                <text class="poi-option-name">{{ poi.name }}</text>
+                <text class="poi-option-desc">
+                  {{ poi.category || "腾讯地图点位" }} · 距离 {{ poi.distance_meters ?? "未知" }}m
+                </text>
+              </view>
+              <text class="poi-option-action">关联</text>
             </button>
           </view>
+          <button class="poi-ghost-button poi-clear-button" hover-class="button-hover" @tap="clearAssociatedPoi">
+            不关联公共点
+          </button>
+        </view>
+        <view v-else-if="poiLoadState === 'ready'" class="poi-card">
+          <text class="poi-title">附近暂无公共地点</text>
+          <text class="poi-desc">可以直接使用当前选点创建任务。</text>
         </view>
         <text class="info-line">该位置将用于后续喂食任务</text>
-      </view>
+      </scroll-view>
     </view>
 
     <view class="bottom-actions">
@@ -121,7 +131,6 @@ const selectedLocation = reactive<SelectedTaskLocation>({
   ...HBNU_DEFAULT_TASK_LOCATION,
 });
 const associatedPoiCandidates = ref<TencentPoiDto[]>([]);
-const associatedPoiIndex = ref(0);
 const poiLoadState = ref<PoiLoadState>("idle");
 const currentAssociatedPoi = computed<TencentPoiDto | null>(() => {
   if (!selectedLocation.tencent_poi_id && !selectedLocation.tencent_poi_name) {
@@ -139,9 +148,6 @@ const currentAssociatedPoi = computed<TencentPoiDto | null>(() => {
     match_method: selectedLocation.tencent_poi_match_method || "admin_selected",
   };
 });
-const recommendedPoi = computed(
-  () => associatedPoiCandidates.value[associatedPoiIndex.value] || null,
-);
 const markers = computed(() => [
   {
     id: 1,
@@ -197,7 +203,6 @@ async function loadNearbyPoiCandidates() {
       limit: 6,
     });
     associatedPoiCandidates.value = response.candidates;
-    associatedPoiIndex.value = 0;
     poiLoadState.value = "ready";
   } catch {
     associatedPoiCandidates.value = [];
@@ -205,11 +210,7 @@ async function loadNearbyPoiCandidates() {
   }
 }
 
-function associateSelectedPoi() {
-  const poi = recommendedPoi.value;
-  if (!poi) {
-    return;
-  }
+function selectAssociatedPoi(poi: TencentPoiDto) {
   selectedLocation.tencent_poi_id = poi.poi_id;
   selectedLocation.tencent_poi_name = poi.name;
   selectedLocation.tencent_poi_address = poi.address;
@@ -223,14 +224,6 @@ function associateSelectedPoi() {
   }
 }
 
-function switchAssociatedPoi() {
-  if (!associatedPoiCandidates.value.length) {
-    return;
-  }
-  associatedPoiIndex.value =
-    (associatedPoiIndex.value + 1) % associatedPoiCandidates.value.length;
-}
-
 function clearAssociatedPoi(options: { keepCandidates?: boolean } = {}) {
   selectedLocation.tencent_poi_id = null;
   selectedLocation.tencent_poi_name = null;
@@ -242,7 +235,6 @@ function clearAssociatedPoi(options: { keepCandidates?: boolean } = {}) {
   selectedLocation.tencent_poi_match_method = null;
   if (!options.keepCandidates) {
     associatedPoiCandidates.value = [];
-    associatedPoiIndex.value = 0;
   }
 }
 
@@ -292,6 +284,8 @@ function goBack() {
   height: 100vh;
   padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx)
     calc(env(safe-area-inset-bottom) + 160rpx);
+  display: flex;
+  flex-direction: column;
 }
 
 .nav-row {
@@ -364,6 +358,7 @@ function goBack() {
 
 .map-shell {
   position: relative;
+  flex-shrink: 0;
   height: 640rpx;
   margin-top: 34rpx;
   border-radius: 30rpx;
@@ -408,6 +403,8 @@ function goBack() {
 
 .selected-card {
   box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
   margin-top: 28rpx;
   padding: 30rpx;
   border-radius: 28rpx;
@@ -478,13 +475,6 @@ function goBack() {
   line-height: 1.35;
 }
 
-.poi-actions {
-  margin-top: 16rpx;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10rpx;
-}
-
 .poi-button,
 .poi-ghost-button {
   height: 58rpx;
@@ -513,8 +503,62 @@ function goBack() {
   color: #287c31;
 }
 
-.poi-actions .poi-ghost-button {
-  margin-top: 0;
+.poi-list {
+  margin-top: 16rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.poi-option {
+  width: 100%;
+  min-height: 74rpx;
+  margin: 0;
+  padding: 14rpx 16rpx;
+  border: 0;
+  border-radius: 18rpx;
+  background: #ffffff;
+  color: #111827;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70rpx;
+  align-items: center;
+  gap: 14rpx;
+  text-align: left;
+}
+
+.poi-option::after {
+  border: 0;
+}
+
+.poi-option-name,
+.poi-option-desc {
+  display: block;
+}
+
+.poi-option-name {
+  color: #1f6f29;
+  font-size: 23rpx;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.poi-option-desc {
+  margin-top: 6rpx;
+  color: #65705f;
+  font-size: 20rpx;
+  font-weight: 800;
+  line-height: 1.3;
+}
+
+.poi-option-action {
+  color: #287c31;
+  font-size: 22rpx;
+  font-weight: 900;
+  text-align: right;
+}
+
+.poi-clear-button {
+  width: 100%;
 }
 
 .coord-label {

@@ -1,3 +1,7 @@
+import hashlib
+import json
+from types import SimpleNamespace
+from urllib.parse import parse_qs, urlparse
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -6,6 +10,20 @@ from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
 from app.modules.map import service as map_service
 from app.modules.map.models import Campus, CampusArea, MapMarkerConfig, MapPoint
+
+
+class FakeHttpResponse:
+    def __init__(self, payload: dict):
+        self.payload = payload
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_args):
+        return False
+
+    def read(self) -> bytes:
+        return json.dumps(self.payload).encode("utf-8")
 
 
 def create_member(
@@ -169,6 +187,14 @@ def test_map_init_returns_campus_marker_configs_and_tencent_config(api_client, d
     data = response.json()["data"]
     assert data["campus"]["name"] == "湖北师范大学"
     assert data["campus"]["center_lng"] == 115.062202
+    assert data["campus"]["core_bounds"] == {
+        "south_west": {"lng": 115.0558, "lat": 30.2248},
+        "north_east": {"lng": 115.0693, "lat": 30.2342},
+    }
+    assert data["campus"]["limit_bounds"]["south_west"]["lng"] < 115.0558
+    assert data["campus"]["limit_bounds"]["south_west"]["lat"] < 30.2248
+    assert data["campus"]["limit_bounds"]["north_east"]["lng"] > 115.0693
+    assert data["campus"]["limit_bounds"]["north_east"]["lat"] > 30.2342
     assert data["areas"][0]["name"] == "北门"
     assert {item["marker_key"] for item in data["marker_configs"]} >= {
         "task_emergency",
@@ -177,6 +203,71 @@ def test_map_init_returns_campus_marker_configs_and_tencent_config(api_client, d
     }
     assert data["tencent_config"]["map_provider"] == "tencent"
     assert "key" not in data["tencent_config"]
+
+
+def test_map_init_returns_dynamic_marker_filter_options(api_client, db_session):
+    user = create_member(db_session)
+    seed_map_data(db_session)
+
+    response = api_client.get("/api/v1/map/init", headers=auth_headers(user))
+
+    assert response.status_code == 200
+    options = response.json()["data"]["filter_options"]
+    keys = [item["key"] for item in options]
+    assert keys[:2] == ["none", "all"]
+    assert {"task", "cat", "supply"}.issubset(keys)
+    assert next(item for item in options if item["key"] == "task")["point_types"] == ["task"]
+
+
+def test_tencent_webservice_request_signs_query_when_secret_is_configured(monkeypatch):
+    captured: dict[str, str] = {}
+    settings = SimpleNamespace(
+        tencent_map_key="replace-with-tencent-map-key",
+        tencent_map_secret_key="test-secret",
+        tencent_map_service_timeout_seconds=3,
+    )
+
+    def fake_urlopen(url: str, timeout: float):
+        captured["url"] = url
+        captured["timeout"] = str(timeout)
+        return FakeHttpResponse({"status": 0, "result": {"ok": True}})
+
+    monkeypatch.setattr(map_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(map_service, "urlopen", fake_urlopen)
+
+    payload = map_service._request_tencent_json(
+        "/ws/place/v1/search",
+        {
+            "keyword": "教育大楼",
+            "boundary": "rectangle(30.2248,115.0558,30.2342,115.0693)",
+            "output": "json",
+        },
+    )
+
+    query = parse_qs(urlparse(captured["url"]).query)
+    signature_source = (
+        "/ws/place/v1/search?"
+        "boundary=rectangle(30.2248,115.0558,30.2342,115.0693)&"
+        "key=replace-with-tencent-map-key&"
+        "keyword=教育大楼&"
+        "output=json"
+        "test-secret"
+    )
+    assert payload == {"status": 0, "result": {"ok": True}}
+    assert query["sig"] == [hashlib.md5(signature_source.encode("utf-8")).hexdigest()]
+    assert query["key"] == ["replace-with-tencent-map-key"]
+
+
+def test_parse_tencent_polyline_decodes_official_float_start_and_delta_points():
+    points = map_service.parse_tencent_polyline(
+        [30.22991, 115.0622, 1490, -700, 1600, -600]
+    )
+
+    assert points == [
+        {"lng": 115.0622, "lat": 30.22991},
+        {"lng": 115.0615, "lat": 30.2314},
+        {"lng": 115.0609, "lat": 30.233},
+    ]
 
 
 def test_map_points_returns_visible_markers_with_filter_and_distance(api_client, db_session):
@@ -317,8 +408,8 @@ def test_map_navigation_returns_walking_route_geometry(api_client, db_session, m
                         "distance": 450,
                         "duration": 6,
                         "polyline": [
-                            30229910,
-                            115062200,
+                            30.22991,
+                            115.0622,
                             1490,
                             -700,
                             1600,
@@ -485,6 +576,9 @@ def test_map_bottom_content_returns_latest_task_items(api_client, db_session):
     data = response.json()["data"]
     assert data["content_type"] == "latest_tasks"
     assert data["items"][0]["title"] == "北门草丛紧急救助任务"
+    assert data["items"][0]["description"] == "北门进门右侧草丛附近"
+    assert data["items"][0]["status_label"] == "紧急任务"
+    assert "cover_photo_url" in data["items"][0]
 
 
 def test_map_endpoints_require_password_changed(api_client, db_session):

@@ -94,6 +94,64 @@ export function formatTaskDate(value: string | null | undefined): string {
   return `${year}年${Number(month)}月${Number(day)}日`;
 }
 
+function padDatePart(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+export function formatLocalDate(value: Date): string {
+  return `${value.getFullYear()}-${padDatePart(value.getMonth() + 1)}-${padDatePart(
+    value.getDate(),
+  )}`;
+}
+
+function shiftDate(value: Date, days: number): Date {
+  return new Date(value.getFullYear(), value.getMonth(), value.getDate() + days);
+}
+
+export type TaskDateFilterValue = "" | "today" | "week" | "month" | "specific";
+
+export interface TaskDateFilterQuery {
+  execute_date?: string;
+  execute_date_start?: string;
+  execute_date_end?: string;
+}
+
+export function buildTaskDateFilterQuery(
+  filter: TaskDateFilterValue,
+  specificDate = "",
+  baseDate = new Date(),
+): TaskDateFilterQuery {
+  if (filter === "today") {
+    return { execute_date: formatLocalDate(baseDate) };
+  }
+
+  if (filter === "week") {
+    const weekday = baseDate.getDay();
+    const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+    const start = shiftDate(baseDate, mondayOffset);
+    const end = shiftDate(start, 6);
+    return {
+      execute_date_start: formatLocalDate(start),
+      execute_date_end: formatLocalDate(end),
+    };
+  }
+
+  if (filter === "month") {
+    const start = new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
+    const end = new Date(baseDate.getFullYear(), baseDate.getMonth() + 1, 0);
+    return {
+      execute_date_start: formatLocalDate(start),
+      execute_date_end: formatLocalDate(end),
+    };
+  }
+
+  if (filter === "specific" && specificDate) {
+    return { execute_date: specificDate };
+  }
+
+  return {};
+}
+
 export function formatExecutionDateSummary(values: string[]): string {
   if (!values.length) {
     return "请选择日期";
@@ -150,18 +208,82 @@ export function buildUploadedTaskPhoto(asset: UploadedImageAsset): UploadedFileR
 }
 
 interface TaskListStatusSource {
+  status?: string | null;
   status_label: string;
   current_execution?: {
     status?: string | null;
   } | null;
 }
 
+export type TaskStatusTone = "completed" | "in_progress" | "cancelled" | "default";
+
+export function getTaskStatusTone(task: TaskListStatusSource): TaskStatusTone {
+  if (task.current_execution?.status === "completed" || task.status === "completed") {
+    return "completed";
+  }
+  if (task.status === "in_progress") {
+    return "in_progress";
+  }
+  if (task.status === "cancelled") {
+    return "cancelled";
+  }
+  return "default";
+}
+
 export function getTaskListStatusLabel(task: TaskListStatusSource): string {
-  if (task.current_execution?.status === "completed") {
+  const tone = getTaskStatusTone(task);
+  if (tone === "completed") {
     return "已完成";
+  }
+  if (tone === "in_progress") {
+    return "进行中";
+  }
+  if (tone === "cancelled") {
+    return "已取消";
   }
 
   return task.status_label;
+}
+
+interface TaskDetailActionStateSource {
+  can_checkin: boolean;
+  checkin_disabled_reason: string | null;
+  current_execution?: {
+    status?: string | null;
+    execute_date?: string | null;
+  } | null;
+}
+
+export interface TaskDetailActionState {
+  label: "未开始" | "投喂" | "已完成";
+  tone: "not_started" | "ready" | "completed";
+  disabled: boolean;
+}
+
+export function getTaskDetailActionState(
+  source: TaskDetailActionStateSource,
+): TaskDetailActionState {
+  if (source.current_execution?.status === "completed") {
+    return {
+      label: "已完成",
+      tone: "completed",
+      disabled: true,
+    };
+  }
+
+  if (source.can_checkin) {
+    return {
+      label: "投喂",
+      tone: "ready",
+      disabled: false,
+    };
+  }
+
+  return {
+    label: "未开始",
+    tone: "not_started",
+    disabled: true,
+  };
 }
 
 export function buildSummerFeedingTaskPayload(

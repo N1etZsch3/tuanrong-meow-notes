@@ -5,7 +5,7 @@
     <view class="content">
       <view class="brand-block">
         <image class="association-logo" :src="loadingLogo" mode="aspectFit" />
-        <text class="app-title">猫协地图</text>
+        <text class="app-title">团绒喵记本</text>
         <text class="app-subtitle">探索校园 · 守护猫咪</text>
         <view class="system-name">
           <image class="wheat-icon wheat-icon-left" :src="wheatRightIcon" mode="aspectFit" />

@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     amap_security_js_code: str = "replace-with-amap-security-js-code"
     amap_web_service_timeout_seconds: float = 3.0
     tencent_map_key: str = "replace-with-tencent-map-key"
+    tencent_map_secret_key: str = ""
     tencent_map_referer: str = "catmap-miniapp"
     tencent_map_service_timeout_seconds: float = 3.0
     tencent_cos_secret_id: str = ""

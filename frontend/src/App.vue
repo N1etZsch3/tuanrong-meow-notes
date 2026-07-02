@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from "@dcloudio/uni-app";
+import { startUserLocationPreload } from "@/services/user-location";
+
 onLaunch(() => {
   console.log("App Launch");
+  startUserLocationPreload();
 });
 onShow(() => {
   console.log("App Show");

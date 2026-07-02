@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
 from app.modules.map.models import Campus, MapMarkerConfig
+from app.modules.tasks import service as task_service
 
 
 def create_user(
@@ -155,8 +156,65 @@ def test_admin_can_publish_summer_feeding_task_and_map_marker_is_visible(
     assert marker["business_type"] == "feeding"
     assert marker["business_id"] == data["task_id"]
     assert marker["marker_key"] == "task_feeding"
+    assert marker["cover_photo_url"] == "https://img.example.com/task-feeding-thumb.jpg"
+    assert marker["extra"]["location_detail"] == "靠近教学楼B后方草坪"
+    assert marker["extra"]["task_status_label"] == "进行中"
     assert marker["extra"]["next_execute_date"] == "2026-07-02"
     assert marker["extra"]["associated_poi"]["poi_id"] == "7554185223751732838"
+
+
+def test_map_point_summary_uses_uploaded_task_photos_for_detail_thumbnails(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    payload["photos"].extend(
+        [
+            {
+                "file_id": None,
+                "file_url": "https://img.example.com/task-feeding-2.jpg",
+                "thumbnail_url": "https://img.example.com/task-feeding-2-thumb.jpg",
+                "photo_type": "scene",
+                "caption": "喂食点补充图",
+                "sort_order": 1,
+                "is_cover": False,
+            },
+            {
+                "file_id": None,
+                "file_url": "https://img.example.com/task-feeding-3.jpg",
+                "thumbnail_url": "https://img.example.com/task-feeding-3-thumb.jpg",
+                "photo_type": "route",
+                "caption": "入口路线图",
+                "sort_order": 2,
+                "is_cover": False,
+            },
+        ]
+    )
+
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    published = publish_response.json()["data"]
+
+    summary_response = api_client.get(
+        f"/api/v1/map/points/{published['map_point_id']}/summary",
+        headers=auth_headers(member),
+    )
+
+    assert summary_response.status_code == 200
+    summary = summary_response.json()["data"]
+    assert summary["cover_photo_url"] == "https://img.example.com/task-feeding-thumb.jpg"
+    assert [photo["thumbnail_url"] for photo in summary["photos"]] == [
+        "https://img.example.com/task-feeding-thumb.jpg",
+        "https://img.example.com/task-feeding-2-thumb.jpg",
+        "https://img.example.com/task-feeding-3-thumb.jpg",
+    ]
 
 
 def test_member_list_and_detail_include_dates_photos_location_materials_and_activities(
@@ -282,6 +340,170 @@ def test_member_checkin_completes_one_execution_date_without_completing_parent_t
     assert detail["activities"][0]["activity_type"] == "execution_completed"
 
 
+def test_member_list_filters_by_execution_status_instead_of_parent_task_status(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    today = date.today().isoformat()
+
+    first_payload = publish_payload(campus)
+    first_payload["execute_dates"] = [today]
+    first_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=first_payload,
+    )
+    assert first_response.status_code == 200
+    completed_task_id = first_response.json()["data"]["task_id"]
+
+    second_payload = publish_payload(campus)
+    second_payload["title"] = "待投喂任务"
+    second_payload["execute_dates"] = [today]
+    second_payload["map_point"]["lng"] = 115.06421
+    second_payload["map_point"]["lat"] = 30.23158
+    second_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=second_payload,
+    )
+    assert second_response.status_code == 200
+    pending_task_id = second_response.json()["data"]["task_id"]
+
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{completed_task_id}/checkins",
+        headers=auth_headers(member),
+        json={"execute_date": today, "is_completed": True},
+    )
+    assert checkin_response.status_code == 200
+
+    pending_response = api_client.get(
+        f"/api/v1/tasks?execute_date={today}&execution_status=pending&status=in_progress,completed",
+        headers=auth_headers(member),
+    )
+    assert pending_response.status_code == 200
+    pending_items = pending_response.json()["data"]["items"]
+    assert [item["task_id"] for item in pending_items] == [pending_task_id]
+    assert pending_items[0]["current_execution"]["status"] == "pending"
+
+    completed_response = api_client.get(
+        f"/api/v1/tasks?execute_date={today}&execution_status=completed&status=in_progress,completed",
+        headers=auth_headers(member),
+    )
+    assert completed_response.status_code == 200
+    completed_items = completed_response.json()["data"]["items"]
+    assert [item["task_id"] for item in completed_items] == [completed_task_id]
+    assert completed_items[0]["current_execution"]["status"] == "completed"
+
+
+def test_member_list_filters_by_execution_date_range(api_client, db_session):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    published = publish_task(api_client, admin, campus)
+
+    july_response = api_client.get(
+        "/api/v1/tasks?execute_date_start=2026-07-01&execute_date_end=2026-07-31",
+        headers=auth_headers(member),
+    )
+    assert july_response.status_code == 200
+    assert [item["task_id"] for item in july_response.json()["data"]["items"]] == [
+        published["task_id"]
+    ]
+
+    august_response = api_client.get(
+        "/api/v1/tasks?execute_date_start=2026-08-01&execute_date_end=2026-08-31",
+        headers=auth_headers(member),
+    )
+    assert august_response.status_code == 200
+    assert august_response.json()["data"]["items"] == []
+
+
+def test_future_execution_date_is_not_checkable_before_that_day(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        task_service,
+        "_now",
+        lambda: datetime(2026, 7, 2, 9, 0, tzinfo=UTC),
+    )
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    payload["execute_dates"] = ["2026-07-09"]
+
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    detail_response = api_client.get(
+        f"/api/v1/tasks/{task_id}?current_date=2026-07-02",
+        headers=auth_headers(member),
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert detail["current_execution"]["execute_date"] == "2026-07-09"
+    assert detail["actions"]["can_checkin"] is False
+    assert detail["actions"]["checkin_disabled_reason"] == "未到任务日期"
+
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{task_id}/checkins",
+        headers=auth_headers(member),
+        json={"execute_date": "2026-07-09", "is_completed": True},
+    )
+    assert checkin_response.status_code == 400
+    assert checkin_response.json()["code"] == 62007
+
+
+def test_completion_activity_content_uses_actual_completed_date(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    payload["execute_dates"] = ["2026-07-02"]
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    monkeypatch.setattr(
+        task_service,
+        "_now",
+        lambda: datetime(2026, 7, 10, 12, 44, tzinfo=UTC),
+    )
+
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{task_id}/checkins",
+        headers=auth_headers(member),
+        json={"execute_date": "2026-07-02", "is_completed": True},
+    )
+    assert checkin_response.status_code == 200
+
+    detail_response = api_client.get(
+        f"/api/v1/tasks/{task_id}",
+        headers=auth_headers(member),
+    )
+    assert detail_response.status_code == 200
+    content = detail_response.json()["data"]["activities"][0]["content"]
+    assert content == "Nietzsche 于 2026-07-10 完成投喂"
+
+
 def test_map_init_and_points_use_dynamic_feeding_completion_filters(api_client, db_session):
     admin = create_user(db_session, role="admin", nickname="管理员")
     member = create_user(db_session, nickname="Nietzsche")
@@ -312,6 +534,9 @@ def test_map_init_and_points_use_dynamic_feeding_completion_filters(api_client, 
     assert pending_marker["business_id"] == task_id
     assert pending_marker["lng"] == 115.06321
     assert pending_marker["lat"] == 30.23108
+    assert pending_marker["cover_photo_url"] == "https://img.example.com/task-feeding-thumb.jpg"
+    assert pending_marker["extra"]["location_detail"] == "靠近教学楼B后方草坪"
+    assert pending_marker["extra"]["task_status_label"] == "进行中"
     assert pending_marker["extra"]["feeding_status"] == "pending"
 
     checkin_response = api_client.post(
@@ -339,6 +564,29 @@ def test_map_init_and_points_use_dynamic_feeding_completion_filters(api_client, 
     completed_marker = completed_response.json()["data"]["items"][0]
     assert completed_marker["business_id"] == task_id
     assert completed_marker["extra"]["feeding_status"] == "completed"
+    assert completed_marker["extra"]["task_status_label"] == "已完成"
+
+    second_payload = publish_payload(campus)
+    second_payload["title"] = "second feeding task"
+    second_payload["execute_dates"] = [today]
+    second_payload["map_point"]["lng"] = 115.06421
+    second_payload["map_point"]["lat"] = 30.23158
+    second_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=second_payload,
+    )
+    assert second_response.status_code == 200
+
+    mixed_init_response = api_client.get("/api/v1/map/init", headers=auth_headers(member))
+    assert mixed_init_response.status_code == 200
+    mixed_filter_options = mixed_init_response.json()["data"]["filter_options"]
+    assert [item["key"] for item in mixed_filter_options] == [
+        "none",
+        "all",
+        "feeding_pending",
+        "feeding_completed",
+    ]
 
 
 def test_member_cannot_publish_summer_feeding_task(api_client, db_session):

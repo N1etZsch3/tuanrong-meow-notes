@@ -1,6 +1,6 @@
 {
     "name" : "猫协地图",
-    "appid" : "",
+    "appid" : "wx0000000000000000",
     "description" : "校园猫协地图任务系统微信小程序",
     "versionName" : "1.0.0",
     "versionCode" : "100",
@@ -50,15 +50,22 @@
     "quickapp" : {},
     /* 小程序特有相关 */
     "mp-weixin" : {
-        "appid" : "",
+        "appid" : "wx0000000000000000",
         "setting" : {
-            "urlCheck" : false
+            "urlCheck" : false,
+            "ignoreDevUnusedFiles" : false,
+            "ignoreUploadUnusedFiles" : false
         },
         "permission" : {
             "scope.userLocation" : {
                 "desc" : "用于在猫协地图中显示当前位置并规划到任务点的路线"
             }
         },
+        "requiredPrivateInfos" : [
+            "getLocation",
+            "startLocationUpdate",
+            "onLocationChange"
+        ],
         "usingComponents" : true
     },
     "mp-alipay" : {

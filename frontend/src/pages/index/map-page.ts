@@ -47,6 +47,7 @@ export interface MapShellItem {
   description: string | null;
   distance_meters: number | null;
   status_label?: string;
+  status_key?: string | null;
   tag_label?: string;
   lng?: number;
   lat?: number;
@@ -72,7 +73,9 @@ export interface MapFilterOption {
   business_types?: string[];
 }
 
-export type MapMarkerDisplayMode = "icon" | "label" | "preview";
+export type MapMarkerDisplayMode = "icon" | "label";
+
+export const MARKER_LABEL_MIN_VISIBLE_ZOOM = 18;
 
 export interface MapMarkerDisplayModeInput {
   zoom: number;
@@ -81,6 +84,12 @@ export interface MapMarkerDisplayModeInput {
   labelMinZoom?: number | null;
   previewMinZoom?: number | null;
   selected?: boolean;
+}
+
+export interface MapRegionScaleSyncInput {
+  type?: string;
+  causedBy?: string;
+  scale?: number | null;
 }
 
 export const ALL_MAP_FILTER_KEY: MapFilterKey = "all";
@@ -101,6 +110,19 @@ export function isFiniteLngLat(
     typeof point?.lat === "number" &&
     Number.isFinite(point.lng) &&
     Number.isFinite(point.lat)
+  );
+}
+
+export function isFiniteLngLatBounds(
+  bounds: Partial<LngLatBounds> | null | undefined,
+): bounds is LngLatBounds {
+  const southWest = bounds?.south_west;
+  const northEast = bounds?.north_east;
+  return (
+    isFiniteLngLat(southWest) &&
+    isFiniteLngLat(northEast) &&
+    southWest.lng < northEast.lng &&
+    southWest.lat < northEast.lat
   );
 }
 
@@ -234,11 +256,44 @@ export function normalizeMapFilterOptions(
       business_types: option.business_types || [],
     }));
 
-  if (!normalized.some((option) => option.key === NO_MAP_FILTER_KEY)) {
-    normalized.unshift(NO_MAP_FILTER_OPTION);
+  const optionByKey = new Map<MapFilterKey, MapFilterOption>();
+  for (const option of normalized) {
+    if (!optionByKey.has(option.key)) {
+      optionByKey.set(option.key, option);
+    }
   }
 
-  return normalized.length ? normalized : [NO_MAP_FILTER_OPTION];
+  const markerOptions = [...optionByKey.values()].filter(
+    (option) => option.key !== NO_MAP_FILTER_KEY && option.key !== ALL_MAP_FILTER_KEY,
+  );
+  const staticAllMarkerOption = MAP_FILTER_OPTIONS.find(
+    (option) => option.key === ALL_MAP_FILTER_KEY,
+  );
+  const onlyTaskOptions =
+    markerOptions.length > 0 &&
+    markerOptions.every((option) => {
+      const pointTypes = option.point_types || [];
+      return pointTypes.length > 0 && pointTypes.every((pointType) => pointType === "task");
+    });
+  const allMarkerOption =
+    optionByKey.get(ALL_MAP_FILTER_KEY) ||
+    (staticAllMarkerOption
+      ? {
+          ...staticAllMarkerOption,
+          ...(onlyTaskOptions
+            ? {
+                label: "全部任务类型",
+                description: "展示所有任务类型",
+              }
+            : {}),
+        }
+      : undefined);
+
+  return [
+    optionByKey.get(NO_MAP_FILTER_KEY) || NO_MAP_FILTER_OPTION,
+    ...(markerOptions.length >= 2 && allMarkerOption ? [allMarkerOption] : []),
+    ...markerOptions,
+  ];
 }
 
 export function isMapShellItemVisibleByFilter(
@@ -251,29 +306,50 @@ export function isMapShellItemVisibleByFilter(
   if (filterKey === "feeding_pending" || filterKey === "feeding_completed") {
     return item.type === "daily_task";
   }
+  if (filterKey === "task") {
+    return item.type === "daily_task" || item.type === "emergency_task";
+  }
   return filterKey === ALL_MAP_FILTER_KEY || item.type === filterKey;
 }
 
 export function getMarkerDisplayMode(
   input: MapMarkerDisplayModeInput,
 ): MapMarkerDisplayMode {
-  const previewEnabled = input.previewEnabled !== false;
-  const labelMinZoom = input.labelMinZoom ?? 16;
-  const previewMinZoom = input.previewMinZoom ?? 15;
-
-  if (previewEnabled && (input.selected || input.visibleMarkerCount <= 2)) {
-    return "preview";
-  }
-
-  if (input.visibleMarkerCount >= 8 || input.zoom >= labelMinZoom + 2) {
-    return "icon";
-  }
-
-  if (input.zoom >= labelMinZoom || input.zoom >= previewMinZoom) {
+  if (input.selected) {
     return "label";
   }
 
-  return "icon";
+  return input.zoom >= MARKER_LABEL_MIN_VISIBLE_ZOOM ? "label" : "icon";
+}
+
+export function shouldSyncMapScaleFromRegionChange(
+  input: MapRegionScaleSyncInput | null | undefined,
+): boolean {
+  if (typeof input?.scale !== "number" || !Number.isFinite(input.scale)) {
+    return false;
+  }
+  if (input.causedBy === "drag" || input.causedBy === "update") {
+    return false;
+  }
+  return input.causedBy === "scale" || input.type === "end" || !input.causedBy;
+}
+
+export function shouldQueryMapScaleFromRegionChange(
+  input: MapRegionScaleSyncInput | null | undefined,
+): boolean {
+  if (!input) {
+    return false;
+  }
+  if (input.type && input.type !== "end") {
+    return false;
+  }
+  if (typeof input.scale === "number" && Number.isFinite(input.scale)) {
+    return false;
+  }
+  if (input.causedBy === "drag" || input.causedBy === "update") {
+    return false;
+  }
+  return input.causedBy === "scale" || input.type === "end";
 }
 
 export function isLngLatInsideBounds(
@@ -358,8 +434,62 @@ export function getDefaultStatusLabel(type: MapShellItemType): string {
   return labels[type];
 }
 
+function getStringExtra(extra: Record<string, unknown> | undefined, key: string): string | null {
+  const value = extra?.[key];
+  return typeof value === "string" && value.trim() ? value : null;
+}
+
+function getStatusKeyFromLabel(label: string | null | undefined): string | null {
+  if (label === "已完成") {
+    return "completed";
+  }
+  if (label === "进行中") {
+    return "in_progress";
+  }
+  return null;
+}
+
+function getTaskMarkerLocationDetail(marker: MapPointMarkerDto): string | null {
+  return getStringExtra(marker.extra, "location_detail") || marker.subtitle;
+}
+
+function getTaskMarkerStatusKey(marker: MapPointMarkerDto): string | null {
+  const feedingStatus = getStringExtra(marker.extra, "feeding_status");
+  if (feedingStatus === "completed") {
+    return "completed";
+  }
+
+  const taskStatus = getStringExtra(marker.extra, "task_status");
+  if (taskStatus === "completed" || taskStatus === "in_progress") {
+    return taskStatus;
+  }
+
+  if (feedingStatus === "pending") {
+    return "in_progress";
+  }
+
+  return taskStatus || feedingStatus;
+}
+
+function getTaskMarkerStatusLabel(marker: MapPointMarkerDto, type: MapShellItemType): string {
+  const statusLabel = getStringExtra(marker.extra, "task_status_label");
+  if (statusLabel) {
+    return statusLabel;
+  }
+
+  const statusKey = getTaskMarkerStatusKey(marker);
+  if (statusKey === "completed") {
+    return "已完成";
+  }
+  if (statusKey === "in_progress") {
+    return "进行中";
+  }
+  return getDefaultStatusLabel(type);
+}
+
 export function mapMarkerToShellItem(marker: MapPointMarkerDto): MapShellItem {
   const type = resolveMapShellItemType(marker.point_type, marker.business_type);
+  const isTask = type === "daily_task" || type === "emergency_task";
 
   return {
     id: marker.point_id,
@@ -367,9 +497,10 @@ export function mapMarkerToShellItem(marker: MapPointMarkerDto): MapShellItem {
     type,
     title: marker.name,
     subtitle: marker.subtitle,
-    description: marker.subtitle,
+    description: isTask ? getTaskMarkerLocationDetail(marker) : marker.subtitle,
     distance_meters: marker.distance_meters,
-    status_label: getDefaultStatusLabel(type),
+    status_label: isTask ? getTaskMarkerStatusLabel(marker, type) : getDefaultStatusLabel(type),
+    status_key: isTask ? getTaskMarkerStatusKey(marker) : null,
     tag_label: getMapFilterLabel(type),
     lng: marker.lng,
     lat: marker.lat,
@@ -393,6 +524,7 @@ export function mapSearchResultToShellItem(
     description: result.description,
     distance_meters: result.distance_meters,
     status_label: result.status_label || getDefaultStatusLabel(type),
+    status_key: getStatusKeyFromLabel(result.status_label),
     tag_label: getMapFilterLabel(type),
     lng: result.lng,
     lat: result.lat,
@@ -416,9 +548,11 @@ export function mapBottomContentItemToShellItem(
     description: item.description,
     distance_meters: item.distance_meters,
     status_label: item.status_label || getDefaultStatusLabel(type),
+    status_key: getStatusKeyFromLabel(item.status_label),
     tag_label: item.tag_label || getMapFilterLabel(type),
     lng: item.lng ?? undefined,
     lat: item.lat ?? undefined,
+    cover_photo_url: item.cover_photo_url,
   };
 }
 

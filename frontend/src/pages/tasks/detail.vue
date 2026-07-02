@@ -42,6 +42,7 @@
                   class="hero-image"
                   :src="photo.url"
                   mode="aspectFill"
+                  @tap="openTaskPhotoPreview(photo.photo_id)"
                   @error="markHeroPhotoFailed(photo.photo_id)"
                 />
               </swiper-item>
@@ -141,6 +142,7 @@
                 class="checkin-photo"
                 :src="photo.thumbnail_url || photo.file_url"
                 mode="aspectFill"
+                @tap="openCheckinPhotoPreview(photo)"
               />
             </view>
             <text v-else class="empty-line">完成投喂前可上传现场照片</text>
@@ -155,14 +157,22 @@
       </button>
       <button
         class="primary-action"
+        :class="`action-${primaryActionState.tone}`"
         :loading="isSubmitting"
-        :disabled="!canCheckin"
+        :disabled="primaryActionState.disabled"
         hover-class="button-hover"
         @tap="completeFeedingTask"
       >
-        完成投喂
+        {{ primaryActionState.label }}
       </button>
     </view>
+    <ImagePreviewModal
+      :visible="imagePreviewVisible"
+      :images="imagePreviewUrls"
+      :current-index="imagePreviewIndex"
+      @change="setImagePreviewIndex"
+      @close="closeImagePreview"
+    />
   </view>
 </template>
 
@@ -178,10 +188,15 @@ import {
   type TaskPhotoDto,
   type UploadedFileRef,
 } from "@/api/tasks";
+import ImagePreviewModal from "@/components/ImagePreviewModal.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
-import { buildUploadedTaskPhoto, formatTaskDate } from "@/pages/tasks/task-page";
+import {
+  buildUploadedTaskPhoto,
+  formatTaskDate,
+  getTaskDetailActionState,
+} from "@/pages/tasks/task-page";
 import { clearTaskListCache } from "@/pages/tasks/task-list-cache";
 import { MAP_PENDING_NAVIGATION_STORAGE_KEY } from "@/pages/index/map-page";
 
@@ -199,6 +214,9 @@ const isUploading = ref(false);
 const isSubmitting = ref(false);
 const checkinPhotos = ref<UploadedFileRef[]>([]);
 const failedHeroPhotoIds = ref<string[]>([]);
+const imagePreviewVisible = ref(false);
+const imagePreviewUrls = ref<string[]>([]);
+const imagePreviewIndex = ref(0);
 
 const heroPhotos = computed(() => {
   if (!task.value) {
@@ -216,9 +234,27 @@ const heroPhotos = computed(() => {
 const currentExecution = computed(() => task.value?.current_execution || task.value?.next_execution || null);
 const currentDateText = computed(() => formatTaskDate(currentExecution.value?.execute_date));
 const associatedPoi = computed(() => task.value?.map_point.associated_poi || null);
-const canCheckin = computed(() => Boolean(task.value?.actions.can_checkin && currentExecution.value));
+const primaryActionState = computed(() =>
+  getTaskDetailActionState({
+    can_checkin: Boolean(task.value?.actions.can_checkin && currentExecution.value),
+    checkin_disabled_reason: task.value?.actions.checkin_disabled_reason || null,
+    current_execution: currentExecution.value
+      ? {
+          status: currentExecution.value.status,
+          execute_date: currentExecution.value.execute_date,
+        }
+      : null,
+  }),
+);
+const canCheckin = computed(() => !primaryActionState.value.disabled);
 const canAdminEditTask = computed(() =>
   Boolean(userStore.isAdmin && task.value?.actions.can_admin_edit),
+);
+const taskPhotoPreviewUrls = computed(() => heroPhotos.value.map((photo) => photo.url));
+const checkinPhotoPreviewUrls = computed(() =>
+  checkinPhotos.value
+    .map((photo) => photo.file_url || photo.thumbnail_url || "")
+    .filter((url) => url),
 );
 
 async function getAccessToken(): Promise<string | null> {
@@ -252,6 +288,39 @@ function markHeroPhotoFailed(photoId: string) {
   if (!failedHeroPhotoIds.value.includes(photoId)) {
     failedHeroPhotoIds.value = [...failedHeroPhotoIds.value, photoId];
   }
+}
+
+function openImagePreview(urls: string[], current: string) {
+  if (!current) {
+    return;
+  }
+  const uniqueUrls = Array.from(new Set(urls.filter((url) => url)));
+  const resolvedUrls = uniqueUrls.length ? uniqueUrls : [current];
+  const currentIndex = Math.max(0, resolvedUrls.indexOf(current));
+  imagePreviewUrls.value = resolvedUrls;
+  imagePreviewIndex.value = currentIndex;
+  imagePreviewVisible.value = true;
+}
+
+function closeImagePreview() {
+  imagePreviewVisible.value = false;
+}
+
+function setImagePreviewIndex(index: number) {
+  imagePreviewIndex.value = index;
+}
+
+function openTaskPhotoPreview(photoId: string) {
+  const photo = heroPhotos.value.find((item) => item.photo_id === photoId);
+  if (!photo) {
+    return;
+  }
+  openImagePreview(taskPhotoPreviewUrls.value, photo.url);
+}
+
+function openCheckinPhotoPreview(photo: UploadedFileRef) {
+  const current = photo.file_url || photo.thumbnail_url || "";
+  openImagePreview(checkinPhotoPreviewUrls.value, current);
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -369,6 +438,7 @@ function goNavigateToTaskPoint() {
   }
   uni.setStorageSync(MAP_PENDING_NAVIGATION_STORAGE_KEY, {
     source: "task_detail",
+    focus_only: true,
     task_id: task.value.task_id,
     title: task.value.title,
     map_point: {
@@ -766,8 +836,27 @@ onLoad((query) => {
   box-shadow: 0 14rpx 34rpx rgba(40, 124, 49, 0.24);
 }
 
+.primary-action.action-ready {
+  background: #287c31;
+  box-shadow: 0 14rpx 34rpx rgba(40, 124, 49, 0.24);
+}
+
+.primary-action.action-not_started,
+.primary-action.action-not_started[disabled] {
+  background: #d73546;
+  color: #ffffff;
+  box-shadow: 0 14rpx 34rpx rgba(215, 53, 70, 0.18);
+}
+
+.primary-action.action-completed,
+.primary-action.action-completed[disabled] {
+  background: #9ca3af;
+  color: #ffffff;
+  box-shadow: 0 14rpx 34rpx rgba(75, 85, 99, 0.14);
+}
+
 .primary-action[disabled] {
-  background: #a7b7a6;
+  opacity: 1;
 }
 
 .button-hover {

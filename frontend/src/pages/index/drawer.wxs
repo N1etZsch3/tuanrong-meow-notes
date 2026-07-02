@@ -4,6 +4,7 @@ var config = {
 };
 var MAX_DRAWER_PROGRESS = 3;
 var MAX_DRAWER_TOP_GAP_RPX = 210;
+var FILTER_LAYER_MIN_TOP_RPX = 176;
 var currentProgress = 1; // 1 = Normal
 var startProgress = 1;
 var startY = 0;
@@ -104,7 +105,7 @@ function applyProgress(progress, ownerInstance, transition) {
   var filterLayer = ownerInstance.selectComponent('.map-filter-layer');
   if (filterLayer) {
     filterLayer.setStyle({
-      top: px(mapT + 34) + 'px',
+      top: px(Math.max(mapT + 34, FILTER_LAYER_MIN_TOP_RPX)) + 'px',
       left: px(mapL + 28) + 'px',
       opacity: mapOp,
       transition: trans

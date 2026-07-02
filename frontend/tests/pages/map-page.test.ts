@@ -222,7 +222,101 @@ describe("map page shell behavior", () => {
     expect(mapPageSource).toContain("task_status_label");
     expect(indexPageSource).toContain("status-completed");
     expect(indexPageSource).toContain("status-in_progress");
+    expect(indexPageSource).toContain("status-cancelled");
+    expect(indexPageSource).toContain("status-archived");
     expect(indexPageSource).not.toContain("· 距离 {{ formatDistance(item.distance_meters) }}");
+  });
+
+  it("maps cancelled and archived task statuses into task list status tones", () => {
+    const baseMarker = {
+      point_id: "point-1",
+      point_type: "task",
+      point_scope: "long_term",
+      business_type: "feeding",
+      business_id: "task-1",
+      name: "娘子坡喂食任务",
+      subtitle: "暑假喂食任务",
+      lng: 115.06321,
+      lat: 30.23108,
+      area_id: null,
+      area_name: null,
+      marker_key: "task_feeding",
+      icon_key: "task_feeding",
+      display_level: 85,
+      visibility: "public",
+      status: "active",
+      cover_photo_url: null,
+      preview_enabled: true,
+      preview_min_zoom: 16,
+      label_min_zoom: 16,
+      distance_meters: null,
+    };
+
+    expect(
+      mapMarkerToShellItem({
+        ...baseMarker,
+        extra: { task_status: "cancelled", task_status_label: "已取消" },
+      }).status_key,
+    ).toBe("cancelled");
+    expect(
+      mapMarkerToShellItem({
+        ...baseMarker,
+        extra: { task_status: "archived", task_status_label: "已归档" },
+      }).status_key,
+    ).toBe("archived");
+    expect(mapSearchResultToShellItem({
+      result_type: "task",
+      map_point_id: "point-1",
+      business_id: "task-1",
+      point_type: "task",
+      business_type: "feeding",
+      title: "归档喂食任务",
+      subtitle: "暑假喂食任务",
+      description: "屋檐下",
+      icon_key: "task_feeding",
+      cover_photo_url: null,
+      lng: 115.06321,
+      lat: 30.23108,
+      distance_meters: null,
+      status_label: "已归档",
+      highlight_text: "",
+      sort_score: 0,
+    }).status_key).toBe("archived");
+    expect(mapBottomContentItemToShellItem({
+      id: "task-1",
+      type: "daily_task",
+      title: "取消喂食任务",
+      subtitle: "暑假喂食任务",
+      description: "屋檐下",
+      distance_meters: null,
+      status_label: "已取消",
+      tag_label: "喂食任务",
+      cover_photo_url: null,
+      map_point_id: "point-1",
+      lng: 115.06321,
+      lat: 30.23108,
+    }).status_key).toBe("cancelled");
+  });
+
+  it("lets the drawer drag start from the handle and search box only", () => {
+    expect(indexPageSource).toContain('class="drawer-grip-area"');
+    expect(indexPageSource).toContain('@touchstart="drawer.touchstart"');
+    expect(indexPageSource).toContain('class="search-box"');
+    expect(indexPageSource).toContain('@touchstart.stop="drawer.touchstart"');
+    expect(indexPageSource).toContain('@touchmove.stop="drawer.touchmove"');
+    expect(indexPageSource).toContain('@touchend.stop="drawer.touchend"');
+  });
+
+  it("shows only the title-side summary type badge in selected point detail cards", () => {
+    expect(indexPageSource).toContain("summaryTypeTag");
+    expect(indexPageSource).toContain('class="summary-type-badge"');
+    expect(indexPageSource).not.toContain('class="summary-tags"');
+  });
+
+  it("upserts a marker when a bottom task row is selected from the no-marker state", () => {
+    const selectSource = extractFunctionSource("selectShellItem");
+    expect(indexPageSource).toContain("function upsertShellItemMapMarker");
+    expect(selectSource).toContain("upsertShellItemMapMarker(item)");
   });
 
   it("deduplicates the selected point detail card before rendering text blocks", () => {

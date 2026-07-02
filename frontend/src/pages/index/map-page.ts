@@ -446,6 +446,12 @@ function getStatusKeyFromLabel(label: string | null | undefined): string | null 
   if (label === "进行中") {
     return "in_progress";
   }
+  if (label === "已取消") {
+    return "cancelled";
+  }
+  if (label === "已归档") {
+    return "archived";
+  }
   return null;
 }
 
@@ -460,7 +466,12 @@ function getTaskMarkerStatusKey(marker: MapPointMarkerDto): string | null {
   }
 
   const taskStatus = getStringExtra(marker.extra, "task_status");
-  if (taskStatus === "completed" || taskStatus === "in_progress") {
+  if (
+    taskStatus === "completed" ||
+    taskStatus === "in_progress" ||
+    taskStatus === "cancelled" ||
+    taskStatus === "archived"
+  ) {
     return taskStatus;
   }
 
@@ -483,6 +494,12 @@ function getTaskMarkerStatusLabel(marker: MapPointMarkerDto, type: MapShellItemT
   }
   if (statusKey === "in_progress") {
     return "进行中";
+  }
+  if (statusKey === "cancelled") {
+    return "已取消";
+  }
+  if (statusKey === "archived") {
+    return "已归档";
   }
   return getDefaultStatusLabel(type);
 }

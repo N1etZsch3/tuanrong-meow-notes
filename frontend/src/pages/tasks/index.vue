@@ -59,7 +59,7 @@
             @change="handleTaskStatusChange"
           >
             <view class="filter-control">
-              <text class="picker-caption">完成状态</text>
+              <text class="picker-caption">任务状态</text>
               <view class="picker-shell">
                 <text class="picker-value">{{ selectedTaskStatusLabel }}</text>
                 <image
@@ -199,15 +199,17 @@ type PickerKind = "task_type" | "status" | "date" | "";
 type PickerChangeEvent = { detail: { value: string | number } };
 type DatePickerChangeEvent = { detail: { value: string } };
 
-const DEFAULT_TASK_STATUS_QUERY = "in_progress,completed";
+const DEFAULT_TASK_STATUS_QUERY = "in_progress,completed,cancelled,archived";
 const taskTypeOptions = [
   { label: "全部", value: "" },
   { label: "暑假投喂", value: "feeding" },
 ] as const;
 const taskStatusOptions = [
   { label: "全部", value: "" },
-  { label: "进行中", value: "pending" },
+  { label: "进行中", value: "in_progress" },
   { label: "已完成", value: "completed" },
+  { label: "已取消", value: "cancelled" },
+  { label: "已归档", value: "archived" },
 ] as const;
 const dateFilterOptions = [
   { label: "全部", value: "" },
@@ -288,8 +290,7 @@ function buildTaskListQuery(): TaskListQuery {
     task_type: selectedTaskType.value
       ? (selectedTaskType.value as TaskListQuery["task_type"])
       : undefined,
-    status: DEFAULT_TASK_STATUS_QUERY,
-    execution_status: selectedTaskStatus.value || undefined,
+    status: selectedTaskStatus.value || DEFAULT_TASK_STATUS_QUERY,
     keyword: searchKeyword.value.trim(),
     ...dateQuery,
     page: 1,
@@ -402,6 +403,9 @@ function taskStatusClass(task: TaskListItemDto): string {
   }
   if (tone === "cancelled") {
     return "task-status-cancelled";
+  }
+  if (tone === "archived") {
+    return "task-status-archived";
   }
   return "task-status-default";
 }
@@ -733,13 +737,18 @@ onShow(() => {
 }
 
 .task-status-in-progress {
+  background: #fff4cc;
+  color: #a66f00;
+}
+
+.task-status-cancelled {
   background: #ffe7eb;
   color: #d73546;
 }
 
-.task-status-cancelled {
-  background: #f3f4f6;
-  color: #7a4750;
+.task-status-archived {
+  background: #edf4ff;
+  color: #2276ff;
 }
 
 .task-status-default {

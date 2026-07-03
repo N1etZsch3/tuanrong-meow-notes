@@ -79,13 +79,14 @@ function goBack() {
 .admin-inner {
   box-sizing: border-box;
   min-height: 100vh;
-  padding: 74rpx 38rpx calc(env(safe-area-inset-bottom) + 48rpx);
+  padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx)
+    calc(env(safe-area-inset-bottom) + 48rpx);
 }
 
 .nav-row {
   display: flex;
   align-items: center;
-  gap: 24rpx;
+  gap: var(--catmap-page-title-gap, 14rpx);
 }
 
 .back-button {
@@ -113,21 +114,23 @@ function goBack() {
 
 .nav-title {
   color: #171b22;
-  font-size: 42rpx;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
+  line-height: 1;
 }
 
 .nav-subtitle {
-  margin-top: 8rpx;
+  margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
   color: #68717a;
-  font-size: 25rpx;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
+  line-height: 1.2;
 }
 
 .admin-actions {
-  margin-top: 44rpx;
+  margin-top: 34rpx;
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 20rpx;
 }
 
 .admin-action,
@@ -140,8 +143,8 @@ function goBack() {
 }
 
 .admin-action {
-  min-height: 156rpx;
-  padding: 30rpx;
+  min-height: 142rpx;
+  padding: 26rpx 30rpx;
   display: flex;
   align-items: center;
   gap: 24rpx;
@@ -188,10 +191,10 @@ function goBack() {
 }
 
 .action-subtitle {
-  margin-top: 12rpx;
+  margin-top: 6rpx;
   color: #69727b;
   font-size: 24rpx;
-  line-height: 1.4;
+  line-height: 1.3;
 }
 
 .action-chevron {

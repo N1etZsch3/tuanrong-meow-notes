@@ -200,14 +200,15 @@ function goBack() {
 .password-inner {
   box-sizing: border-box;
   min-height: 100vh;
-  padding: 78rpx 38rpx calc(env(safe-area-inset-bottom) + 48rpx);
+  padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx)
+    calc(env(safe-area-inset-bottom) + 48rpx);
 }
 
 .nav-row {
   display: flex;
   align-items: center;
-  gap: 22rpx;
-  margin-bottom: 38rpx;
+  gap: var(--catmap-page-title-gap, 14rpx);
+  margin-bottom: 32rpx;
 }
 
 .back-button {
@@ -240,16 +241,17 @@ function goBack() {
 
 .nav-title {
   color: #171b22;
-  font-size: 48rpx;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
-  line-height: 1.08;
+  line-height: 1;
 }
 
 .nav-subtitle {
-  margin-top: 12rpx;
+  margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
   color: #656d78;
-  font-size: 24rpx;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .form-card {

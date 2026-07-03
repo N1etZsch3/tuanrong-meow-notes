@@ -323,7 +323,7 @@ describe("summer feeding task pages", () => {
 
   it("shows associated tencent poi metadata on task detail when available", () => {
     expect(taskDetailSource).toContain("associatedPoi");
-    expect(taskDetailSource).toContain("公共地点");
+    expect(taskDetailSource).toContain("附近地标");
     expect(taskDetailSource).toContain("associatedPoi.category");
     expect(taskDetailSource).toContain("goViewAssociatedPoiOnMap");
     expect(taskDetailSource).toContain("地图查看");

@@ -24,7 +24,7 @@ from app.modules.auth.schemas import (
     LoginRequest,
 )
 
-VALID_ROLES = {"member", "admin"}
+VALID_ROLES = {"member", "summer_volunteer", "admin"}
 VALID_STATUSES = {"active", "blocked", "left", "deleted"}
 MEOW_NO_PREFIX = "trmx"
 MEOW_NO_WIDTH = 4

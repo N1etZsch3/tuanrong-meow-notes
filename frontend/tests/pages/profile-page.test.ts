@@ -6,7 +6,12 @@ import profileIndexSource from "../../src/pages/profile/index.vue?raw";
 import profileRecordsSource from "../../src/pages/profile/records.vue?raw";
 import profileResetPasswordSource from "../../src/pages/profile/reset-password.vue?raw";
 import profileSettingsSource from "../../src/pages/profile/settings.vue?raw";
-import { PROFILE_RECORD_TYPES, PROFILE_STAT_ENTRIES } from "../../src/pages/profile/profile-page";
+import {
+  PROFILE_RECORD_TYPES,
+  PROFILE_STAT_ENTRIES,
+  getRoleLabel,
+  getRolePillClass,
+} from "../../src/pages/profile/profile-page";
 
 describe("profile center pages", () => {
   it("registers personal center detail and record routes", () => {
@@ -77,6 +82,28 @@ describe("profile center pages", () => {
     expect(profileSettingsSource).toContain("logoutFromServer");
     expect(profileResetPasswordSource).toContain("changeCurrentPassword");
     expect(profileResetPasswordSource).toContain("重设密码");
+  });
+
+  it("uses role-specific labels and badge classes", () => {
+    expect(getRoleLabel("admin")).toBe("猫协管理员");
+    expect(getRoleLabel("member")).toBe("猫协成员");
+    expect(getRoleLabel("summer_volunteer")).toBe("暑期志愿者");
+    expect(getRolePillClass("admin")).toBe("role-pill--admin");
+    expect(getRolePillClass("member")).toBe("role-pill--member");
+    expect(getRolePillClass("summer_volunteer")).toBe("role-pill--volunteer");
+    expect(profileIndexSource).toContain(":class=\"rolePillClass\"");
+  });
+
+  it("uses shared map-title metrics on profile secondary pages", () => {
+    for (const source of [
+      profileDetailSource,
+      profileRecordsSource,
+      profileSettingsSource,
+      profileResetPasswordSource,
+    ]) {
+      expect(source).toContain("var(--catmap-page-title-top, 92rpx)");
+      expect(source).toContain("var(--catmap-page-title-font-size, 52rpx)");
+    }
   });
 
   it("loads record pages through the corresponding me endpoints", () => {

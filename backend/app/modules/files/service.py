@@ -18,7 +18,17 @@ from app.modules.files.presets import (
 )
 from app.modules.files.storage import ObjectStorage
 
-OWNER_TYPES = {"user", "cat", "map_point", "task", "task_checkin", "observation", "temporary"}
+OWNER_TYPES = {
+    "user",
+    "cat",
+    "map_point",
+    "task",
+    "task_checkin",
+    "observation",
+    "supply_point",
+    "supply_point_record",
+    "temporary",
+}
 VISIBILITIES = {"private", "internal", "public"}
 
 

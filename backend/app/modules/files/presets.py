@@ -26,7 +26,7 @@ class UsageTypeConfig:
     process_preset: str
     max_file_size_bytes: int
     max_batch_count: int
-    allowed_roles: tuple[str, ...] = ("member", "admin", "super_admin")
+    allowed_roles: tuple[str, ...] = ("member", "summer_volunteer", "admin", "super_admin")
 
 
 DEFAULT_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024
@@ -142,6 +142,13 @@ USAGE_TYPE_CONFIGS: dict[str, UsageTypeConfig] = {
         DEFAULT_MAX_FILE_SIZE_BYTES,
         DEFAULT_MAX_BATCH_COUNT,
     ),
+    "supply_record_photo": UsageTypeConfig(
+        "supply_record_photo",
+        "物资记录照片",
+        "normal_photo_v1",
+        DEFAULT_MAX_FILE_SIZE_BYTES,
+        DEFAULT_MAX_BATCH_COUNT,
+    ),
     "observation_photo": UsageTypeConfig(
         "observation_photo",
         "观察记录照片",
@@ -167,6 +174,8 @@ SCENE_VARIANT_MAP: dict[str, str] = {
     "task_detail_full": "display",
     "task_checkin_list": "thumb_md",
     "task_checkin_detail": "display",
+    "supply_record_list": "thumb_md",
+    "supply_record_detail": "display",
 }
 
 

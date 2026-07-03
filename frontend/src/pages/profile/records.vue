@@ -152,13 +152,14 @@ onLoad((options) => {
 .records-inner {
   box-sizing: border-box;
   min-height: 100vh;
-  padding: 74rpx 38rpx calc(env(safe-area-inset-bottom) + 48rpx);
+  padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx)
+    calc(env(safe-area-inset-bottom) + 48rpx);
 }
 
 .nav-row {
   display: flex;
   align-items: center;
-  gap: 24rpx;
+  gap: var(--catmap-page-title-gap, 14rpx);
 }
 
 .back-button {
@@ -181,8 +182,9 @@ onLoad((options) => {
 
 .nav-title {
   color: #171b22;
-  font-size: 42rpx;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
+  line-height: 1;
 }
 
 .empty-card {
@@ -198,7 +200,7 @@ onLoad((options) => {
 }
 
 .record-list {
-  height: calc(100vh - 178rpx);
+  height: calc(100vh - 220rpx);
   margin-top: 42rpx;
 }
 

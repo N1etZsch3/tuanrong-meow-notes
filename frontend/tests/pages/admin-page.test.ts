@@ -23,4 +23,16 @@ describe("admin entry pages", () => {
     expect(adminCreateUserSource).toContain("initial_password");
     expect(adminCreateUserSource).toContain("must_change_password");
   });
+
+  it("offers summer volunteer accounts and the trmx sequence placeholder", () => {
+    expect(adminCreateUserSource).toContain('"summer_volunteer"');
+    expect(adminCreateUserSource).toContain("trmx+四位序号");
+  });
+
+  it("uses shared map-title metrics on admin secondary pages", () => {
+    expect(adminIndexSource).toContain("var(--catmap-page-title-top, 92rpx)");
+    expect(adminIndexSource).toContain("var(--catmap-page-title-font-size, 52rpx)");
+    expect(adminCreateUserSource).toContain("var(--catmap-page-title-top, 92rpx)");
+    expect(adminCreateUserSource).toContain("var(--catmap-page-title-font-size, 52rpx)");
+  });
 });

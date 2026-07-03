@@ -127,6 +127,48 @@ def test_member_cannot_create_member_account(api_client, db_session):
     assert response.json()["code"] == 40302
 
 
+def test_admin_can_create_summer_volunteer_with_member_permissions(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin002",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    token = create_token(admin)
+
+    response = api_client.post(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "student_no": "trmx2026",
+            "initial_password": "Password123",
+            "role": "summer_volunteer",
+            "profile": {"nickname": "summer helper"},
+            "must_change_password": False,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["role"] == "summer_volunteer"
+
+    volunteer = db_session.query(User).filter_by(student_no="trmx2026").one()
+    volunteer_token = create_token(volunteer)
+    forbidden_response = api_client.post(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {volunteer_token}"},
+        json={
+            "student_no": "trmx2027",
+            "initial_password": "Password123",
+            "profile": {"nickname": "not allowed"},
+        },
+    )
+
+    assert forbidden_response.status_code == 403
+    assert forbidden_response.json()["code"] == 40302
+
+
 def test_admin_can_list_reset_status_and_role(api_client, db_session):
     admin = create_user(
         db_session,

@@ -141,6 +141,7 @@ def test_get_file_upload_config_returns_image_limits(api_client, db_session):
     assert "image/jpeg" in data["allowed_mime_types"]
     assert "user_avatar" in {item["usage_type"] for item in data["usage_types"]}
     assert "task_checkin_photo" in {item["usage_type"] for item in data["usage_types"]}
+    assert "supply_record_photo" in {item["usage_type"] for item in data["usage_types"]}
 
 
 def test_upload_user_avatar_allows_incomplete_profile_and_creates_variants(api_client, db_session):
@@ -261,6 +262,55 @@ def test_upload_task_point_photo_accepts_common_high_resolution_phone_image(api_
     assert data["source"]["source_height"] == 4000
     assert data["variants"]["display"]["width"] == 1280
     assert len(storage.objects) == 4
+
+
+def test_admin_can_upload_supply_point_scene_photo(api_client, db_session):
+    install_fake_storage(api_client)
+    admin = create_user(
+        db_session,
+        student_no="trmx0013",
+        password="trmx0013",
+        role="admin",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    token = create_token(admin)
+
+    response = api_client.post(
+        "/api/v1/files/images",
+        headers=auth_headers(token),
+        data={"usage_type": "map_point_scene", "owner_type": "supply_point"},
+        files={"file": ("supply-point.jpg", image_bytes(), "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["usage_type"] == "map_point_scene"
+    assert data["owner_type"] == "supply_point"
+
+
+def test_member_can_upload_supply_record_photo(api_client, db_session):
+    install_fake_storage(api_client)
+    member = create_user(
+        db_session,
+        student_no="trmx0014",
+        password="trmx0014",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    token = create_token(member)
+
+    response = api_client.post(
+        "/api/v1/files/images",
+        headers=auth_headers(token),
+        data={"usage_type": "supply_record_photo", "owner_type": "supply_point_record"},
+        files={"file": ("supply-record.jpg", image_bytes(), "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["usage_type"] == "supply_record_photo"
+    assert data["owner_type"] == "supply_point_record"
 
 
 def test_upload_rejects_corrupt_image(api_client, db_session):

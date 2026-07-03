@@ -89,14 +89,15 @@ function confirmLogout() {
 .settings-inner {
   box-sizing: border-box;
   min-height: 100vh;
-  padding: 78rpx 38rpx calc(env(safe-area-inset-bottom) + 48rpx);
+  padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx)
+    calc(env(safe-area-inset-bottom) + 48rpx);
 }
 
 .nav-row {
   display: flex;
   align-items: center;
-  gap: 22rpx;
-  margin-bottom: 38rpx;
+  gap: var(--catmap-page-title-gap, 14rpx);
+  margin-bottom: 32rpx;
 }
 
 .back-button {
@@ -129,27 +130,28 @@ function confirmLogout() {
 
 .nav-title {
   color: #171b22;
-  font-size: 48rpx;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
-  line-height: 1.08;
+  line-height: 1;
 }
 
 .nav-subtitle {
-  margin-top: 12rpx;
+  margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
   color: #656d78;
-  font-size: 24rpx;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .settings-card {
   border-radius: 28rpx;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 16rpx 42rpx rgba(42, 63, 43, 0.1);
-  padding: 10rpx 28rpx;
+  padding: 8rpx 28rpx;
 }
 
 .settings-row {
-  min-height: 116rpx;
+  min-height: 104rpx;
   margin: 0;
   padding: 0;
   border: 0;
@@ -185,9 +187,10 @@ function confirmLogout() {
 }
 
 .row-desc {
-  margin-top: 10rpx;
+  margin-top: 4rpx;
   color: #707883;
   font-size: 23rpx;
+  line-height: 1.25;
 }
 
 .row-chevron {

@@ -16,7 +16,7 @@
             <input
               v-model.trim="form.meow_no"
               class="field-input"
-              placeholder="留空自动生成 trmx0001"
+              placeholder="留空自动生成 trmx+四位序号"
               maxlength="8"
             />
           </view>
@@ -86,8 +86,8 @@ import type { UserRole } from "@/types/user";
 
 const departments = ["生存保障部", "活动部", "宣传部", "秘书部", "养护部"] as const;
 type Department = (typeof departments)[number];
-const roles: UserRole[] = ["member", "admin"];
-const roleLabels = ["普通成员", "管理员"];
+const roles: UserRole[] = ["member", "summer_volunteer", "admin"];
+const roleLabels = ["普通成员", "暑期志愿者", "管理员"];
 
 const userStore = useUserStore();
 const isSubmitting = ref(false);
@@ -200,13 +200,14 @@ function goBack() {
 .create-inner {
   box-sizing: border-box;
   min-height: 100vh;
-  padding: 74rpx 38rpx calc(env(safe-area-inset-bottom) + 48rpx);
+  padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx)
+    calc(env(safe-area-inset-bottom) + 48rpx);
 }
 
 .nav-row {
   display: flex;
   align-items: center;
-  gap: 24rpx;
+  gap: var(--catmap-page-title-gap, 14rpx);
 }
 
 .back-button {
@@ -234,14 +235,16 @@ function goBack() {
 
 .nav-title {
   color: #171b22;
-  font-size: 42rpx;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
+  line-height: 1;
 }
 
 .nav-subtitle {
-  margin-top: 8rpx;
+  margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
   color: #68717a;
-  font-size: 25rpx;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
+  line-height: 1.2;
 }
 
 .form-card,

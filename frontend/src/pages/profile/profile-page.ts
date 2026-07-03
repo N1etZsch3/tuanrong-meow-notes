@@ -80,7 +80,20 @@ export function getRoleLabel(role: string | undefined): string {
   if (role === "admin" || role === "super_admin") {
     return "猫协管理员";
   }
-  return "猫协志愿者";
+  if (role === "summer_volunteer") {
+    return "暑期志愿者";
+  }
+  return "猫协成员";
+}
+
+export function getRolePillClass(role: string | undefined): string {
+  if (role === "admin" || role === "super_admin") {
+    return "role-pill--admin";
+  }
+  if (role === "summer_volunteer") {
+    return "role-pill--volunteer";
+  }
+  return "role-pill--member";
 }
 
 export function buildRecordRoute(type: ProfileRecordType): string {

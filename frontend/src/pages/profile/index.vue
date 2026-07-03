@@ -17,7 +17,7 @@
           <view class="profile-main">
             <view class="name-row">
               <text class="nickname">{{ dashboard?.profile.nickname || "未命名成员" }}</text>
-              <text class="role-pill">{{ roleLabel }}</text>
+              <text class="role-pill" :class="rolePillClass">{{ roleLabel }}</text>
             </view>
             <text class="meta-line">喵喵号 {{ dashboard?.profile.meow_no || "--" }}</text>
             <text class="meta-line">部门：{{ dashboard?.profile.department || "未设置" }}</text>
@@ -103,6 +103,7 @@ import {
   PROFILE_STAT_ENTRIES,
   buildRecordRoute,
   getRoleLabel,
+  getRolePillClass,
   getStatValue,
   type ProfileRecordType,
 } from "./profile-page";
@@ -138,7 +139,9 @@ const profileMenuIconMap = {
 const profileAvatar = computed(
   () => dashboard.value?.profile.avatar_url || userStore.currentUser?.avatar_url || defaultAvatar,
 );
-const roleLabel = computed(() => getRoleLabel(dashboard.value?.profile.role || userStore.currentUser?.role));
+const currentRole = computed(() => dashboard.value?.profile.role || userStore.currentUser?.role);
+const roleLabel = computed(() => getRoleLabel(currentRole.value));
+const rolePillClass = computed(() => getRolePillClass(currentRole.value));
 
 async function loadDashboard() {
   if (isLoading.value) {
@@ -322,12 +325,25 @@ onShow(() => {
 
 .role-pill {
   border-radius: 12rpx;
-  background: #e3f1d6;
-  color: #2f8037;
   flex: 0 0 auto;
   font-size: 22rpx;
   font-weight: 800;
   padding: 8rpx 14rpx;
+}
+
+.role-pill--admin {
+  background: #e3f1d6;
+  color: #2f8037;
+}
+
+.role-pill--member {
+  background: #e8f1ff;
+  color: #2f68d8;
+}
+
+.role-pill--volunteer {
+  background: #fff1df;
+  color: #df7426;
 }
 
 .meta-line {

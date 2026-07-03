@@ -215,13 +215,13 @@ onLoad((query) => {
   z-index: 1;
   box-sizing: border-box;
   min-height: 100vh;
-  padding: 92rpx 38rpx 48rpx;
+  padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx) 48rpx;
 }
 
 .page-head {
   display: flex;
   align-items: center;
-  gap: 20rpx;
+  gap: var(--catmap-page-title-gap, 14rpx);
   margin-bottom: 30rpx;
 }
 
@@ -246,18 +246,20 @@ onLoad((query) => {
 .head-copy {
   display: flex;
   flex-direction: column;
-  gap: 10rpx;
+  gap: var(--catmap-page-title-subtitle-margin, 14rpx);
 }
 
 .page-title {
-  font-size: 48rpx;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
+  line-height: 1;
 }
 
 .page-subtitle {
   color: #6b7280;
-  font-size: 24rpx;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .state-panel,

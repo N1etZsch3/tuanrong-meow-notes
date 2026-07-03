@@ -1,4 +1,4 @@
-export type UserRole = "member" | "admin" | "super_admin";
+export type UserRole = "member" | "summer_volunteer" | "admin" | "super_admin";
 
 export type UserStatus = "active" | "inactive" | "blocked" | "left" | "deleted";
 

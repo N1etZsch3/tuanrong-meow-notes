@@ -333,15 +333,17 @@ function goBack() {
 
 .nav-title {
   color: #111827;
-  font-size: 44rpx;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
+  line-height: 1;
 }
 
 .nav-subtitle {
-  margin-top: 8rpx;
+  margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
   color: #6b7280;
-  font-size: 24rpx;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
   font-weight: 700;
+  line-height: 1.2;
 }
 
 .top-confirm {

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   checkinTask,
+  deleteSummerFeedingTask,
   getAdminTaskDetail,
   getTaskDetail,
   getTasks,
@@ -234,6 +235,23 @@ describe("tasks api", () => {
           status: "completed",
           reason: "管理员在任务编辑页手动调整完成状态",
         },
+      }),
+    );
+  });
+
+  it("soft deletes a summer feeding task from the admin edit flow", async () => {
+    const requestMock = mockSuccess({
+      task_id: "task-1",
+      deleted_at: "2026-07-02T12:30:00+08:00",
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await deleteSummerFeedingTask("admin-token", "task-1");
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        url: expect.stringContaining("/admin/tasks/task-1"),
       }),
     );
   });

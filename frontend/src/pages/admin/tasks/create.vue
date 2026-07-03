@@ -188,7 +188,16 @@
       </view>
     </scroll-view>
 
-    <view class="bottom-actions">
+    <view class="bottom-actions" :class="{ 'is-edit': isEditMode }">
+      <button
+        v-if="isEditMode"
+        class="delete-button"
+        :disabled="isSubmitting || isLoadingDetail"
+        hover-class="button-hover"
+        @tap="confirmDeleteTask"
+      >
+        删除任务
+      </button>
       <button class="cancel-button" hover-class="button-hover" @tap="goBack">取消</button>
       <button
         class="submit-button"
@@ -259,6 +268,7 @@ import { computed, reactive, ref } from "vue";
 
 import { uploadImage } from "@/api/files";
 import {
+  deleteSummerFeedingTask,
   getAdminTaskDetail,
   publishSummerFeedingTask,
   updateSummerFeedingTask,
@@ -535,6 +545,44 @@ async function submitTask() {
   }
 }
 
+function confirmDeleteTask() {
+  if (!isEditMode.value || isSubmitting.value || isLoadingDetail.value) {
+    return;
+  }
+
+  uni.showModal({
+    title: "删除任务",
+    content: "删除后该任务将不再对前端可见，地图上也不会显示对应标记。",
+    confirmText: "删除",
+    confirmColor: "#d14343",
+    success: (result) => {
+      if (result.confirm) {
+        void deleteTask();
+      }
+    },
+  });
+}
+
+async function deleteTask() {
+  const token = await getAccessToken();
+  if (!token || !editTaskId.value || isSubmitting.value) {
+    return;
+  }
+
+  isSubmitting.value = true;
+  try {
+    await deleteSummerFeedingTask(token, editTaskId.value);
+    uni.removeStorageSync(TASK_PUBLISH_LOCATION_STORAGE_KEY);
+    uni.showToast({ title: "任务已删除", icon: "success" });
+    uni.switchTab({ url: "/pages/tasks/index" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "删除失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    isSubmitting.value = false;
+  }
+}
+
 function taskPhotoToUploadedRef(photo: TaskPhotoDto): UploadedFileRef {
   return {
     file_id: photo.file_id,
@@ -682,6 +730,7 @@ onLoad((query) => {
 .outline-button::after,
 .photo-remove::after,
 .photo-upload::after,
+.delete-button::after,
 .date-picker-button::after,
 .date-tag::after,
 .calendar-nav::after,
@@ -1045,6 +1094,10 @@ onLoad((query) => {
   gap: 22rpx;
 }
 
+.bottom-actions.is-edit {
+  grid-template-columns: minmax(152rpx, 0.82fr) minmax(0, 1fr) minmax(0, 1fr);
+}
+
 .calendar-overlay {
   position: fixed;
   z-index: 12;
@@ -1169,6 +1222,7 @@ onLoad((query) => {
   color: #ffffff;
 }
 
+.delete-button,
 .cancel-button,
 .submit-button {
   height: 92rpx;
@@ -1178,6 +1232,12 @@ onLoad((query) => {
   font-size: 30rpx;
   font-weight: 900;
   line-height: 92rpx;
+}
+
+.delete-button {
+  border: 2rpx solid #d14343;
+  background: rgba(255, 255, 255, 0.96);
+  color: #d14343;
 }
 
 .cancel-button {

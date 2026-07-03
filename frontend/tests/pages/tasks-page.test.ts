@@ -255,6 +255,13 @@ describe("summer feeding task pages", () => {
     expect(adminCreateTaskSource).toContain("submitStatusChangeIfNeeded");
   });
 
+  it("shows a soft delete action on the admin task edit page", () => {
+    expect(adminCreateTaskSource).toContain("删除任务");
+    expect(adminCreateTaskSource).toContain("deleteSummerFeedingTask");
+    expect(adminCreateTaskSource).toContain("confirmDeleteTask");
+    expect(adminCreateTaskSource).toContain('v-if="isEditMode"');
+  });
+
   it("starts map-page navigation from the task detail navigation button", () => {
     expect(taskDetailSource).toContain("goNavigateToTaskPoint");
     expect(taskDetailSource).toContain("MAP_PENDING_NAVIGATION_STORAGE_KEY");

@@ -242,7 +242,7 @@ def test_admin_can_publish_summer_feeding_task_and_map_marker_is_visible(
     assert marker["cover_photo_url"] == "https://img.example.com/task-feeding-thumb.jpg"
     assert marker["extra"]["location_detail"] == "靠近教学楼B后方草坪"
     assert marker["extra"]["task_status_label"] == "进行中"
-    assert marker["extra"]["next_execute_date"] == "2026-07-02"
+    assert marker["extra"]["next_execute_date"] == "2026-07-09"
     assert marker["extra"]["associated_poi"]["poi_id"] == "7554185223751732838"
 
 
@@ -278,6 +278,13 @@ def test_cancelled_task_is_filterable_but_hidden_from_map_markers(
     assert [item["task_id"] for item in cancelled_items] == [data["task_id"]]
     assert cancelled_items[0]["status_label"] == "已取消"
 
+    edit_cancelled_response = api_client.patch(
+        f"/api/v1/admin/tasks/{data['task_id']}",
+        headers=auth_headers(admin),
+        json={"title": "恢复前可编辑的喂食任务"},
+    )
+    assert edit_cancelled_response.status_code == 200
+
     hidden_marker_response = api_client.get(
         "/api/v1/map/points?point_types=task&business_types=feeding",
         headers=auth_headers(member),
@@ -305,6 +312,34 @@ def test_cancelled_task_is_filterable_but_hidden_from_map_markers(
     assert restored_marker_response.status_code == 200
     restored_marker = restored_marker_response.json()["data"]["items"][0]
     assert restored_marker["business_id"] == data["task_id"]
+
+
+def test_cancelled_task_stays_hidden_from_map_even_if_point_is_public(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    data = publish_task(api_client, admin, campus)
+
+    task = db_session.get(Task, UUID(data["task_id"]))
+    point = db_session.get(MapPoint, UUID(data["map_point_id"]))
+    assert task is not None
+    assert point is not None
+    task.status = "cancelled"
+    point.status = "active"
+    point.visibility = "public"
+    point.deleted_at = None
+    db_session.commit()
+
+    response = api_client.get(
+        "/api/v1/map/points?point_types=task&business_types=feeding",
+        headers=auth_headers(member),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["items"] == []
 
 
 def test_admin_soft_deletes_task_and_removes_its_map_marker(
@@ -516,7 +551,7 @@ def test_member_list_and_detail_include_dates_photos_location_materials_and_acti
     assert item["required_items"] == "猫粮、水"
     assert item["cover_photo_url"] == "https://img.example.com/task-feeding-thumb.jpg"
     assert item["date_range"]["total_count"] == 3
-    assert item["next_execution"]["execute_date"] == "2026-07-02"
+    assert item["next_execution"]["execute_date"] == "2026-07-09"
 
     assert detail_response.status_code == 200
     detail = detail_response.json()["data"]
@@ -884,7 +919,7 @@ def test_map_init_and_points_use_dynamic_feeding_completion_filters(api_client, 
     completed_marker = completed_response.json()["data"]["items"][0]
     assert completed_marker["business_id"] == task_id
     assert completed_marker["extra"]["feeding_status"] == "completed"
-    assert completed_marker["extra"]["task_status_label"] == "已完成"
+    assert completed_marker["extra"]["task_status_label"] == "进行中"
 
     second_payload = publish_payload(campus)
     second_payload["title"] = "second feeding task"

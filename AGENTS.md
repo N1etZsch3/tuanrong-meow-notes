@@ -42,9 +42,10 @@ Before starting any development task, read documents in this order.
 1. `docs/校园猫协地图任务系统_项目说明文档.md`
 2. `docs/校园猫协地图任务系统_库表设计说明.md`
 3. `docs/接口文档/接口设计规范文档.md`
-4. The module-specific product or interface document for the task.
-5. The relevant table design document if the task touches persistence.
-6. The page prototype or visual asset if the task touches UI.
+4. `docs/开发进度.md`, focusing on the most recent entries for the modules affected by the task.
+5. The module-specific product or interface document for the task.
+6. The relevant table design document if the task touches persistence.
+7. The relevant non-prototype visual asset if the task touches UI.
 
 For authentication work, also read:
 
@@ -54,8 +55,6 @@ For authentication work, also read:
 For map work, also read:
 
 - `docs/模块功能/地图模块_详细功能说明.md`
-- `页面原型/首页.png`
-- `页面原型/地图选点.png`
 
 When more module documents are added under `docs/模块功能`, `docs/接口文档`, or `docs/库表文档`, prefer the latest module-specific document over inferred behavior.
 
@@ -169,7 +168,7 @@ Before coding a module, answer these points in the task notes or progress file:
 - Which docs were read?
 - Which APIs are needed or affected?
 - Which tables are needed or affected?
-- Which page prototypes or assets are relevant?
+- Which non-image references or assets are relevant?
 - Which upstream modules are required?
 - What is the smallest useful vertical slice?
 - What is explicitly out of scope for this branch?
@@ -472,27 +471,27 @@ Frontend typography and 中文字体 rules:
 Frontend development workflow:
 
 1. Work from a feature branch such as `feature/frontend-login`, `feature/frontend-map`, or `feature/frontend-tasks`.
-2. Before developing any page, find and open the matching page image under `frontend/页面原型`.
-3. Reproduce the target page's layout, spacing, colors, typography, icons, empty states, and interaction states as closely as possible.
-4. Check `frontend/页面原型代码` when it exists, but treat the page image under `frontend/页面原型` as the visual source of truth.
+2. Do not read or open images under `frontend/页面原型` unless the user explicitly asks.
+3. Reproduce page layout, spacing, colors, typography, icons, empty states, and interaction states from module docs, existing implementation, `frontend/页面原型代码` when available, and approved assets.
+4. Check `frontend/页面原型代码` when it exists, but do not treat images under `frontend/页面原型` as required reading or visual source of truth.
 5. Check `frontend/素材` before adding any icon, image, illustration, marker, empty-state image, or decorative asset.
 6. If the needed visual asset is not in `frontend/素材`, use a clear placeholder component or placeholder block with a meaningful label. Do not use a random replacement icon, third-party image, or near-match asset.
-7. Keep page implementation scoped to the current page or module. Do not redesign other pages while matching one prototype.
+7. Keep page implementation scoped to the current page or module. Do not redesign other pages while matching one prototype or reference.
 8. Run `npm run type-check` and the relevant uni-app build command before handoff.
 
 Frontend data rules:
 
 - Keep TypeScript types aligned with backend `snake_case` fields.
 - Use Pinia for user identity, task state, map filters, and other shared state.
-- Handle loading, empty, error, permission-denied, and image-failed states using existing prototype/assets where available.
-- Do not invent unrelated visual systems when page prototypes exist.
+- Handle loading, empty, error, permission-denied, and image-failed states using existing implementation/assets where available.
+- Do not invent unrelated visual systems when page references exist.
 - Do not substitute missing icons or components with arbitrary online assets or unrelated local assets.
-- Prefer existing assets and prototype styles over new visual abstractions.
+- Prefer existing assets and reference styles over new visual abstractions.
 - Map pages should prioritize usable map area and task/cat/supply point interaction.
 
 Prototype and asset folders:
 
-- `frontend/页面原型`
+- `frontend/页面原型` is ignored by git and should not be read for images unless the user explicitly asks.
 - `frontend/页面原型代码`
 - `frontend/素材`
 
@@ -624,9 +623,9 @@ Do not mark a module as complete just because code was written.
 2. Read `docs/校园猫协地图任务系统_项目说明文档.md`.
 3. Read `docs/校园猫协地图任务系统_库表设计说明.md`.
 4. Read `docs/接口文档/接口设计规范文档.md`.
-5. Check `docs/开发进度.md` if it exists.
+5. Read `docs/开发进度.md`, especially the recent entries for the module you will change.
 6. Check current files and branch state.
 7. Select one module slice.
-8. Read that module's docs and prototypes.
+8. Read that module's docs and non-image references.
 9. Implement the smallest useful vertical slice.
 10. Verify and update progress before handoff.

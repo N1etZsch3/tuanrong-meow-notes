@@ -460,11 +460,6 @@ function getTaskMarkerLocationDetail(marker: MapPointMarkerDto): string | null {
 }
 
 function getTaskMarkerStatusKey(marker: MapPointMarkerDto): string | null {
-  const feedingStatus = getStringExtra(marker.extra, "feeding_status");
-  if (feedingStatus === "completed") {
-    return "completed";
-  }
-
   const taskStatus = getStringExtra(marker.extra, "task_status");
   if (
     taskStatus === "completed" ||
@@ -475,8 +470,12 @@ function getTaskMarkerStatusKey(marker: MapPointMarkerDto): string | null {
     return taskStatus;
   }
 
+  const feedingStatus = getStringExtra(marker.extra, "feeding_status");
   if (feedingStatus === "pending") {
     return "in_progress";
+  }
+  if (feedingStatus === "completed") {
+    return "completed";
   }
 
   return taskStatus || feedingStatus;

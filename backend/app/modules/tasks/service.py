@@ -995,7 +995,7 @@ def update_summer_feeding_task(
     payload: SummerFeedingTaskUpdateRequest,
 ) -> dict:
     task = get_task_or_raise(db, task_id, include_private=True)
-    if task.status not in {"in_progress", "completed"}:
+    if task.status not in {"in_progress", "completed", "cancelled", "archived"}:
         raise APIError(
             code=TASK_ERROR_STATUS_CONFLICT,
             message="当前任务状态不允许修改",

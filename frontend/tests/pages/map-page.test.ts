@@ -264,6 +264,16 @@ describe("map page shell behavior", () => {
         extra: { task_status: "archived", task_status_label: "已归档" },
       }).status_key,
     ).toBe("archived");
+    const completedTodayMarker = mapMarkerToShellItem({
+      ...baseMarker,
+      extra: {
+        task_status: "in_progress",
+        task_status_label: "进行中",
+        feeding_status: "completed",
+      },
+    });
+    expect(completedTodayMarker.status_key).toBe("in_progress");
+    expect(completedTodayMarker.status_label).toBe("进行中");
     expect(mapSearchResultToShellItem({
       result_type: "task",
       map_point_id: "point-1",

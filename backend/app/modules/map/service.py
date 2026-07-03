@@ -55,6 +55,13 @@ POINT_TYPE_FILTER_META = {
     },
 }
 POINT_TYPE_FILTER_ORDER = ("task", "cat", "supply", "landmark")
+MAP_VISIBLE_TASK_STATUSES = {"in_progress", "completed"}
+TASK_STATUS_LABELS = {
+    "in_progress": "进行中",
+    "completed": "已完成",
+    "cancelled": "已取消",
+    "archived": "已归档",
+}
 
 
 def as_float(value) -> float | None:
@@ -540,9 +547,25 @@ def task_by_map_point_ids(db: Session, points: list[MapPoint]) -> dict[UUID, Tas
             selectinload(Task.execution_dates),
             selectinload(Task.photos).selectinload(TaskPhoto.file_asset),
         )
-        .where(Task.map_point_id.in_(point_ids), Task.deleted_at.is_(None))
+        .where(
+            Task.map_point_id.in_(point_ids),
+            Task.deleted_at.is_(None),
+        )
     ).all()
     return {task.map_point_id: task for task in tasks}
+
+
+def filter_points_with_visible_task_business(
+    points: list[MapPoint],
+    task_lookup: dict[UUID, Task],
+) -> list[MapPoint]:
+    return [
+        point
+        for point in points
+        if point.point_type != "task"
+        or task_lookup.get(point.id) is None
+        or task_lookup[point.id].status in MAP_VISIBLE_TASK_STATUSES
+    ]
 
 
 def next_task_execution_date(task: Task) -> str | None:
@@ -595,16 +618,7 @@ def feeding_task_marker_status(task: Task | None) -> str | None:
 def task_status_label(task: Task | None) -> str | None:
     if task is None:
         return None
-    feeding_status = feeding_task_marker_status(task)
-    if feeding_status == "completed" or task.status == "completed":
-        return "已完成"
-    if task.status == "in_progress":
-        return "进行中"
-    if task.status == "cancelled":
-        return "已取消"
-    if task.status == "archived":
-        return "已归档"
-    return task.status
+    return TASK_STATUS_LABELS.get(task.status, task.status)
 
 
 def task_marker_extra(task: Task | None) -> dict:
@@ -732,6 +746,7 @@ def map_filter_options(
 ) -> list[dict]:
     points = db.scalars(visible_points_statement().where(MapPoint.campus_id == campus.id)).all()
     task_lookup = task_by_map_point_ids(db, points)
+    points = filter_points_with_visible_task_business(points, task_lookup)
     point_types = {
         point.point_type
         for point in points
@@ -909,6 +924,7 @@ def map_points(
             if point_business_type(point, configs) in business_filter
         ]
     task_lookup = task_by_map_point_ids(db, points)
+    points = filter_points_with_visible_task_business(points, task_lookup)
     if normalized_filter_key in {"feeding_pending", "feeding_completed"}:
         target_status = normalized_filter_key.replace("feeding_", "")
         points = [

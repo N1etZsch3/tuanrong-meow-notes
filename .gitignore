@@ -16,7 +16,12 @@ ssl_key/
 *.log
 logs/
 *.burp
+
+# Local project artifacts
+test/
 喵扎特抓包/
+页面原型/
+frontend/页面原型/
 
 # Node / frontend
 node_modules/

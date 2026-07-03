@@ -215,6 +215,11 @@ export interface TaskStatusUpdateResponse {
   updated_at: string;
 }
 
+export interface TaskDeleteResponse {
+  task_id: string;
+  deleted_at: string;
+}
+
 export function getTasks(
   accessToken: string,
   query: TaskListQuery = {},
@@ -292,6 +297,17 @@ export function updateSummerFeedingTaskStatus(
     url: API_ENDPOINTS.admin.taskStatus(taskId),
     method: "PATCH",
     data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function deleteSummerFeedingTask(
+  accessToken: string,
+  taskId: string,
+): Promise<TaskDeleteResponse> {
+  return request<TaskDeleteResponse>({
+    url: API_ENDPOINTS.admin.task(taskId),
+    method: "DELETE",
     token: accessToken,
   });
 }

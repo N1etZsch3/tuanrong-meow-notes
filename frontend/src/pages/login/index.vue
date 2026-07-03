@@ -447,12 +447,16 @@ watch(
 .input-with-action {
   display: flex;
   align-items: center;
+  overflow: hidden;
 }
 
 .inline-input {
   flex: 1;
+  width: 0;
+  height: 100%;
   border: 0;
   box-shadow: none;
+  background: transparent;
 }
 
 .icon-action {

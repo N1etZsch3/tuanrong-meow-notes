@@ -5,7 +5,7 @@
         <button class="back-button" @tap="goBack">‹</button>
         <view>
           <text class="nav-title">管理员入口</text>
-          <text class="nav-subtitle">成员账号与喂食任务</text>
+          <text class="nav-subtitle">成员账号、喂食任务与物资点</text>
         </view>
       </view>
 
@@ -32,6 +32,15 @@
           </view>
           <text class="action-chevron">›</text>
         </button>
+
+        <button class="admin-action" @tap="goCreateSupplyPoint">
+          <view class="action-icon action-icon-supply">物</view>
+          <view class="action-copy">
+            <text class="action-title">新建物资点</text>
+            <text class="action-subtitle">创建地图物资点、配置初始物资和路线照片</text>
+          </view>
+          <text class="action-chevron">›</text>
+        </button>
       </view>
     </view>
   </view>
@@ -48,6 +57,10 @@ function goCreateUser() {
 
 function goPublishTask() {
   uni.navigateTo({ url: "/pages/admin/tasks/create" });
+}
+
+function goCreateSupplyPoint() {
+  uni.navigateTo({ url: "/pages/admin/supplies/create" });
 }
 
 function goBack() {
@@ -148,6 +161,12 @@ function goBack() {
 
 .action-icon-task {
   background: #ff8b22;
+}
+
+.action-icon-supply {
+  background: #287c31;
+  font-size: 34rpx;
+  line-height: 72rpx;
 }
 
 .action-copy {

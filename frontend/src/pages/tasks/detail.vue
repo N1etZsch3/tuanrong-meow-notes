@@ -1226,11 +1226,18 @@ onLoad((query) => {
   gap: 22rpx;
 }
 
+.section-card > .timeline {
+  max-height: 520rpx;
+  overflow-y: auto;
+}
+
 .execution-groups {
   margin-top: 22rpx;
   display: flex;
   flex-direction: column;
   gap: 18rpx;
+  max-height: 620rpx;
+  overflow-y: auto;
 }
 
 .execution-group-card {
@@ -1323,6 +1330,7 @@ onLoad((query) => {
   overflow-x: auto;
   overflow-y: hidden;
   white-space: nowrap;
+  max-height: 148rpx;
 }
 
 .checkin-photo-cell {

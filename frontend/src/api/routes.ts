@@ -50,6 +50,9 @@ export const API_ENDPOINTS = {
   },
   admin: {
     users: "/admin/users",
+    supplyPoints: "/admin/supply-points",
+    supplyPoint: (supplyPointId: ApiPathParam) =>
+      `/admin/supply-points/${encodePathParam(supplyPointId)}`,
     summerFeedingTask: "/admin/tasks/summer-feeding",
     task: (taskId: ApiPathParam) => `/admin/tasks/${encodePathParam(taskId)}`,
     taskStatus: (taskId: ApiPathParam) =>
@@ -101,5 +104,11 @@ export const API_ENDPOINTS = {
       `/tasks/${encodePathParam(taskId)}/checkins`,
     checkinPhoto: (taskId: ApiPathParam, photoId: ApiPathParam) =>
       `/tasks/${encodePathParam(taskId)}/checkin-photos/${encodePathParam(photoId)}`,
+  },
+  supplies: {
+    detail: (supplyPointId: ApiPathParam) =>
+      `/supply-points/${encodePathParam(supplyPointId)}`,
+    records: (supplyPointId: ApiPathParam) =>
+      `/supply-points/${encodePathParam(supplyPointId)}/records`,
   },
 } as const;

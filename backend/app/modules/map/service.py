@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.errors import APIError, ErrorCode
 from app.modules.auth.models import User
 from app.modules.map.models import Campus, CampusArea, MapMarkerConfig, MapPoint, MapPointPhoto
+from app.modules.supplies.models import SupplyPoint, SupplyPointRecord
 from app.modules.tasks.execution_state import (
     active_execution as select_active_execution,
 )
@@ -588,6 +589,29 @@ def task_by_map_point_ids(db: Session, points: list[MapPoint]) -> dict[UUID, Tas
     return {task.map_point_id: task for task in tasks}
 
 
+def supply_by_map_point_ids(db: Session, points: list[MapPoint]) -> dict[UUID, SupplyPoint]:
+    point_ids = [point.id for point in points if point.point_type == "supply"]
+    if not point_ids:
+        return {}
+    supplies = db.scalars(
+        select(SupplyPoint)
+        .options(
+            selectinload(SupplyPoint.map_point).selectinload(MapPoint.photos),
+            selectinload(SupplyPoint.items),
+            selectinload(SupplyPoint.records)
+            .selectinload(SupplyPointRecord.recorder)
+            .selectinload(User.profile),
+            selectinload(SupplyPoint.records).selectinload(SupplyPointRecord.items),
+        )
+        .where(
+            SupplyPoint.map_point_id.in_(point_ids),
+            SupplyPoint.deleted_at.is_(None),
+            SupplyPoint.status == "active",
+        )
+    ).all()
+    return {supply.map_point_id: supply for supply in supplies}
+
+
 def filter_points_with_visible_task_business(
     points: list[MapPoint],
     task_lookup: dict[UUID, Task],
@@ -684,6 +708,81 @@ def task_marker_extra(task: Task | None) -> dict:
     return extra
 
 
+def supply_item_label(item) -> str:
+    return f"{item.item_name} x{item.quantity}{item.unit or ''}"
+
+
+def supply_item_payload(item) -> dict:
+    return {
+        "item_id": getattr(item, "id", None),
+        "source_item_id": getattr(item, "supply_point_item_id", None),
+        "item_name": item.item_name,
+        "item_type": item.item_type,
+        "quantity": item.quantity,
+        "unit": item.unit,
+        "icon_key": item.icon_key,
+        "color_key": item.color_key,
+        "is_custom": item.is_custom,
+        "sort_order": item.sort_order,
+        "label": supply_item_label(item),
+    }
+
+
+def supply_active_items(supply: SupplyPoint) -> list:
+    return sorted(
+        [item for item in supply.items if item.deleted_at is None],
+        key=lambda item: item.sort_order,
+    )
+
+
+def supply_latest_record(supply: SupplyPoint):
+    records = sorted(
+        [record for record in supply.records if record.deleted_at is None],
+        key=lambda record: record.recorded_at or record.created_at,
+        reverse=True,
+    )
+    return records[0] if records else None
+
+
+def supply_marker_extra(supply: SupplyPoint | None) -> dict:
+    if supply is None:
+        return {}
+    latest = supply_latest_record(supply)
+    current_items = (
+        [
+            supply_item_payload(item)
+            for item in sorted(latest.items, key=lambda item: item.sort_order)
+        ]
+        if latest
+        else [supply_item_payload(item) for item in supply_active_items(supply)]
+    )
+    return {
+        "supply_point_id": supply.id,
+        "status": supply.status,
+        "current_state_source": "latest_record" if latest else "initial",
+        "current_items": current_items,
+        "latest_record": {
+            "record_id": latest.id,
+            "recorded_at": latest.recorded_at,
+            "match_status": latest.match_status,
+            "display_tone": latest.display_tone,
+        }
+        if latest
+        else None,
+    }
+
+
+def supply_cover_photo(supply: SupplyPoint | None) -> str | None:
+    if supply is None:
+        return None
+    photos = [photo for photo in supply.map_point.photos if photo.deleted_at is None]
+    cover = next((photo for photo in photos if photo.id == supply.map_point.cover_photo_id), None)
+    if cover:
+        return cover.thumbnail_url or cover.file_url
+    first_photo = min(photos, key=lambda item: item.sort_order, default=None)
+    return (first_photo.thumbnail_url or first_photo.file_url) if first_photo else None
+
+
 def point_label(point: MapPoint, configs: dict[str, MapMarkerConfig]) -> str:
     if point.icon_key and point.icon_key in configs:
         return configs[point.icon_key].label
@@ -703,10 +802,12 @@ def point_marker_payload(
     user_lng: float | None = None,
     user_lat: float | None = None,
     task: Task | None = None,
+    supply: SupplyPoint | None = None,
 ) -> dict:
     lng = as_float(point.lng)
     lat = as_float(point.lat)
     extra = task_marker_extra(task)
+    extra.update(supply_marker_extra(supply))
     associated_poi = associated_poi_payload(point)
     if associated_poi:
         extra["associated_poi"] = associated_poi
@@ -719,7 +820,7 @@ def point_marker_payload(
         "point_type": point.point_type,
         "point_scope": point.point_scope,
         "business_type": point_business_type(point, configs),
-        "business_id": task.id if task else point.id,
+        "business_id": task.id if task else (supply.id if supply else point.id),
         "name": point.name,
         "subtitle": point.subtitle,
         "lng": lng,
@@ -731,7 +832,9 @@ def point_marker_payload(
         "display_level": point.display_level,
         "visibility": point.visibility,
         "status": point.status,
-        "cover_photo_url": task_cover_photo(task) or point_cover_photo(point),
+        "cover_photo_url": (
+            task_cover_photo(task) or supply_cover_photo(supply) or point_cover_photo(point)
+        ),
         "preview_enabled": point.preview_enabled,
         "preview_min_zoom": point.preview_min_zoom,
         "label_min_zoom": point.label_min_zoom,
@@ -972,6 +1075,7 @@ def map_points(
             if point_business_type(point, configs) in business_filter
         ]
     task_lookup = task_by_map_point_ids(db, points)
+    supply_lookup = supply_by_map_point_ids(db, points)
     points = filter_points_with_visible_task_business(points, task_lookup)
     if normalized_filter_key in {"feeding_pending", "feeding_completed"}:
         target_status = normalized_filter_key.replace("feeding_", "")
@@ -988,6 +1092,7 @@ def map_points(
                 user_lng=user_lng,
                 user_lat=user_lat,
                 task=task_lookup.get(point.id),
+                supply=supply_lookup.get(point.id),
             )
             for point in points
         ],
@@ -1316,18 +1421,23 @@ def summary(
     point = get_visible_point(db, point_id)
     configs = marker_configs_by_key(db)
     task = task_by_map_point_ids(db, [point]).get(point.id)
+    supply = supply_by_map_point_ids(db, [point]).get(point.id)
     lng = as_float(point.lng)
     lat = as_float(point.lat)
     business_type = point_business_type(point, configs)
     tags = [point_label(point, configs), point_label_for_type(point.point_type, business_type)]
+    business_summary = task_marker_extra(task)
+    business_summary.update(supply_marker_extra(supply))
     return {
         "point_id": point.id,
         "point_type": point.point_type,
         "business_type": business_type,
-        "business_id": task.id if task else point.id,
+        "business_id": task.id if task else (supply.id if supply else point.id),
         "title": point.name,
         "subtitle": point.subtitle,
-        "cover_photo_url": task_cover_photo(task) or point_cover_photo(point),
+        "cover_photo_url": (
+            task_cover_photo(task) or supply_cover_photo(supply) or point_cover_photo(point)
+        ),
         "tags": list(dict.fromkeys(tag for tag in tags if tag)),
         "description": point.description,
         "location_name": point.location_name,
@@ -1345,7 +1455,7 @@ def summary(
         ),
         "associated_poi": associated_poi_payload(point),
         "photos": summary_photos(point, task),
-        "business_summary": task_marker_extra(task),
+        "business_summary": business_summary,
         "actions": [
             {
                 "key": "navigate",
@@ -1362,14 +1472,18 @@ def summary(
                 "enabled": True,
                 "disabled_reason": None,
                 "method": None,
-                "path": detail_path(point, task),
+                "path": detail_path(point, task, supply),
                 "target_type": "page",
             },
         ],
     }
 
 
-def detail_path(point: MapPoint, task: Task | None = None) -> str:
+def detail_path(
+    point: MapPoint,
+    task: Task | None = None,
+    supply: SupplyPoint | None = None,
+) -> str:
     if point.point_type == "task":
         if task:
             return f"/pages/tasks/detail?task_id={task.id}"
@@ -1377,6 +1491,8 @@ def detail_path(point: MapPoint, task: Task | None = None) -> str:
     if point.point_type == "cat":
         return f"/pages/cats/detail?map_point_id={point.id}"
     if point.point_type == "supply":
+        if supply:
+            return f"/pages/supplies/detail?supply_point_id={supply.id}"
         return f"/pages/supplies/detail?map_point_id={point.id}"
     return f"/pages/map/points/detail?point_id={point.id}"
 

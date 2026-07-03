@@ -57,6 +57,13 @@
 			}
 		},
 		{
+			"path": "pages/supplies/detail",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "物资点详情"
+			}
+		},
+		{
 			"path": "pages/profile/index",
 			"style": {
 				"navigationStyle": "custom",
@@ -103,6 +110,20 @@
 			"style": {
 				"navigationStyle": "custom",
 				"navigationBarTitleText": "选择任务位置"
+			}
+		},
+		{
+			"path": "pages/admin/supplies/create",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "新建物资点"
+			}
+		},
+		{
+			"path": "pages/admin/supplies/location",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "选择物资点位置"
 			}
 		},
 		{

@@ -104,7 +104,7 @@
 
           <view v-if="associatedPoi" class="section-card poi-section">
             <view class="section-head">
-              <text class="section-title">公共地点</text>
+              <text class="section-title">附近地标</text>
               <button
                 class="poi-map-button"
                 hover-class="button-hover"

@@ -14,7 +14,7 @@ export default defineConfig(({ command, mode }) => {
   });
 
   return {
-    publicDir: "favicon",
+    publicDir: false,
     plugins: [uni()],
   };
 });

@@ -81,7 +81,7 @@ import {
 } from "@/api/admin-map";
 import { useUserStore } from "@/stores/user";
 
-import loadingBackground from "../../../../素材/加载页素材/加载页背景.jpg";
+import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 
 type LoadState = "loading" | "ready" | "error";
 

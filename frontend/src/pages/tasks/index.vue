@@ -204,9 +204,9 @@ import {
   setCachedTaskList,
 } from "@/pages/tasks/task-list-cache";
 
-import taskIcon from "../../../素材/icon/任务.png";
+import taskIcon from "../../../素材/png/地图点/日常任务.png";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
-import loadingBackground from "../../../素材/加载页素材/加载页背景.jpg";
+import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
 import filterArrowIcon from "../../../素材/png/地图点/箭头.png";
 import clearFilterIcon from "../../../素材/svg/猫咪库/删除.svg";

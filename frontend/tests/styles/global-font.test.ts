@@ -28,6 +28,6 @@ describe("global Chinese font rules", () => {
     expect(appVue).toContain("--catmap-page-title-icon-size: 48rpx");
     expect(appVue).toContain("--catmap-page-title-subtitle-margin: 14rpx");
     expect(appVue).toContain("--catmap-page-title-subtitle-size: 24rpx");
-    expect(agents).toContain("frontend/素材/加载页素材/加载页背景.jpg");
+    expect(agents).toContain("frontend/素材/加载页素材/背景.jpg");
   });
 });

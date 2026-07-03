@@ -349,7 +349,7 @@ import landmarkPointIcon from "../../../素材/png/地图点/地标.png";
 import supplyPointMarkerIcon from "../../../素材/png/地图点/物资点.png";
 import locationIcon from "../../../素材/png/菜单/定位.png";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
-import loadingBackground from "../../../素材/加载页素材/加载页背景.jpg";
+import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 import {
   ALL_MAP_FILTER_KEY,
   HBNU_CAMPUS,

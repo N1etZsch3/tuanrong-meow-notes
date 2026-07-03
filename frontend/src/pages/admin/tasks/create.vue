@@ -293,8 +293,8 @@ import {
   type SelectedTaskLocation,
 } from "@/pages/tasks/task-page";
 
-import taskIcon from "../../../../素材/icon/任务.png";
-import loadingBackground from "../../../../素材/加载页素材/加载页背景.jpg";
+import taskIcon from "../../../../素材/png/地图点/日常任务.png";
+import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 
 const userStore = useUserStore();
 const form = reactive<FeedingTaskDraft>(createDefaultFeedingTaskDraft());

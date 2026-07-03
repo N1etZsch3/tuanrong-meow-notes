@@ -58,7 +58,7 @@ import {
   type DefaultStateKey,
 } from "./default-state";
 
-import loadingBackground from "../../素材/加载页素材/加载页背景.jpg";
+import loadingBackground from "../../素材/加载页素材/背景.jpg";
 
 const ACTION_ICONS: Record<string, string> = {
   back: "‹",

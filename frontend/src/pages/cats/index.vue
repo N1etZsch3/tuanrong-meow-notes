@@ -224,7 +224,7 @@ import {
   getCatTagTone,
   normalizeCatStats,
 } from "./cats-page";
-import loadingBackground from "../../../素材/加载页素材/加载页背景.jpg";
+import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 import titleMascotIcon from "../../../素材/svg/萌猫/寿司.svg";
 import totalStatsIcon from "../../../素材/svg/猫咪库/总计.svg";
 import activeStatsIcon from "../../../素材/svg/猫咪库/盾牌.svg";
@@ -537,8 +537,8 @@ onShow(() => {
 }
 
 .page-title-icon {
-  width: var(--catmap-page-title-icon-size, 48rpx);
-  height: var(--catmap-page-title-icon-size, 48rpx);
+  width: 64rpx;
+  height: 64rpx;
 }
 
 .page-title-subtitle {

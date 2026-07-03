@@ -4,6 +4,8 @@ import pagesJson from "../../src/pages.json?raw";
 import profileDetailSource from "../../src/pages/profile/detail.vue?raw";
 import profileIndexSource from "../../src/pages/profile/index.vue?raw";
 import profileRecordsSource from "../../src/pages/profile/records.vue?raw";
+import profileResetPasswordSource from "../../src/pages/profile/reset-password.vue?raw";
+import profileSettingsSource from "../../src/pages/profile/settings.vue?raw";
 import { PROFILE_RECORD_TYPES, PROFILE_STAT_ENTRIES } from "../../src/pages/profile/profile-page";
 
 describe("profile center pages", () => {
@@ -14,7 +16,6 @@ describe("profile center pages", () => {
 
   it("renders the real dashboard instead of the under-development placeholder", () => {
     expect(profileIndexSource).toContain("getMeDashboard");
-    expect(profileIndexSource).toContain("logoutFromServer");
     expect(profileIndexSource).toContain("AppTabBar active-key=\"profile\"");
     expect(profileIndexSource).toContain("scroll-view");
     expect(profileIndexSource).not.toContain("个人中心建设中");
@@ -65,6 +66,17 @@ describe("profile center pages", () => {
     expect(profileDetailSource).toContain("getMyProfile");
     expect(profileDetailSource).toContain("updateMyProfile");
     expect(profileDetailSource).toContain("联系方式");
+  });
+
+  it("routes account settings to a dedicated settings page with logout and reset password actions", () => {
+    expect(pagesJson).toContain("pages/profile/settings");
+    expect(pagesJson).toContain("pages/profile/reset-password");
+    expect(profileIndexSource).toContain("/pages/profile/settings");
+    expect(profileIndexSource).not.toContain('class="logout-button"');
+    expect(profileSettingsSource).toContain("/pages/profile/reset-password");
+    expect(profileSettingsSource).toContain("logoutFromServer");
+    expect(profileResetPasswordSource).toContain("changeCurrentPassword");
+    expect(profileResetPasswordSource).toContain("重设密码");
   });
 
   it("loads record pages through the corresponding me endpoints", () => {

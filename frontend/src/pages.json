@@ -78,6 +78,20 @@
 			}
 		},
 		{
+			"path": "pages/profile/settings",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "账号设置"
+			}
+		},
+		{
+			"path": "pages/profile/reset-password",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "重设密码"
+			}
+		},
+		{
 			"path": "pages/profile/records",
 			"style": {
 				"navigationStyle": "custom",

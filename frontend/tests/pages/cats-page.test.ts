@@ -27,7 +27,7 @@ describe("cats page behavior", () => {
   });
 
   it("uses the shared app background and map-page title treatment", () => {
-    expect(catsPageSource).toContain("加载页背景.jpg");
+    expect(catsPageSource).toContain("背景.jpg");
     expect(catsPageSource).toContain("萌猫/寿司.svg");
     expect(catsPageSource).toContain("page-title-row");
     expect(catsPageSource).toContain("page-title-icon");

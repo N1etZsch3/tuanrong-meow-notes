@@ -58,7 +58,7 @@
         </button>
 
         <view class="menu-card">
-          <button class="menu-row" @tap="goProfileDetail">
+          <button class="menu-row" @tap="goAccountSettings">
             <image class="menu-icon-image" :src="profileMenuIconMap.settings" mode="aspectFit" />
             <text class="menu-label">账号设置</text>
             <text class="menu-chevron">›</text>
@@ -79,8 +79,6 @@
             <text class="menu-chevron">›</text>
           </button>
         </view>
-
-        <button class="logout-button" @tap="confirmLogout">退出登录</button>
 
         <view v-if="isLoading" class="state-line">正在加载个人中心...</view>
         <view v-else-if="errorMessage" class="state-line is-error" @tap="loadDashboard">
@@ -110,7 +108,7 @@ import {
 } from "./profile-page";
 import defaultAvatar from "../../../素材/svg/萌猫/橘猫.svg";
 import catLineArt from "../../../素材/svg/萌猫/猫.svg";
-import favoriteCat from "../../../素材/svg/用户页/猫咪插画.svg";
+import favoriteCat from "../../../素材/svg/萌猫/黑猫.svg";
 import taskStatsIcon from "../../../素材/svg/用户页/任务.svg";
 import inProgressStatsIcon from "../../../素材/svg/用户页/进行中.svg";
 import settingsIcon from "../../../素材/svg/用户页/设置.svg";
@@ -176,6 +174,10 @@ function goProfileDetail() {
   uni.navigateTo({ url: "/pages/profile/detail" });
 }
 
+function goAccountSettings() {
+  uni.navigateTo({ url: "/pages/profile/settings" });
+}
+
 function goRecord(type: ProfileRecordType) {
   uni.navigateTo({ url: buildRecordRoute(type) });
 }
@@ -194,24 +196,6 @@ function goAdmin() {
 
 function showPendingToast(title: string) {
   uni.showToast({ title: `${title}暂未开放`, icon: "none" });
-}
-
-function confirmLogout() {
-  uni.showModal({
-    title: "退出登录",
-    content: "确认退出当前账号吗？",
-    confirmText: "退出",
-    success: async (result) => {
-      if (!result.confirm) {
-        return;
-      }
-      try {
-        await userStore.logoutFromServer();
-      } finally {
-        uni.reLaunch({ url: LOGIN_ROUTE });
-      }
-    },
-  });
 }
 
 onShow(() => {
@@ -393,8 +377,7 @@ onShow(() => {
 
 .stat-button::after,
 .favorite-card::after,
-.menu-row::after,
-.logout-button::after {
+.menu-row::after {
   border: 0;
 }
 
@@ -571,18 +554,6 @@ onShow(() => {
 
 .menu-chevron {
   font-size: 46rpx;
-}
-
-.logout-button {
-  width: 100%;
-  height: 86rpx;
-  margin: 28rpx 0 0;
-  border-radius: 26rpx;
-  background: #fff5f2;
-  color: #c34839;
-  font-size: 28rpx;
-  font-weight: 900;
-  line-height: 86rpx;
 }
 
 .state-line {

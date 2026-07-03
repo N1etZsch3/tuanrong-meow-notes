@@ -241,14 +241,14 @@ import {
   type SupplyPointDraft,
 } from "@/pages/admin/supplies/supply-page";
 
-import supplyIcon from "../../../../素材/icon/物资.png";
+import supplyIcon from "../../../../素材/png/地图点/物资点.png";
 import carrierIcon from "../../../../素材/svg/物资点/航空箱.svg";
 import catFoodIcon from "../../../../素材/svg/物资点/猫粮.svg";
 import glovesIcon from "../../../../素材/svg/物资点/手套.svg";
 import netIcon from "../../../../素材/svg/物资点/网兜.svg";
 import trapIcon from "../../../../素材/svg/物资点/诱捕笼.svg";
 import waterIcon from "../../../../素材/svg/物资点/水.svg";
-import loadingBackground from "../../../../素材/加载页素材/加载页背景.jpg";
+import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 
 const userStore = useUserStore();
 const form = reactive<SupplyPointDraft>(createDefaultSupplyDraft());

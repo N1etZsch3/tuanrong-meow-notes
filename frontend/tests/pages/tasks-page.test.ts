@@ -54,6 +54,23 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).not.toContain("uni.previewImage");
   });
 
+  it("confirms completion photo upload and renders persisted checkin photos", () => {
+    expect(taskDetailSource).toContain("confirmUploadCheckinPhotos");
+    expect(taskDetailSource).toContain("uni.showModal");
+    expect(taskDetailSource).toContain("确认上传");
+    expect(taskDetailSource).toContain("task.value?.checkin_photos");
+    expect(taskDetailSource).toContain("displayCheckinPhotos");
+    expect(taskDetailSource).toContain("photo.can_delete");
+  });
+
+  it("lets the uploader or admin delete persisted checkin photos from task detail", () => {
+    expect(taskDetailSource).toContain("deleteTaskCheckinPhoto");
+    expect(taskDetailSource).toContain("deleteImageAsset");
+    expect(taskDetailSource).toContain("confirmDeleteCheckinPhoto");
+    expect(taskDetailSource).toContain("删除照片");
+    expect(taskDetailSource).toContain("@tap.stop=\"confirmDeleteCheckinPhoto(photo)\"");
+  });
+
   it("uses a mini-program-safe png arrow in task list filters", () => {
     expect(taskIndexSource).toContain("地图点/箭头.png");
     expect(taskIndexSource).not.toContain("地图点/箭头.svg");
@@ -111,8 +128,40 @@ describe("summer feeding task pages", () => {
     expect(taskIndexSource).not.toContain("only_today");
     expect(taskIndexSource).toContain("clearFilters");
     expect(taskIndexSource).toContain("keyword: searchKeyword.value.trim()");
-    expect(taskIndexSource).toContain("status: selectedTaskStatus.value || DEFAULT_TASK_STATUS_QUERY");
-    expect(taskIndexSource).not.toContain("execution_status: selectedTaskStatus.value");
+    expect(taskIndexSource).toContain("status: DEFAULT_TASK_STATUS_QUERY");
+    expect(taskIndexSource).toContain("execution_display_status: selectedTaskStatus.value");
+  });
+
+  it("renders recurring child execution cards inside each parent task card", () => {
+    expect(taskIndexSource).toContain("display_executions");
+    expect(taskIndexSource).toContain('class="execution-strip"');
+    expect(taskIndexSource).toContain('scroll-x');
+    expect(taskIndexSource).toContain("goExecutionDetail(task.task_id, execution.execution_date_id)");
+    expect(taskIndexSource).toContain("getExecutionDisplayLabel(execution)");
+    expect(taskIndexSource).toContain("getExecutionDisplayClass(execution)");
+    expect(taskIndexSource).toContain("-webkit-line-clamp: 1");
+    expect(taskIndexSource).not.toContain('class="task-location"');
+    expect(taskIndexSource).not.toContain("task.required_items");
+  });
+
+  it("supports parent and child scoped task detail pages", () => {
+    expect(taskDetailSource).toContain("executionDateId");
+    expect(taskDetailSource).toContain("detail_scope");
+    expect(taskDetailSource).toContain("isExecutionDetail");
+    expect(taskDetailSource).toContain("execution_groups");
+    expect(taskDetailSource).toContain("activityExecutionGroups");
+    expect(taskDetailSource).toContain("photoExecutionGroups");
+    expect(taskDetailSource).toContain('v-for="group in activityExecutionGroups"');
+    expect(taskDetailSource).toContain('v-for="group in photoExecutionGroups"');
+    expect(taskDetailSource).not.toContain('v-for="group in task.execution_groups"');
+    expect(taskDetailSource).toContain('class="task-info-panel"');
+    expect(taskDetailSource).toContain('class="task-info-section date-section"');
+    expect(taskDetailSource).toContain('class="task-info-section address-section"');
+    expect(taskDetailSource).not.toContain('class="info-grid"');
+    expect(taskDetailSource).toContain('class="execution-date-button"');
+    expect(taskDetailSource).toContain("goExecutionDetail(execution.execution_date_id)");
+    expect(taskDetailSource).toContain("getTaskDetail(token, taskId.value, {");
+    expect(taskDetailSource).toContain("execution_date_id: executionDateId.value");
   });
 
   it("builds task list date filter query parameters", () => {
@@ -188,8 +237,9 @@ describe("summer feeding task pages", () => {
     expect(taskIndexSource).toContain("task-status-completed");
     expect(taskIndexSource).toContain("task-status-cancelled");
     expect(taskIndexSource).toContain("task-status-archived");
+    expect(taskIndexSource).toContain('{ label: "未开始", value: "not_started" }');
     expect(taskIndexSource).toContain('{ label: "已取消", value: "cancelled" }');
-    expect(taskIndexSource).toContain('{ label: "已归档", value: "archived" }');
+    expect(taskIndexSource).not.toContain('{ label: "已归档", value: "archived" }');
 
     expect(
       getTaskStatusTone({
@@ -266,7 +316,7 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain("goNavigateToTaskPoint");
     expect(taskDetailSource).toContain("MAP_PENDING_NAVIGATION_STORAGE_KEY");
     expect(taskDetailSource).toContain("uni.setStorageSync");
-    expect(taskDetailSource).toContain("focus_only: true");
+    expect(taskDetailSource).toContain("map_point_id: task.value.map_point.map_point_id");
     expect(taskDetailSource).toContain('uni.switchTab({ url: "/pages/index/index" })');
     expect(taskDetailSource).not.toContain("导航后续接入");
   });
@@ -275,7 +325,21 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain("associatedPoi");
     expect(taskDetailSource).toContain("公共地点");
     expect(taskDetailSource).toContain("associatedPoi.category");
-    expect(taskDetailSource).toContain("associatedPoi.address");
+    expect(taskDetailSource).toContain("goViewAssociatedPoiOnMap");
+    expect(taskDetailSource).toContain("地图查看");
+  });
+
+  it("uses distinct label and value styles for task detail content rows", () => {
+    expect(taskDetailSource).toContain("section-line-label");
+    expect(taskDetailSource).toContain("section-line-value");
+    expect(taskDetailSource).toContain('class="section-line-label">物资');
+    expect(taskDetailSource).not.toContain("物资：{{ task.required_items }}");
+  });
+
+  it("fills selected task point detail with the associated POI name before its address", () => {
+    expect(adminTaskLocationSource).toContain("selectAssociatedPoi");
+    expect(adminTaskLocationSource).toContain("selectedLocation.location_detail = poi.name || poi.address");
+    expect(adminTaskLocationSource).not.toContain("selectedLocation.location_detail = poi.address || poi.name");
   });
 
   it("uses a custom multi-select calendar instead of the native date picker", () => {

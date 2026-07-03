@@ -6,7 +6,31 @@
         <text class="nav-title">{{ recordMeta.title }}</text>
       </view>
 
-      <view class="empty-card">
+      <scroll-view
+        v-if="isCompletedTaskRecordPage && completedTaskRecords.length"
+        class="record-list"
+        scroll-y
+        :show-scrollbar="false"
+      >
+        <button
+          v-for="record in completedTaskRecords"
+          :key="record.checkin_id"
+          class="record-card"
+          hover-class="record-card-hover"
+          @tap="goTaskRecord(record)"
+        >
+          <view class="record-main">
+            <text class="record-title">{{ record.task_title }}</text>
+            <text class="record-meta">
+              {{ formatRecordDate(record.execute_date) }} · {{ record.map_point?.location_name || "投喂点" }}
+            </text>
+            <text class="record-copy">{{ record.process_result || record.remark || "已完成本次投喂" }}</text>
+          </view>
+          <text class="record-arrow">›</text>
+        </button>
+      </scroll-view>
+
+      <view v-else class="empty-card">
         <image class="empty-image" :src="emptyImage" mode="aspectFit" />
         <text class="empty-title">{{ recordMeta.empty_title }}</text>
         <text class="empty-description">{{ recordMeta.empty_description }}</text>
@@ -26,6 +50,7 @@ import {
   getMyObservations,
   getMyTasks,
   type EmptyRecordPage,
+  type MyCheckinRecordDto,
 } from "@/api/me";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
@@ -42,6 +67,30 @@ const records = ref<EmptyRecordPage | null>(null);
 const isLoading = ref(false);
 
 const recordMeta = computed(() => PROFILE_RECORD_TYPES[recordType.value]);
+const isCompletedTaskRecordPage = computed(
+  () => recordType.value === "total_tasks" || recordType.value === "monthly_completed",
+);
+const completedTaskRecords = computed<MyCheckinRecordDto[]>(() => {
+  if (!isCompletedTaskRecordPage.value) {
+    return [];
+  }
+  return (records.value?.items || []) as MyCheckinRecordDto[];
+});
+
+function formatRecordDate(value: string | null): string {
+  if (!value) {
+    return "未记录日期";
+  }
+  const [year, month, day] = value.split("-");
+  if (!year || !month || !day) {
+    return value;
+  }
+  return `${year}年${Number(month)}月${Number(day)}日`;
+}
+
+async function loadCompletedTaskRecords(accessToken: string) {
+  records.value = await getMyCheckins(accessToken);
+}
 
 async function loadRecords() {
   const accessToken = await userStore.ensureFreshAccessToken();
@@ -52,12 +101,12 @@ async function loadRecords() {
 
   isLoading.value = true;
   try {
-    if (recordType.value === "observations") {
+    if (isCompletedTaskRecordPage.value) {
+      await loadCompletedTaskRecords(accessToken);
+    } else if (recordType.value === "observations") {
       records.value = await getMyObservations(accessToken);
     } else if (recordType.value === "favorite_cats") {
       records.value = await getFavoriteCats(accessToken);
-    } else if (recordType.value === "monthly_completed") {
-      records.value = await getMyCheckins(accessToken);
     } else {
       records.value = await getMyTasks(accessToken);
     }
@@ -71,6 +120,15 @@ async function loadRecords() {
 
 function goBack() {
   uni.navigateBack();
+}
+
+function goTaskRecord(record: MyCheckinRecordDto) {
+  const executionQuery = record.execution_date_id
+    ? `&execution_date_id=${record.execution_date_id}`
+    : "";
+  uni.navigateTo({
+    url: `/pages/tasks/detail?task_id=${record.task_id}${executionQuery}`,
+  });
 }
 
 onLoad((options) => {
@@ -137,6 +195,77 @@ onLoad((options) => {
   flex-direction: column;
   align-items: center;
   text-align: center;
+}
+
+.record-list {
+  height: calc(100vh - 178rpx);
+  margin-top: 42rpx;
+}
+
+.record-card {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 148rpx;
+  margin: 0 0 20rpx;
+  padding: 26rpx 28rpx;
+  border: 0;
+  border-radius: 26rpx;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14rpx 36rpx rgba(42, 63, 43, 0.1);
+  color: #20242a;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  text-align: left;
+}
+
+.record-card::after {
+  border: 0;
+}
+
+.record-card-hover {
+  opacity: 0.9;
+  transform: translateY(2rpx);
+}
+
+.record-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.record-title,
+.record-meta,
+.record-copy {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.record-title {
+  color: #171b22;
+  font-size: 30rpx;
+  font-weight: 900;
+}
+
+.record-meta {
+  margin-top: 12rpx;
+  color: #2f8037;
+  font-size: 24rpx;
+  font-weight: 900;
+}
+
+.record-copy {
+  margin-top: 8rpx;
+  color: #6f7780;
+  font-size: 23rpx;
+  font-weight: 700;
+}
+
+.record-arrow {
+  color: #8a929c;
+  font-size: 48rpx;
+  font-weight: 300;
 }
 
 .empty-image {

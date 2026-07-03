@@ -64,15 +64,19 @@ export interface SummerFeedingTaskCreateResponse {
   published_at: string;
 }
 
+export interface TaskUserDto {
+  user_id: string;
+  nickname: string;
+  avatar_url: string | null;
+}
+
 export interface TaskExecutionDto {
   execution_date_id: string;
   execute_date: string;
   status: string;
-  completed_by: {
-    user_id: string;
-    nickname: string;
-    avatar_url: string | null;
-  } | null;
+  display_status?: string;
+  display_status_label?: string;
+  completed_by: TaskUserDto | null;
   completed_at: string | null;
   checkin_id: string | null;
   remark: string | null;
@@ -103,6 +107,7 @@ export interface TaskListItemDto {
   };
   current_execution: TaskExecutionDto | null;
   next_execution: TaskExecutionDto | null;
+  display_executions?: TaskExecutionDto[];
   distance_meters: number | null;
   published_at: string;
 }
@@ -119,6 +124,7 @@ export interface TaskListQuery {
   task_type?: "feeding";
   status?: string;
   execution_status?: string;
+  execution_display_status?: string;
   keyword?: string;
   execute_date?: string;
   execute_date_start?: string;
@@ -151,6 +157,23 @@ export interface TaskActivityDto {
   created_at: string;
 }
 
+export interface TaskCheckinPhotoDto extends UploadedFileRef {
+  photo_id: string;
+  checkin_id: string;
+  task_id: string;
+  caption: string | null;
+  sort_order: number;
+  uploaded_by: TaskUserDto | null;
+  can_delete: boolean;
+  created_at: string;
+}
+
+export interface TaskExecutionGroupDto {
+  execution: TaskExecutionDto;
+  activities: TaskActivityDto[];
+  checkin_photos: TaskCheckinPhotoDto[];
+}
+
 export interface TaskDetailDto extends Omit<TaskListItemDto, "map_point"> {
   task_no: string;
   task_mode: string;
@@ -162,8 +185,13 @@ export interface TaskDetailDto extends Omit<TaskListItemDto, "map_point"> {
     point_scope: string;
   };
   photos: TaskPhotoDto[];
+  checkin_photos: TaskCheckinPhotoDto[];
   execution_dates: TaskExecutionDto[];
   activities: TaskActivityDto[];
+  detail_scope?: "parent" | "execution";
+  active_execution_id?: string | null;
+  execution?: TaskExecutionDto | null;
+  execution_groups?: TaskExecutionGroupDto[];
   actions: {
     can_navigate: boolean;
     can_checkin: boolean;
@@ -172,6 +200,10 @@ export interface TaskDetailDto extends Omit<TaskListItemDto, "map_point"> {
   };
   created_at: string;
   updated_at: string;
+}
+
+export interface TaskDetailQuery {
+  execution_date_id?: string | null;
 }
 
 export interface TaskCheckinPayload {
@@ -196,6 +228,7 @@ export interface TaskCheckinResponse {
     process_result: string | null;
     remark: string | null;
     submitted_at: string;
+    photos: TaskCheckinPhotoDto[];
   };
 }
 
@@ -220,6 +253,11 @@ export interface TaskDeleteResponse {
   deleted_at: string;
 }
 
+export interface TaskCheckinPhotoDeleteResponse {
+  photo_id: string;
+  deleted_at: string;
+}
+
 export function getTasks(
   accessToken: string,
   query: TaskListQuery = {},
@@ -235,10 +273,12 @@ export function getTasks(
 export function getTaskDetail(
   accessToken: string,
   taskId: string,
+  query: TaskDetailQuery = {},
 ): Promise<TaskDetailDto> {
   return request<TaskDetailDto>({
     url: API_ENDPOINTS.tasks.detail(taskId),
     method: "GET",
+    data: compactApiParams(query),
     token: accessToken,
   });
 }
@@ -246,10 +286,12 @@ export function getTaskDetail(
 export function getAdminTaskDetail(
   accessToken: string,
   taskId: string,
+  query: TaskDetailQuery = {},
 ): Promise<TaskDetailDto> {
   return request<TaskDetailDto>({
     url: API_ENDPOINTS.admin.task(taskId),
     method: "GET",
+    data: compactApiParams(query),
     token: accessToken,
   });
 }
@@ -321,6 +363,18 @@ export function checkinTask(
     url: API_ENDPOINTS.tasks.checkins(taskId),
     method: "POST",
     data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function deleteTaskCheckinPhoto(
+  accessToken: string,
+  taskId: string,
+  photoId: string,
+): Promise<TaskCheckinPhotoDeleteResponse> {
+  return request<TaskCheckinPhotoDeleteResponse>({
+    url: API_ENDPOINTS.tasks.checkinPhoto(taskId, photoId),
+    method: "DELETE",
     token: accessToken,
   });
 }

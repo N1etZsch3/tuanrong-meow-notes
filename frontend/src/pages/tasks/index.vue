@@ -122,7 +122,7 @@
         </view>
 
         <view v-else-if="tasks.length" class="task-list">
-          <button
+          <view
             v-for="task in tasks"
             :key="task.task_id"
             class="task-card"
@@ -145,14 +145,29 @@
                 <text class="task-title">{{ task.title }}</text>
                 <text class="task-status" :class="taskStatusClass(task)">{{ getTaskListStatusLabel(task) }}</text>
               </view>
-              <text class="task-location">{{ task.map_point.location_name }}</text>
               <text class="task-desc">{{ task.description }}</text>
-              <view class="task-meta">
-                <text>{{ executionText(task) }}</text>
-                <text>{{ task.required_items }}</text>
-              </view>
+              <scroll-view
+                class="execution-strip"
+                scroll-x
+                :show-scrollbar="false"
+                @tap.stop
+              >
+                <view class="execution-row">
+                  <button
+                    v-for="execution in displayExecutions(task)"
+                    :key="execution.execution_date_id"
+                    class="execution-card"
+                    :class="getExecutionDisplayClass(execution)"
+                    hover-class="execution-card-hover"
+                    @tap.stop="goExecutionDetail(task.task_id, execution.execution_date_id)"
+                  >
+                    <text class="execution-date">{{ formatTaskDate(execution.execute_date) }}</text>
+                    <text class="execution-label">{{ getExecutionDisplayLabel(execution) }}</text>
+                  </button>
+                </view>
+              </scroll-view>
             </view>
-          </button>
+          </view>
         </view>
 
         <view v-else class="state-box">
@@ -169,7 +184,7 @@
 import { onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
-import { getTasks, type TaskListItemDto, type TaskListQuery } from "@/api/tasks";
+import { getTasks, type TaskExecutionDto, type TaskListItemDto, type TaskListQuery } from "@/api/tasks";
 import AppTabBar from "@/components/AppTabBar.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
@@ -178,6 +193,8 @@ import {
   buildTaskDateFilterQuery,
   formatTaskDate,
   formatLocalDate,
+  getExecutionDisplayLabel,
+  getExecutionDisplayTone,
   getTaskListStatusLabel,
   getTaskStatusTone,
   type TaskDateFilterValue,
@@ -206,10 +223,10 @@ const taskTypeOptions = [
 ] as const;
 const taskStatusOptions = [
   { label: "全部", value: "" },
+  { label: "未开始", value: "not_started" },
   { label: "进行中", value: "in_progress" },
   { label: "已完成", value: "completed" },
   { label: "已取消", value: "cancelled" },
-  { label: "已归档", value: "archived" },
 ] as const;
 const dateFilterOptions = [
   { label: "全部", value: "" },
@@ -271,16 +288,6 @@ async function getAccessToken(): Promise<string | null> {
   return null;
 }
 
-function executionText(task: TaskListItemDto): string {
-  const current = task.current_execution || task.next_execution;
-  if (!current) {
-    return "暂无执行日期";
-  }
-
-  const label = current.status === "completed" ? "已完成" : "待投喂";
-  return `${formatTaskDate(current.execute_date)} · ${label}`;
-}
-
 function buildTaskListQuery(): TaskListQuery {
   const dateQuery = buildTaskDateFilterQuery(
     selectedDateFilter.value,
@@ -290,7 +297,8 @@ function buildTaskListQuery(): TaskListQuery {
     task_type: selectedTaskType.value
       ? (selectedTaskType.value as TaskListQuery["task_type"])
       : undefined,
-    status: selectedTaskStatus.value || DEFAULT_TASK_STATUS_QUERY,
+    status: DEFAULT_TASK_STATUS_QUERY,
+    execution_display_status: selectedTaskStatus.value,
     keyword: searchKeyword.value.trim(),
     ...dateQuery,
     page: 1,
@@ -410,8 +418,25 @@ function taskStatusClass(task: TaskListItemDto): string {
   return "task-status-default";
 }
 
+function displayExecutions(task: TaskListItemDto): TaskExecutionDto[] {
+  const executions = task.display_executions?.length
+    ? task.display_executions
+    : [task.current_execution || task.next_execution].filter(Boolean);
+  return executions.filter((execution): execution is TaskExecutionDto => Boolean(execution));
+}
+
+function getExecutionDisplayClass(execution: TaskExecutionDto): string {
+  return `execution-card-${getExecutionDisplayTone(execution)}`;
+}
+
 function goDetail(taskId: string) {
   uni.navigateTo({ url: `/pages/tasks/detail?task_id=${taskId}` });
+}
+
+function goExecutionDetail(taskId: string, executionDateId: string) {
+  uni.navigateTo({
+    url: `/pages/tasks/detail?task_id=${taskId}&execution_date_id=${executionDateId}`,
+  });
 }
 
 onShow(() => {
@@ -484,7 +509,7 @@ onShow(() => {
 
 .search-button::after,
 .clear-filter-button::after,
-.task-card::after {
+.execution-card::after {
   border: 0;
 }
 
@@ -705,7 +730,7 @@ onShow(() => {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 12rpx;
+  gap: 10rpx;
 }
 
 .task-head {
@@ -756,9 +781,7 @@ onShow(() => {
   color: #2276ff;
 }
 
-.task-location,
-.task-desc,
-.task-meta {
+.task-desc {
   color: #6b7280;
   font-size: 23rpx;
   font-weight: 700;
@@ -769,14 +792,83 @@ onShow(() => {
   color: #4b5563;
   display: -webkit-box;
   overflow: hidden;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
   -webkit-box-orient: vertical;
 }
 
-.task-meta {
+.execution-strip {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.execution-row {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
+  gap: 10rpx;
+}
+
+.execution-card {
+  box-sizing: border-box;
+  min-width: 126rpx;
+  height: 62rpx;
+  margin: 0;
+  padding: 7rpx 14rpx;
+  border: 0;
+  border-radius: 12rpx;
+  text-align: left;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4rpx;
+  flex-shrink: 0;
+}
+
+.execution-date,
+.execution-label {
+  display: block;
+  overflow: hidden;
+  font-weight: 900;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.execution-date {
+  font-size: 19rpx;
+}
+
+.execution-label {
+  font-size: 17rpx;
+}
+
+.execution-card-not_started {
+  background: #ffe7eb;
+  color: #d73546;
+}
+
+.execution-card-in_progress {
+  background: #fff4cc;
+  color: #a66f00;
+}
+
+.execution-card-completed {
+  background: #e6f6e4;
+  color: #238033;
+}
+
+.execution-card-cancelled {
+  background: #e5e7eb;
+  color: #667085;
+}
+
+.execution-card-default {
+  background: #edf4ff;
+  color: #2276ff;
+}
+
+.execution-card-hover {
+  opacity: 0.86;
 }
 
 .state-box {

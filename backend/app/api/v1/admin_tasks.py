@@ -28,6 +28,7 @@ def list_admin_tasks(
     execute_date_start: date | None = None,
     execute_date_end: date | None = None,
     execution_status: str | None = None,
+    execution_display_status: str | None = None,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -42,6 +43,7 @@ def list_admin_tasks(
         execute_date_start=execute_date_start,
         execute_date_end=execute_date_end,
         execution_status=execution_status,
+        execution_display_status=execution_display_status,
         page=page,
         page_size=page_size,
         include_private=True,
@@ -54,6 +56,7 @@ def get_admin_task_detail(
     task_id: UUID,
     request: Request,
     current_date: date | None = None,
+    execution_date_id: UUID | None = None,
     activity_limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
@@ -62,9 +65,11 @@ def get_admin_task_detail(
         db,
         task_id=task_id,
         current_date=current_date,
+        execution_date_id=execution_date_id,
         include_private=True,
         activity_limit=activity_limit,
         can_admin_edit=True,
+        viewer=admin,
     )
     return api_success(data=data, trace_id=request.state.trace_id)
 

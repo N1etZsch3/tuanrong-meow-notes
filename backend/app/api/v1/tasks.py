@@ -24,6 +24,7 @@ def list_tasks(
     execute_date_start: date | None = None,
     execute_date_end: date | None = None,
     execution_status: str | None = None,
+    execution_display_status: str | None = None,
     only_today: bool = False,
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=20, ge=1, le=100),
@@ -39,6 +40,7 @@ def list_tasks(
         execute_date_start=execute_date_start,
         execute_date_end=execute_date_end,
         execution_status=execution_status,
+        execution_display_status=execution_display_status,
         only_today=only_today,
         page=page,
         page_size=page_size,
@@ -51,6 +53,7 @@ def task_detail(
     task_id: UUID,
     request: Request,
     current_date: date | None = None,
+    execution_date_id: UUID | None = None,
     activity_limit: int = Query(default=20, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(require_profile_completed),
@@ -59,8 +62,10 @@ def task_detail(
         db,
         task_id=task_id,
         current_date=current_date,
+        execution_date_id=execution_date_id,
         activity_limit=activity_limit,
         can_admin_edit=current_user.role in {"admin", "super_admin"},
+        viewer=current_user,
     )
     return api_success(data=data, trace_id=request.state.trace_id)
 
@@ -75,3 +80,23 @@ def checkin_task(
 ):
     data = service.checkin_task(db, task_id=task_id, user=current_user, payload=payload)
     return api_success(data=data, trace_id=request.state.trace_id, message="投喂已完成")
+
+
+@router.delete(
+    "/{task_id}/checkin-photos/{photo_id}",
+    summary="Soft delete a task checkin photo",
+)
+def delete_task_checkin_photo(
+    task_id: UUID,
+    photo_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_profile_completed),
+):
+    data = service.delete_task_checkin_photo(
+        db,
+        task_id=task_id,
+        photo_id=photo_id,
+        user=current_user,
+    )
+    return api_success(data=data, trace_id=request.state.trace_id, message="照片已删除")

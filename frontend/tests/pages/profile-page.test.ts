@@ -73,4 +73,14 @@ describe("profile center pages", () => {
     expect(profileRecordsSource).toContain("getMyObservations");
     expect(profileRecordsSource).toContain("getFavoriteCats");
   });
+
+  it("uses completed child task checkins for cumulative and monthly task records", () => {
+    expect(profileRecordsSource).toContain("loadCompletedTaskRecords");
+    expect(profileRecordsSource).toContain(
+      'recordType.value === "total_tasks" || recordType.value === "monthly_completed"',
+    );
+    expect(profileRecordsSource).toContain("records.value = await getMyCheckins(accessToken");
+    expect(profileRecordsSource).toContain('class="record-card"');
+    expect(profileRecordsSource).toContain("record.execute_date");
+  });
 });

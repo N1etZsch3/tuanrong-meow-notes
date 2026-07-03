@@ -1,4 +1,4 @@
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, time, timedelta
 from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
@@ -695,6 +695,123 @@ def test_task_checkin_photos_use_file_asset_cos_urls_instead_of_client_content_u
     assert saved_photo.thumbnail_url == asset.default_thumb_url
 
 
+def test_task_detail_exposes_checkin_photos_to_members_with_delete_permissions(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    uploader = create_user(db_session, nickname="Nietzsche")
+    viewer = create_user(db_session, nickname="旁观成员")
+    campus = seed_campus(db_session)
+    published = publish_task(api_client, admin, campus)
+    asset = create_uploaded_asset(
+        db_session,
+        uploader,
+        usage_type="task_checkin_photo",
+        default_url="https://cos.test/catmap/dev/checkin/asset/display.jpg",
+        default_thumb_url="https://cos.test/catmap/dev/checkin/asset/thumb_md.jpg",
+    )
+
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{published['task_id']}/checkins",
+        headers=auth_headers(uploader),
+        json={
+            "execute_date": "2026-07-02",
+            "is_completed": True,
+            "photos": [
+                {
+                    "file_id": str(asset.id),
+                    "file_url": asset_content_url(asset, "task_detail_full"),
+                    "thumbnail_url": asset_content_url(asset, "task_list_cover"),
+                }
+            ],
+        },
+    )
+
+    assert checkin_response.status_code == 200
+    checkin_photo = checkin_response.json()["data"]["checkin"]["photos"][0]
+    assert checkin_photo["file_url"] == asset.default_url
+    assert checkin_photo["thumbnail_url"] == asset.default_thumb_url
+    assert checkin_photo["can_delete"] is True
+
+    viewer_detail_response = api_client.get(
+        f"/api/v1/tasks/{published['task_id']}",
+        headers=auth_headers(viewer),
+    )
+    viewer_detail = viewer_detail_response.json()["data"]
+    assert viewer_detail["checkin_photos"][0]["photo_id"] == checkin_photo["photo_id"]
+    assert viewer_detail["checkin_photos"][0]["file_url"] == asset.default_url
+    assert viewer_detail["checkin_photos"][0]["uploaded_by"]["nickname"] == "Nietzsche"
+    assert viewer_detail["checkin_photos"][0]["can_delete"] is False
+
+    uploader_detail_response = api_client.get(
+        f"/api/v1/tasks/{published['task_id']}",
+        headers=auth_headers(uploader),
+    )
+    assert uploader_detail_response.json()["data"]["checkin_photos"][0]["can_delete"] is True
+
+    admin_detail_response = api_client.get(
+        f"/api/v1/admin/tasks/{published['task_id']}",
+        headers=auth_headers(admin),
+    )
+    assert admin_detail_response.json()["data"]["checkin_photos"][0]["can_delete"] is True
+
+
+def test_only_checkin_photo_uploader_or_admin_can_soft_delete_photo(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    uploader = create_user(db_session, nickname="Nietzsche")
+    viewer = create_user(db_session, nickname="旁观成员")
+    campus = seed_campus(db_session)
+    published = publish_task(api_client, admin, campus)
+    asset = create_uploaded_asset(db_session, uploader, usage_type="task_checkin_photo")
+
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{published['task_id']}/checkins",
+        headers=auth_headers(uploader),
+        json={
+            "execute_date": "2026-07-02",
+            "is_completed": True,
+            "photos": [
+                {
+                    "file_id": str(asset.id),
+                    "file_url": asset.default_url,
+                    "thumbnail_url": asset.default_thumb_url,
+                }
+            ],
+        },
+    )
+    photo_id = checkin_response.json()["data"]["checkin"]["photos"][0]["photo_id"]
+
+    forbidden_response = api_client.delete(
+        f"/api/v1/tasks/{published['task_id']}/checkin-photos/{photo_id}",
+        headers=auth_headers(viewer),
+    )
+    assert forbidden_response.status_code == 403
+    assert forbidden_response.json()["code"] == 40302
+
+    delete_response = api_client.delete(
+        f"/api/v1/tasks/{published['task_id']}/checkin-photos/{photo_id}",
+        headers=auth_headers(admin),
+    )
+    assert delete_response.status_code == 200
+    assert delete_response.json()["data"]["photo_id"] == photo_id
+
+    saved_photo = db_session.get(TaskCheckinPhoto, UUID(photo_id))
+    assert saved_photo is not None
+    assert saved_photo.deleted_at is not None
+    db_session.refresh(asset)
+    assert asset.deleted_at is not None
+
+    detail_response = api_client.get(
+        f"/api/v1/tasks/{published['task_id']}",
+        headers=auth_headers(viewer),
+    )
+    assert detail_response.json()["data"]["checkin_photos"] == []
+
+
 def test_member_list_filters_by_execution_status_instead_of_parent_task_status(
     api_client,
     db_session,
@@ -774,6 +891,319 @@ def test_member_list_filters_by_execution_date_range(api_client, db_session):
     )
     assert august_response.status_code == 200
     assert august_response.json()["data"]["items"] == []
+
+
+def test_list_exposes_child_execution_cards_and_auto_cancels_previous_pending(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 25))
+    monkeypatch.setattr(
+        task_service,
+        "_now",
+        lambda: datetime(2026, 7, 25, 8, 0, tzinfo=UTC),
+    )
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    payload["execute_dates"] = ["2026-07-15", "2026-07-25", "2026-08-05"]
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    response = api_client.get(
+        "/api/v1/tasks?status=in_progress,completed",
+        headers=auth_headers(member),
+    )
+
+    assert response.status_code == 200
+    item = response.json()["data"]["items"][0]
+    assert item["task_id"] == task_id
+    assert item["current_execution"]["execute_date"] == "2026-07-25"
+    assert item["current_execution"]["display_status"] == "in_progress"
+    assert [child["execute_date"] for child in item["display_executions"]] == [
+        "2026-07-15",
+        "2026-07-25",
+        "2026-08-05",
+    ]
+    assert [child["display_status"] for child in item["display_executions"]] == [
+        "cancelled",
+        "in_progress",
+        "not_started",
+    ]
+
+    detail_response = api_client.get(
+        f"/api/v1/tasks/{task_id}?current_date=2026-07-25",
+        headers=auth_headers(member),
+    )
+    assert detail_response.status_code == 200
+    detail_dates = detail_response.json()["data"]["execution_dates"]
+    assert detail_dates[0]["status"] == "cancelled"
+
+
+def test_list_filters_child_execution_cards_by_display_status(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    today = date.today()
+    completed_day = today - timedelta(days=2)
+    running_day = today - timedelta(days=1)
+    future_day = today + timedelta(days=7)
+    payload["execute_dates"] = [
+        completed_day.isoformat(),
+        running_day.isoformat(),
+        future_day.isoformat(),
+    ]
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    monkeypatch.setattr(task_service, "_today", lambda: completed_day)
+    monkeypatch.setattr(
+        task_service,
+        "_now",
+        lambda: datetime.combine(completed_day, time.min, tzinfo=UTC),
+    )
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{task_id}/checkins",
+        headers=auth_headers(member),
+        json={"execute_date": completed_day.isoformat(), "is_completed": True},
+    )
+    assert checkin_response.status_code == 200
+    monkeypatch.setattr(task_service, "_today", lambda: today)
+    monkeypatch.setattr(
+        task_service,
+        "_now",
+        lambda: datetime.combine(today, time.min, tzinfo=UTC),
+    )
+
+    completed_response = api_client.get(
+        "/api/v1/tasks?execution_display_status=completed&status=in_progress,completed",
+        headers=auth_headers(member),
+    )
+    assert completed_response.status_code == 200
+    completed_item = completed_response.json()["data"]["items"][0]
+    assert completed_item["task_id"] == task_id
+    assert [child["execute_date"] for child in completed_item["display_executions"]] == [
+        completed_day.isoformat()
+    ]
+
+    running_response = api_client.get(
+        "/api/v1/tasks?execution_display_status=in_progress&status=in_progress,completed",
+        headers=auth_headers(member),
+    )
+    assert running_response.status_code == 200
+    running_item = running_response.json()["data"]["items"][0]
+    assert [child["execute_date"] for child in running_item["display_executions"]] == [
+        running_day.isoformat()
+    ]
+
+    future_response = api_client.get(
+        "/api/v1/tasks?execution_display_status=not_started&status=in_progress,completed",
+        headers=auth_headers(member),
+    )
+    assert future_response.status_code == 200
+    future_item = future_response.json()["data"]["items"][0]
+    assert [child["execute_date"] for child in future_item["display_executions"]] == [
+        future_day.isoformat()
+    ]
+
+
+def test_task_detail_groups_parent_history_and_supports_execution_scope(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    payload["execute_dates"] = ["2026-07-02", "2026-07-09", "2026-07-16"]
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{task_id}/checkins",
+        headers=auth_headers(member),
+        json={"execute_date": "2026-07-02", "is_completed": True},
+    )
+    assert checkin_response.status_code == 200
+    execution_date_id = checkin_response.json()["data"]["execution_date_id"]
+
+    parent_response = api_client.get(
+        f"/api/v1/tasks/{task_id}?current_date=2026-07-09",
+        headers=auth_headers(member),
+    )
+    assert parent_response.status_code == 200
+    parent_detail = parent_response.json()["data"]
+    assert parent_detail["detail_scope"] == "parent"
+    assert [group["execution"]["execute_date"] for group in parent_detail["execution_groups"]] == [
+        "2026-07-02",
+        "2026-07-09",
+        "2026-07-16",
+    ]
+    first_group = parent_detail["execution_groups"][0]
+    assert first_group["execution"]["execution_date_id"] == execution_date_id
+    assert [activity["activity_type"] for activity in first_group["activities"]] == [
+        "execution_completed"
+    ]
+    assert parent_detail["execution_groups"][1]["activities"] == []
+
+    child_response = api_client.get(
+        f"/api/v1/tasks/{task_id}?execution_date_id={execution_date_id}",
+        headers=auth_headers(member),
+    )
+    assert child_response.status_code == 200
+    child_detail = child_response.json()["data"]
+    assert child_detail["detail_scope"] == "execution"
+    assert child_detail["execution"]["execution_date_id"] == execution_date_id
+    assert [activity["activity_type"] for activity in child_detail["activities"]] == [
+        "execution_completed"
+    ]
+    assert child_detail["checkin_photos"] == []
+
+
+def test_map_marker_extra_exposes_active_child_execution(api_client, db_session):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    today = date.today()
+    completed_date = (today - timedelta(days=2)).isoformat()
+    next_date = (today + timedelta(days=5)).isoformat()
+    payload["execute_dates"] = [completed_date, next_date]
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{task_id}/checkins",
+        headers=auth_headers(member),
+        json={"execute_date": completed_date, "is_completed": True},
+    )
+    assert checkin_response.status_code == 200
+
+    response = api_client.get(
+        "/api/v1/map/points?point_types=task&business_types=feeding",
+        headers=auth_headers(member),
+    )
+
+    assert response.status_code == 200
+    marker = response.json()["data"]["items"][0]
+    assert marker["business_id"] == task_id
+    assert marker["extra"]["active_execution"]["execute_date"] == completed_date
+    assert marker["extra"]["active_execution"]["display_status"] == "completed"
+    assert marker["extra"]["active_execution"]["display_status_label"] == "已完成"
+
+
+def test_map_bottom_content_uses_active_child_execution_status(api_client, db_session):
+    admin = create_user(db_session, role="admin", nickname="manager")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    today = date.today()
+    completed_date = (today - timedelta(days=1)).isoformat()
+    next_date = (today + timedelta(days=5)).isoformat()
+    payload["execute_dates"] = [completed_date, next_date]
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{task_id}/checkins",
+        headers=auth_headers(member),
+        json={"execute_date": completed_date, "is_completed": True},
+    )
+    assert checkin_response.status_code == 200
+
+    response = api_client.get(
+        "/api/v1/map/bottom-content?mode=auto",
+        headers=auth_headers(member),
+    )
+
+    assert response.status_code == 200
+    task_item = next(
+        item for item in response.json()["data"]["items"] if item["id"] == task_id
+    )
+    assert task_item["status_label"] == "已完成"
+    assert task_item["active_execution"]["execute_date"] == completed_date
+    assert task_item["active_execution"]["display_status"] == "completed"
+
+
+def test_profile_dashboard_and_checkins_count_child_task_completions(
+    api_client,
+    db_session,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    today = date.today()
+    first_date = today.isoformat()
+    second_date = (today + timedelta(days=7)).isoformat()
+    payload["execute_dates"] = [first_date, second_date]
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{task_id}/checkins",
+        headers=auth_headers(member),
+        json={"execute_date": first_date, "is_completed": True},
+    )
+    assert checkin_response.status_code == 200
+    execution_date_id = checkin_response.json()["data"]["execution_date_id"]
+
+    dashboard_response = api_client.get(
+        "/api/v1/me/dashboard",
+        headers=auth_headers(member),
+    )
+    assert dashboard_response.status_code == 200
+    stats = dashboard_response.json()["data"]["stats"]
+    assert stats["total_completed_tasks"] == 1
+    assert stats["monthly_completed_tasks"] == 1
+
+    checkins_response = api_client.get(
+        "/api/v1/me/checkins",
+        headers=auth_headers(member),
+    )
+    assert checkins_response.status_code == 200
+    checkins = checkins_response.json()["data"]["items"]
+    assert len(checkins) == 1
+    assert checkins[0]["task_id"] == task_id
+    assert checkins[0]["execution_date_id"] == execution_date_id
+    assert checkins[0]["execute_date"] == first_date
+    assert checkins[0]["task_title"] == "学生宿舍区北侧喂食点"
 
 
 def test_future_execution_date_is_not_checkable_before_that_day(

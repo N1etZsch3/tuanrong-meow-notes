@@ -1,7 +1,23 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildFileAssetContentUrl, uploadImage } from "@/api/files";
+import { buildFileAssetContentUrl, deleteImageAsset, uploadImage } from "@/api/files";
 import { appEnv } from "@/config/app-env";
+
+function mockSuccess(data: unknown) {
+  return vi.fn((options: UniNamespace.RequestOptions) => {
+    options.success?.({
+      statusCode: 200,
+      data: {
+        code: 0,
+        message: "success",
+        data,
+        trace_id: "trace-file",
+      },
+      header: {},
+      cookies: [],
+    } as UniNamespace.RequestSuccessCallbackResult);
+  });
+}
 
 describe("files api", () => {
   afterEach(() => {
@@ -68,6 +84,27 @@ describe("files api", () => {
           visibility: "internal",
           caption: "任务点图片",
         },
+      }),
+    );
+  });
+
+  it("soft deletes an uploaded image asset with bearer token", async () => {
+    const requestMock = mockSuccess({
+      asset_id: "asset-1",
+      deleted: true,
+      deleted_at: "2026-07-03T15:20:00+08:00",
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await deleteImageAsset("token-1", "asset-1");
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        url: expect.stringContaining("/files/assets/asset-1"),
+        header: expect.objectContaining({
+          Authorization: "Bearer token-1",
+        }),
       }),
     );
   });

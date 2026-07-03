@@ -397,22 +397,10 @@ interface NavigationRouteState {
 
 interface PendingMapNavigation {
   source?: string;
-  focus_only?: boolean;
   task_id?: string;
-  title?: string;
-  map_point?: {
-    map_point_id?: string | null;
-    point_type?: string | null;
-    business_type?: string | null;
-    business_id?: string | null;
-    location_name?: string | null;
-    location_detail?: string | null;
-    route_instruction?: string | null;
-    lng?: number | null;
-    lat?: number | null;
-    associated_poi?: MapPointSummaryResponse["associated_poi"];
-  };
-  route_instruction?: string | null;
+  map_point_id?: string | null;
+  shell_item?: MapShellItem;
+  poi?: MapPointSummaryResponse["associated_poi"];
 }
 
 type NativeRoutePoint = { longitude: number; latitude: number };
@@ -811,7 +799,7 @@ const contentSectionAction = computed(() => {
   }
 
   if (selectedSummary.value) {
-    return "后端卡片数据";
+    return "";
   }
 
   if (contentLoadState.value === "loading") {
@@ -826,7 +814,7 @@ const contentSectionAction = computed(() => {
     return `${visibleItems.value.length} 个点位`;
   }
 
-  return "后端实时数据";
+  return "";
 });
 const emptyTitle = computed(() => {
   if (contentLoadState.value === "error") {
@@ -1172,9 +1160,14 @@ function shellItemMarkerExtra(item: MapShellItem): Record<string, unknown> {
     extra.task_status = item.status_key || null;
     extra.task_status_label = item.status_label || null;
     extra.location_detail = item.description || null;
-    if (item.status_key === "completed") {
+    if (item.active_execution) {
+      extra.active_execution = item.active_execution;
+    }
+    const activeStatus =
+      item.active_execution?.display_status || item.active_execution?.status || item.status_key;
+    if (activeStatus === "completed") {
       extra.feeding_status = "completed";
-    } else if (item.status_key === "in_progress") {
+    } else if (activeStatus === "in_progress" || activeStatus === "pending") {
       extra.feeding_status = "pending";
     }
   }
@@ -1270,6 +1263,9 @@ function getShellItemStatusTone(item: MapShellItem): string {
   if (item.status_key === "in_progress" || item.status_label === "进行中") {
     return "in_progress";
   }
+  if (item.status_key === "not_started" || item.status_label === "未开始") {
+    return "not_started";
+  }
   if (item.status_key === "cancelled" || item.status_label === "已取消") {
     return "cancelled";
   }
@@ -1280,6 +1276,13 @@ function getShellItemStatusTone(item: MapShellItem): string {
 }
 
 function getFeedingMarkerIcon(marker: MapPointMarkerDto): string {
+  const activeExecution = marker.extra.active_execution;
+  if (activeExecution && typeof activeExecution === "object") {
+    const record = activeExecution as Record<string, unknown>;
+    const status = record.display_status || record.status;
+    return status === "completed" ? completedTaskMarkerIcon : failedTaskMarkerIcon;
+  }
+
   return marker.extra.feeding_status === "completed"
     ? completedTaskMarkerIcon
     : failedTaskMarkerIcon;
@@ -1910,6 +1913,29 @@ async function loadPointSummary(pointId: string) {
   }
 }
 
+function getExecutionDateIdFromValue(value: unknown): string | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  return typeof record.execution_date_id === "string" ? record.execution_date_id : null;
+}
+
+function selectedSummaryExecutionDateId(): string | null {
+  return (
+    getExecutionDateIdFromValue(selectedSummary.value?.business_summary?.active_execution) ||
+    getExecutionDateIdFromValue(selectedPoiMarker.value?.extra?.active_execution)
+  );
+}
+
+function appendExecutionDateQuery(path: string, executionDateId: string | null): string {
+  if (!executionDateId || path.includes("execution_date_id=")) {
+    return path;
+  }
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}execution_date_id=${executionDateId}`;
+}
+
 async function handleSummaryAction(action: CardActionDto) {
   if (!action.enabled || !selectedSummary.value) {
     return;
@@ -1917,13 +1943,18 @@ async function handleSummaryAction(action: CardActionDto) {
 
   if (action.key === "view_detail") {
     if (action.target_type === "page" && action.path) {
-      uni.navigateTo({ url: action.path });
+      uni.navigateTo({
+        url: appendExecutionDateQuery(action.path, selectedSummaryExecutionDateId()),
+      });
       return;
     }
 
     if (selectedSummary.value.business_type === "feeding" && selectedSummary.value.business_id) {
       uni.navigateTo({
-        url: `/pages/tasks/detail?task_id=${selectedSummary.value.business_id}`,
+        url: appendExecutionDateQuery(
+          `/pages/tasks/detail?task_id=${selectedSummary.value.business_id}`,
+          selectedSummaryExecutionDateId(),
+        ),
       });
       return;
     }
@@ -1992,56 +2023,26 @@ async function handleSummaryAction(action: CardActionDto) {
   }
 }
 
-function buildPendingNavigationSummary(
-  pending: PendingMapNavigation,
+function buildExternalSummaryFromPoi(
+  poi: NonNullable<MapPointSummaryResponse["associated_poi"]>,
 ): MapPointSummaryResponse | null {
-  const mapPoint = pending.map_point;
-  const rawPoint = {
-    lng: mapPoint?.lng ?? Number.NaN,
-    lat: mapPoint?.lat ?? Number.NaN,
-  };
-  if (!mapPoint || !isFiniteLngLat(rawPoint)) {
-    return null;
-  }
-  const point = clampLngLatToBounds(rawPoint, campusMapConfig.value.limit_bounds);
-  const pointId = mapPoint.map_point_id || pending.task_id || `pending-${point.lng}-${point.lat}`;
-
-  return {
-    point_id: pointId,
-    point_type: mapPoint.point_type || "task",
-    business_type: mapPoint.business_type || "feeding",
-    business_id: mapPoint.business_id || pending.task_id || null,
-    title: pending.title || mapPoint.location_name || "任务点位",
-    subtitle: mapPoint.location_name || mapPoint.location_detail || null,
-    cover_photo_url: null,
-    tags: ["投喂任务"],
-    description: mapPoint.location_detail || null,
-    location_name: mapPoint.location_name || pending.title || "任务点位",
-    location_detail: mapPoint.location_detail || null,
-    route_instruction: pending.route_instruction || mapPoint.route_instruction || null,
-    landmark_hint: null,
-    entrance_hint: null,
-    lng: point.lng,
-    lat: point.lat,
-    distance_meters: null,
-    associated_poi: mapPoint.associated_poi || null,
-    photos: [],
-    business_summary: {},
-    actions: [
-      {
-        key: "navigate",
-        label: "导航",
-        enabled: true,
-        disabled_reason: null,
-        method: null,
-        path: null,
-        target_type: "page",
-      },
-    ],
-  };
+  return buildExternalSummaryFromItem({
+    id: `tencent:${poi.poi_id || `${poi.name}-${poi.lng}-${poi.lat}`}`,
+    type: "landmark",
+    title: poi.name,
+    subtitle: poi.category,
+    description: poi.address,
+    distance_meters: poi.distance_meters,
+    status_label: "地图点位",
+    tag_label: "地标",
+    lng: poi.lng,
+    lat: poi.lat,
+    icon_key: "landmark",
+    associated_poi: poi,
+  });
 }
 
-function summaryToFocusedMarker(summary: MapPointSummaryResponse): MapPointMarkerDto {
+function createFocusedMarkerFromSummary(summary: MapPointSummaryResponse): MapPointMarkerDto {
   return {
     point_id: summary.point_id,
     point_type: summary.point_type,
@@ -2079,15 +2080,43 @@ function upsertFocusedMapMarker(marker: MapPointMarkerDto) {
   mapPointMarkers.value = [...mapPointMarkers.value, marker];
 }
 
-function focusPendingMapPoint(summary: MapPointSummaryResponse) {
-  clearNativeRoute();
-  const marker = summaryToFocusedMarker(summary);
+function syncFocusedMarkerFromSummary(summary: MapPointSummaryResponse) {
+  const marker = createFocusedMarkerFromSummary(summary);
   upsertFocusedMapMarker(marker);
   bottomContentItems.value = mapPointMarkers.value.map(mapMarkerToShellItem);
+}
+
+function focusPendingPoi(poi: NonNullable<MapPointSummaryResponse["associated_poi"]>) {
+  const summary = buildExternalSummaryFromPoi(poi);
+  if (!summary) {
+    return;
+  }
+  clearNativeRoute();
   selectedSummary.value = summary;
-  selectedPoiMarker.value = null;
+  selectedPoiMarker.value = buildSelectedPoiMarker(summary);
   contentLoadState.value = "ready";
   focusMapToPoint({ lng: summary.lng, lat: summary.lat });
+}
+
+async function loadPendingNavigationSummary(pending: PendingMapNavigation) {
+  clearNativeRoute();
+  if (pending.poi) {
+    focusPendingPoi(pending.poi);
+    return;
+  }
+  if (!pending.map_point_id) {
+    return;
+  }
+
+  if (pending.shell_item) {
+    upsertShellItemMapMarker(pending.shell_item);
+  }
+  await loadPointSummary(pending.map_point_id);
+  if (!selectedSummary.value) {
+    return;
+  }
+  syncFocusedMarkerFromSummary(selectedSummary.value);
+  selectedPoiMarker.value = null;
 }
 
 function consumePendingNavigation() {
@@ -2098,12 +2127,7 @@ function consumePendingNavigation() {
     return;
   }
   uni.removeStorageSync(MAP_PENDING_NAVIGATION_STORAGE_KEY);
-  const summary = buildPendingNavigationSummary(pending);
-  if (!summary) {
-    return;
-  }
-
-  focusPendingMapPoint(summary);
+  void loadPendingNavigationSummary(pending);
 }
 
 async function loadInitialMapData() {
@@ -3503,6 +3527,10 @@ onBeforeUnmount(() => {
 
 .status-in_progress {
   color: #d5a108;
+}
+
+.status-not_started {
+  color: #d73546;
 }
 
 .status-cancelled {

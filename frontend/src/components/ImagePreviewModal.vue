@@ -4,19 +4,12 @@
     class="image-preview-modal"
     @touchmove.stop.prevent
   >
-    <view class="image-preview-backdrop" />
+    <view class="image-preview-backdrop" @tap="close" />
     <view class="image-preview-toolbar">
       <text class="image-preview-count">{{ activeIndex + 1 }} / {{ safeImages.length }}</text>
-      <button
-        class="image-preview-close"
-        hover-class="image-preview-button-hover"
-        @tap.stop="close"
-      >
-        关闭
-      </button>
     </view>
 
-    <movable-area class="image-preview-area">
+    <movable-area class="image-preview-area" :style="imageAreaStyle">
       <movable-view
         :key="activeUrl"
         class="image-preview-movable"
@@ -27,8 +20,14 @@
         :scale-value="1"
         :x="0"
         :y="0"
+        @tap.stop
       >
-        <image class="image-preview-image" :src="activeUrl" mode="aspectFit" />
+        <image
+          class="image-preview-image"
+          :src="activeUrl"
+          mode="aspectFit"
+          @load="handleImageLoad"
+        />
       </movable-view>
     </movable-area>
 
@@ -52,7 +51,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -70,6 +69,12 @@ const emit = defineEmits<{
   change: [index: number];
 }>();
 
+const systemInfo = uni.getSystemInfoSync();
+const viewportSize = {
+  width: systemInfo.windowWidth || 375,
+  height: systemInfo.windowHeight || 667,
+};
+const imageNaturalSize = ref<{ width: number; height: number } | null>(null);
 const safeImages = computed(() => props.images.filter((url) => Boolean(url)));
 const activeIndex = computed(() => {
   if (!safeImages.value.length) {
@@ -78,6 +83,37 @@ const activeIndex = computed(() => {
   return Math.min(Math.max(props.currentIndex, 0), safeImages.value.length - 1);
 });
 const activeUrl = computed(() => safeImages.value[activeIndex.value] || "");
+const imageAreaStyle = computed(() => {
+  const naturalSize = imageNaturalSize.value;
+  if (!naturalSize?.width || !naturalSize.height) {
+    return "left:0;top:0;width:100%;height:100%;";
+  }
+
+  const imageRatio = naturalSize.width / naturalSize.height;
+  const viewportRatio = viewportSize.width / viewportSize.height;
+  if (imageRatio >= viewportRatio) {
+    const height = viewportSize.width / imageRatio;
+    const top = (viewportSize.height - height) / 2;
+    return `left:0px;top:${top}px;width:${viewportSize.width}px;height:${height}px;`;
+  }
+
+  const width = viewportSize.height * imageRatio;
+  const left = (viewportSize.width - width) / 2;
+  return `left:${left}px;top:0px;width:${width}px;height:${viewportSize.height}px;`;
+});
+
+watch(activeUrl, () => {
+  imageNaturalSize.value = null;
+});
+
+function handleImageLoad(event: Event) {
+  const detail = (event as Event & { detail?: { width?: number; height?: number } }).detail;
+  const width = Number(detail?.width);
+  const height = Number(detail?.height);
+  if (Number.isFinite(width) && width > 0 && Number.isFinite(height) && height > 0) {
+    imageNaturalSize.value = { width, height };
+  }
+}
 
 function close() {
   emit("close");
@@ -125,7 +161,7 @@ function showNext() {
   right: 30rpx;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   pointer-events: none;
 }
 
@@ -139,22 +175,6 @@ function showNext() {
   line-height: 1;
 }
 
-.image-preview-close {
-  width: 112rpx;
-  height: 58rpx;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.92);
-  color: #111827;
-  font-size: 24rpx;
-  font-weight: 900;
-  line-height: 58rpx;
-  pointer-events: auto;
-}
-
-.image-preview-close::after,
 .image-preview-nav::after {
   border: 0;
 }
@@ -162,9 +182,6 @@ function showNext() {
 .image-preview-area {
   position: absolute;
   z-index: 2;
-  inset: 0;
-  width: 100%;
-  height: 100%;
 }
 
 .image-preview-movable {

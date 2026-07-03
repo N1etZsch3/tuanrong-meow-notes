@@ -38,6 +38,14 @@ export interface CampusMapConfig {
   limit_bounds: LngLatBounds;
 }
 
+export interface MapTaskActiveExecution {
+  execution_date_id: string;
+  execute_date: string;
+  status?: string | null;
+  display_status?: string | null;
+  display_status_label?: string | null;
+}
+
 export interface MapShellItem {
   id: string;
   map_point_id?: string;
@@ -54,6 +62,7 @@ export interface MapShellItem {
   cover_photo_url?: string | null;
   icon_key?: string | null;
   associated_poi?: TencentPoiDto | null;
+  active_execution?: MapTaskActiveExecution | null;
 }
 
 export interface CampusExternalPoiResult {
@@ -459,7 +468,52 @@ function getTaskMarkerLocationDetail(marker: MapPointMarkerDto): string | null {
   return getStringExtra(marker.extra, "location_detail") || marker.subtitle;
 }
 
+function getTaskActiveExecution(marker: MapPointMarkerDto): MapTaskActiveExecution | null {
+  const value = marker.extra?.active_execution;
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const record = value as Record<string, unknown>;
+  const executionDateId = record.execution_date_id;
+  const executeDate = record.execute_date;
+  if (typeof executionDateId !== "string" || typeof executeDate !== "string") {
+    return null;
+  }
+  return {
+    execution_date_id: executionDateId,
+    execute_date: executeDate,
+    status: typeof record.status === "string" ? record.status : null,
+    display_status: typeof record.display_status === "string" ? record.display_status : null,
+    display_status_label:
+      typeof record.display_status_label === "string" ? record.display_status_label : null,
+  };
+}
+
+function normalizeExecutionStatusKey(status: string | null | undefined): string | null {
+  if (status === "not_started") {
+    return "not_started";
+  }
+  if (status === "pending" || status === "in_progress") {
+    return "in_progress";
+  }
+  if (status === "completed") {
+    return "completed";
+  }
+  if (status === "cancelled" || status === "skipped") {
+    return "cancelled";
+  }
+  return null;
+}
+
 function getTaskMarkerStatusKey(marker: MapPointMarkerDto): string | null {
+  const activeExecution = getTaskActiveExecution(marker);
+  const executionStatus = normalizeExecutionStatusKey(
+    activeExecution?.display_status || activeExecution?.status,
+  );
+  if (executionStatus) {
+    return executionStatus;
+  }
+
   const taskStatus = getStringExtra(marker.extra, "task_status");
   if (
     taskStatus === "completed" ||
@@ -482,6 +536,11 @@ function getTaskMarkerStatusKey(marker: MapPointMarkerDto): string | null {
 }
 
 function getTaskMarkerStatusLabel(marker: MapPointMarkerDto, type: MapShellItemType): string {
+  const activeExecution = getTaskActiveExecution(marker);
+  if (activeExecution?.display_status_label) {
+    return activeExecution.display_status_label;
+  }
+
   const statusLabel = getStringExtra(marker.extra, "task_status_label");
   if (statusLabel) {
     return statusLabel;
@@ -493,6 +552,9 @@ function getTaskMarkerStatusLabel(marker: MapPointMarkerDto, type: MapShellItemT
   }
   if (statusKey === "in_progress") {
     return "进行中";
+  }
+  if (statusKey === "not_started") {
+    return "未开始";
   }
   if (statusKey === "cancelled") {
     return "已取消";
@@ -506,6 +568,7 @@ function getTaskMarkerStatusLabel(marker: MapPointMarkerDto, type: MapShellItemT
 export function mapMarkerToShellItem(marker: MapPointMarkerDto): MapShellItem {
   const type = resolveMapShellItemType(marker.point_type, marker.business_type);
   const isTask = type === "daily_task" || type === "emergency_task";
+  const activeExecution = isTask ? getTaskActiveExecution(marker) : null;
 
   return {
     id: marker.point_id,
@@ -522,6 +585,7 @@ export function mapMarkerToShellItem(marker: MapPointMarkerDto): MapShellItem {
     lat: marker.lat,
     cover_photo_url: marker.cover_photo_url,
     icon_key: marker.icon_key,
+    active_execution: activeExecution,
   };
 }
 
@@ -554,6 +618,12 @@ export function mapBottomContentItemToShellItem(
   item: MapBottomContentItemDto,
 ): MapShellItem {
   const type = item.type as MapShellItemType;
+  const activeExecution = item.active_execution || null;
+  const statusLabel =
+    activeExecution?.display_status_label || item.status_label || getDefaultStatusLabel(type);
+  const statusKey =
+    normalizeExecutionStatusKey(activeExecution?.display_status || activeExecution?.status) ||
+    getStatusKeyFromLabel(statusLabel);
 
   return {
     id: item.map_point_id || item.id,
@@ -563,12 +633,13 @@ export function mapBottomContentItemToShellItem(
     subtitle: item.subtitle,
     description: item.description,
     distance_meters: item.distance_meters,
-    status_label: item.status_label || getDefaultStatusLabel(type),
-    status_key: getStatusKeyFromLabel(item.status_label),
+    status_label: statusLabel,
+    status_key: statusKey,
     tag_label: item.tag_label || getMapFilterLabel(type),
     lng: item.lng ?? undefined,
     lat: item.lat ?? undefined,
     cover_photo_url: item.cover_photo_url,
+    active_execution: activeExecution,
   };
 }
 

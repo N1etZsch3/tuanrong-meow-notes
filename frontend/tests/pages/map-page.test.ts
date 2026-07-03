@@ -744,7 +744,7 @@ describe("map page shell behavior", () => {
 
   it("navigates summary card view-detail actions to the task detail page", () => {
     expect(indexPageSource).toContain('action.key === "view_detail"');
-    expect(indexPageSource).toContain("uni.navigateTo({ url: action.path })");
+    expect(indexPageSource).toContain("appendExecutionDateQuery(action.path");
     expect(indexPageSource).toContain("/pages/tasks/detail?task_id=");
   });
 
@@ -796,12 +796,12 @@ describe("map page shell behavior", () => {
   it("consumes pending task-detail navigation on the map tab", () => {
     expect(indexPageSource).toContain("MAP_PENDING_NAVIGATION_STORAGE_KEY");
     expect(indexPageSource).toContain("consumePendingNavigation");
-    expect(indexPageSource).toContain("buildPendingNavigationSummary");
-    expect(indexPageSource).toContain("focusPendingMapPoint");
-    expect(indexPageSource).toContain("summaryToFocusedMarker");
-    expect(indexPageSource).toContain("upsertFocusedMapMarker(marker)");
+    expect(indexPageSource).toContain("loadPendingNavigationSummary");
+    expect(indexPageSource).toContain("await loadPointSummary(pending.map_point_id)");
+    expect(indexPageSource).not.toContain("buildPendingNavigationSummary");
+    expect(indexPageSource).not.toContain("focusPendingMapPoint");
+    expect(indexPageSource).not.toContain("summaryToFocusedMarker");
     expect(indexPageSource).not.toContain("mapPointMarkers.value = [marker]");
-    expect(indexPageSource).toContain("focus_only");
     expect(indexPageSource).not.toContain("void handleSummaryAction");
   });
 
@@ -966,13 +966,76 @@ describe("map page shell behavior", () => {
         description: "补粮并检查水碗。",
         distance_meters: null,
         status_label: "日常任务",
+        active_execution: {
+          execution_date_id: "execution-1",
+          execute_date: "2026-07-15",
+          display_status: "completed",
+          display_status_label: "已完成",
+        },
         tag_label: "日常任务",
         cover_photo_url: null,
       }),
     ).toMatchObject({
       map_point_id: "task-point",
       type: "daily_task",
+      status_label: "已完成",
+      status_key: "completed",
+      active_execution: {
+        execution_date_id: "execution-1",
+        execute_date: "2026-07-15",
+      },
     });
+  });
+
+  it("carries active child execution state from task markers into map task cards", () => {
+    const item = mapMarkerToShellItem({
+      point_id: "point-1",
+      point_type: "task",
+      point_scope: "campus",
+      business_type: "feeding",
+      business_id: "task-1",
+      name: "猫哥喂食任务",
+      subtitle: "屋檐下",
+      lng: 115.0617,
+      lat: 30.2311,
+      area_id: null,
+      area_name: null,
+      marker_key: "feeding",
+      icon_key: "task_feeding",
+      display_level: 80,
+      visibility: "public",
+      status: "active",
+      cover_photo_url: null,
+      preview_enabled: true,
+      preview_min_zoom: 18,
+      label_min_zoom: 16,
+      distance_meters: null,
+      extra: {
+        task_status: "in_progress",
+        task_status_label: "进行中",
+        feeding_status: "pending",
+        active_execution: {
+          execution_date_id: "execution-1",
+          execute_date: "2026-07-15",
+          display_status: "completed",
+          display_status_label: "已完成",
+        },
+      },
+    });
+
+    expect(item).toMatchObject({
+      id: "point-1",
+      type: "daily_task",
+      status_key: "completed",
+      active_execution: {
+        execution_date_id: "execution-1",
+        execute_date: "2026-07-15",
+        display_status: "completed",
+      },
+    });
+    expect(mapPageSource).toContain("active_execution");
+    expect(indexPageSource).toContain("appendExecutionDateQuery");
+    expect(indexPageSource).toContain("execution_date_id");
   });
 
   it("uses selected map markers as drawer list content for active marker filters", () => {

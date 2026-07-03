@@ -296,28 +296,93 @@ export function getTaskListStatusLabel(task: TaskListStatusSource): string {
   return task.status_label;
 }
 
+export type ExecutionDisplayTone =
+  | "not_started"
+  | "in_progress"
+  | "completed"
+  | "cancelled"
+  | "default";
+
+export interface TaskExecutionDisplaySource {
+  status?: string | null;
+  display_status?: string | null;
+  display_status_label?: string | null;
+}
+
+export function getExecutionDisplayTone(
+  execution: TaskExecutionDisplaySource | null | undefined,
+): ExecutionDisplayTone {
+  const status = execution?.display_status || execution?.status || "";
+  if (status === "not_started") {
+    return "not_started";
+  }
+  if (status === "in_progress" || status === "pending") {
+    return "in_progress";
+  }
+  if (status === "completed") {
+    return "completed";
+  }
+  if (status === "cancelled" || status === "skipped") {
+    return "cancelled";
+  }
+  return "default";
+}
+
+export function getExecutionDisplayLabel(
+  execution: TaskExecutionDisplaySource | null | undefined,
+): string {
+  if (execution?.display_status_label) {
+    return execution.display_status_label;
+  }
+
+  const tone = getExecutionDisplayTone(execution);
+  if (tone === "not_started") {
+    return "未开始";
+  }
+  if (tone === "in_progress") {
+    return "进行中";
+  }
+  if (tone === "completed") {
+    return "已完成";
+  }
+  if (tone === "cancelled") {
+    return "已取消";
+  }
+  return "待确认";
+}
+
 interface TaskDetailActionStateSource {
   can_checkin: boolean;
   checkin_disabled_reason: string | null;
   current_execution?: {
     status?: string | null;
+    display_status?: string | null;
     execute_date?: string | null;
   } | null;
 }
 
 export interface TaskDetailActionState {
-  label: "未开始" | "投喂" | "已完成";
-  tone: "not_started" | "ready" | "completed";
+  label: "未开始" | "投喂" | "已完成" | "已取消";
+  tone: "not_started" | "ready" | "completed" | "cancelled";
   disabled: boolean;
 }
 
 export function getTaskDetailActionState(
   source: TaskDetailActionStateSource,
 ): TaskDetailActionState {
-  if (source.current_execution?.status === "completed") {
+  const executionTone = getExecutionDisplayTone(source.current_execution);
+  if (executionTone === "completed") {
     return {
       label: "已完成",
       tone: "completed",
+      disabled: true,
+    };
+  }
+
+  if (executionTone === "cancelled") {
+    return {
+      label: "已取消",
+      tone: "cancelled",
       disabled: true,
     };
   }

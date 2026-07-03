@@ -36,8 +36,25 @@ export interface MeDashboardResponse {
   recent_notifications: Array<Record<string, unknown>>;
 }
 
-export interface EmptyRecordPage {
-  items: Array<Record<string, unknown>>;
+export interface MyCheckinRecordDto {
+  checkin_id: string;
+  task_id: string;
+  execution_date_id: string | null;
+  task_title: string;
+  task_type: string;
+  execute_date: string | null;
+  submitted_at: string;
+  process_result: string | null;
+  remark: string | null;
+  map_point: {
+    map_point_id: string;
+    location_name: string;
+  } | null;
+  photos: Array<Record<string, unknown>>;
+}
+
+export interface EmptyRecordPage<T = unknown> {
+  items: T[];
   page: number;
   page_size: number;
   total: number;
@@ -72,8 +89,8 @@ export function getMyTasks(
 export function getMyCheckins(
   accessToken: string,
   query?: PageQuery,
-): Promise<EmptyRecordPage> {
-  return request<EmptyRecordPage>({
+): Promise<EmptyRecordPage<MyCheckinRecordDto>> {
+  return request<EmptyRecordPage<MyCheckinRecordDto>>({
     url: API_ENDPOINTS.me.checkins,
     method: "GET",
     data: compactApiParams(query || {}),

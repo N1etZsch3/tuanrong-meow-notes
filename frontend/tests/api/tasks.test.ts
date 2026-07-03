@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   checkinTask,
+  deleteTaskCheckinPhoto,
   deleteSummerFeedingTask,
   getAdminTaskDetail,
   getTaskDetail,
@@ -69,6 +70,28 @@ describe("tasks api", () => {
       expect.objectContaining({
         method: "GET",
         url: expect.stringContaining("/tasks/task-1"),
+      }),
+    );
+  });
+
+  it("requests task detail scoped to a child execution date", async () => {
+    const requestMock = mockSuccess({ task_id: "task-1", detail_scope: "execution" });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await expect(
+      getTaskDetail("token-1", "task-1", { execution_date_id: "execution-1" }),
+    ).resolves.toMatchObject({
+      task_id: "task-1",
+      detail_scope: "execution",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "GET",
+        url: expect.stringContaining("/tasks/task-1"),
+        data: {
+          execution_date_id: "execution-1",
+        },
       }),
     );
   });
@@ -287,6 +310,26 @@ describe("tasks api", () => {
         url: expect.stringContaining("/tasks/task-1/checkins"),
         data: expect.objectContaining({
           photos: [expect.objectContaining({ file_id: "asset-2" })],
+        }),
+      }),
+    );
+  });
+
+  it("soft deletes a task checkin photo through the task business API", async () => {
+    const requestMock = mockSuccess({
+      photo_id: "photo-1",
+      deleted_at: "2026-07-02T12:30:00+08:00",
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await deleteTaskCheckinPhoto("token-1", "task-1", "photo-1");
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        url: expect.stringContaining("/tasks/task-1/checkin-photos/photo-1"),
+        header: expect.objectContaining({
+          Authorization: "Bearer token-1",
         }),
       }),
     );

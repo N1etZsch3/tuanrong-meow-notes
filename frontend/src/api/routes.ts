@@ -66,6 +66,7 @@ export const API_ENDPOINTS = {
   },
   files: {
     images: "/files/images",
+    asset: (assetId: ApiPathParam) => `/files/assets/${encodePathParam(assetId)}`,
     assetContent: (assetId: ApiPathParam, params: ApiParams = {}) =>
       withApiQuery(`/files/assets/${encodePathParam(assetId)}/content`, params),
   },
@@ -98,5 +99,7 @@ export const API_ENDPOINTS = {
     detail: (taskId: ApiPathParam) => `/tasks/${encodePathParam(taskId)}`,
     checkins: (taskId: ApiPathParam) =>
       `/tasks/${encodePathParam(taskId)}/checkins`,
+    checkinPhoto: (taskId: ApiPathParam, photoId: ApiPathParam) =>
+      `/tasks/${encodePathParam(taskId)}/checkin-photos/${encodePathParam(photoId)}`,
   },
 } as const;

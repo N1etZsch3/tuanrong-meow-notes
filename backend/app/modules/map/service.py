@@ -1,6 +1,6 @@
 import hashlib
 import json
-from datetime import date
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from math import asin, cos, radians, sin, sqrt
 from urllib.parse import quote, urlencode
@@ -14,6 +14,17 @@ from app.core.config import get_settings
 from app.core.errors import APIError, ErrorCode
 from app.modules.auth.models import User
 from app.modules.map.models import Campus, CampusArea, MapMarkerConfig, MapPoint, MapPointPhoto
+from app.modules.tasks.execution_state import (
+    active_execution as select_active_execution,
+)
+from app.modules.tasks.execution_state import (
+    active_execution_dates as sorted_active_execution_dates,
+)
+from app.modules.tasks.execution_state import (
+    execution_display_status,
+    execution_display_status_label,
+    normalize_execution_date_states,
+)
 from app.modules.tasks.models import Task, TaskPhoto
 
 EARTH_RADIUS_METERS = 6_371_000
@@ -552,6 +563,28 @@ def task_by_map_point_ids(db: Session, points: list[MapPoint]) -> dict[UUID, Tas
             Task.deleted_at.is_(None),
         )
     ).all()
+    changed = False
+    today = date.today()
+    now = datetime.now(tz=UTC)
+    for task in tasks:
+        changed = normalize_execution_date_states(
+            task.execution_dates,
+            today=today,
+            now=now,
+        ) or changed
+    if changed:
+        db.commit()
+        tasks = db.scalars(
+            select(Task)
+            .options(
+                selectinload(Task.execution_dates),
+                selectinload(Task.photos).selectinload(TaskPhoto.file_asset),
+            )
+            .where(
+                Task.map_point_id.in_(point_ids),
+                Task.deleted_at.is_(None),
+            )
+        ).all()
     return {task.map_point_id: task for task in tasks}
 
 
@@ -570,10 +603,7 @@ def filter_points_with_visible_task_business(
 
 def next_task_execution_date(task: Task) -> str | None:
     today = date.today()
-    active_dates = sorted(
-        (item for item in task.execution_dates if item.deleted_at is None),
-        key=lambda item: item.execute_date,
-    )
+    active_dates = sorted_active_execution_dates(task.execution_dates)
     pending = [
         item
         for item in active_dates
@@ -599,18 +629,33 @@ def today_task_execution_status(task: Task) -> str | None:
 
 
 def active_task_execution_dates(task: Task):
-    return [item for item in task.execution_dates if item.deleted_at is None]
+    return sorted_active_execution_dates(task.execution_dates)
+
+
+def active_task_execution_payload(task: Task | None) -> dict | None:
+    if task is None or task.task_type != "feeding":
+        return None
+    today = date.today()
+    execution = select_active_execution(task.execution_dates, today=today)
+    if execution is None:
+        return None
+    display_status = execution_display_status(execution, today=today)
+    return {
+        "execution_date_id": execution.id,
+        "execute_date": execution.execute_date.isoformat(),
+        "status": execution.status,
+        "display_status": display_status,
+        "display_status_label": execution_display_status_label(display_status),
+        "completed_at": execution.completed_at,
+        "checkin_id": execution.checkin_id,
+    }
 
 
 def feeding_task_marker_status(task: Task | None) -> str | None:
     if task is None or task.task_type != "feeding":
         return None
-    today_status = today_task_execution_status(task)
-    if today_status == "completed":
-        return "completed"
-
-    active_dates = active_task_execution_dates(task)
-    if active_dates and all(item.status == "completed" for item in active_dates):
+    active_payload = active_task_execution_payload(task)
+    if active_payload and active_payload["display_status"] == "completed":
         return "completed"
     return "pending"
 
@@ -630,6 +675,9 @@ def task_marker_extra(task: Task | None) -> dict:
         "next_execute_date": next_task_execution_date(task),
         "today_status": today_task_execution_status(task),
     }
+    active_payload = active_task_execution_payload(task)
+    if active_payload:
+        extra["active_execution"] = active_payload
     feeding_status = feeding_task_marker_status(task)
     if feeding_status:
         extra["feeding_status"] = feeding_status
@@ -1396,38 +1444,42 @@ def bottom_content(db: Session, *, mode: str = "auto", limit: int = 10) -> dict:
     )
     points = db.scalars(statement).all()
     task_lookup = task_by_map_point_ids(db, points)
-    return {
-        "content_type": "latest_tasks" if mode == "auto" else mode,
-        "title": "最新任务",
-        "items": [
+    items = []
+    for point in points:
+        task = task_lookup.get(point.id)
+        active_execution = active_task_execution_payload(task)
+        items.append(
             {
-                "id": task_lookup[point.id].id if point.id in task_lookup else point.id,
+                "id": task.id if task else point.id,
                 "type": "emergency_task"
                 if point_business_type(point, configs) == "emergency"
                 else "daily_task",
-                "title": task_lookup[point.id].title if point.id in task_lookup else point.name,
+                "title": task.title if task else point.name,
                 "subtitle": point.subtitle,
                 "description": point.location_detail
-                or (
-                    task_lookup[point.id].description
-                    if point.id in task_lookup
-                    else point.description
-                ),
+                or (task.description if task else point.description),
                 "distance_meters": None,
-                "status_label": task_status_label(task_lookup.get(point.id))
+                "status_label": (
+                    active_execution["display_status_label"]
+                    if active_execution
+                    else task_status_label(task)
+                )
                 or point_label_for_type(
                     point.point_type,
                     point_business_type(point, configs),
                 ),
                 "tag_label": point_label(point, configs),
-                "cover_photo_url": task_cover_photo(task_lookup.get(point.id))
-                or point_cover_photo(point),
+                "cover_photo_url": task_cover_photo(task) or point_cover_photo(point),
                 "map_point_id": point.id,
                 "lng": as_float(point.lng),
                 "lat": as_float(point.lat),
+                "active_execution": active_execution,
             }
-            for point in points
-        ],
+        )
+    return {
+        "content_type": "latest_tasks" if mode == "auto" else mode,
+        "title": "最新任务",
+        "items": items,
     }
 
 

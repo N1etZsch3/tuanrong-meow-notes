@@ -72,6 +72,11 @@ class Task(Base):
         cascade="all, delete-orphan",
         order_by="TaskActivityLog.created_at.desc()",
     )
+    checkins: Mapped[list["TaskCheckin"]] = relationship(
+        back_populates="task",
+        cascade="all, delete-orphan",
+        order_by="TaskCheckin.submitted_at.desc()",
+    )
 
 
 class TaskExecutionDate(Base):
@@ -148,6 +153,7 @@ class TaskCheckin(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
     submitter = relationship("User")
+    task: Mapped[Task] = relationship(back_populates="checkins")
     execution_date = relationship("TaskExecutionDate")
     photos: Mapped[list["TaskCheckinPhoto"]] = relationship(
         back_populates="checkin",
@@ -173,6 +179,7 @@ class TaskCheckinPhoto(Base):
 
     checkin: Mapped[TaskCheckin] = relationship(back_populates="photos")
     file_asset = relationship("FileAsset", foreign_keys=[file_id])
+    uploader = relationship("User", foreign_keys=[uploaded_by])
 
 
 class TaskActivityLog(Base):

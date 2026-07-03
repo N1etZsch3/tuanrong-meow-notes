@@ -68,47 +68,93 @@
             <text class="task-desc">{{ task.description }}</text>
           </view>
 
-          <view class="info-grid">
-            <view class="info-card">
-              <text class="info-label">本次任务日期</text>
-              <text class="info-value">{{ currentDateText }}</text>
+          <view class="task-info-panel">
+            <view class="task-info-section date-section">
+              <view class="info-section-head">
+                <text class="info-label">{{ isExecutionDetail ? "本次任务日期" : "任务日期" }}</text>
+              </view>
+              <text v-if="isExecutionDetail" class="single-date-value">{{ currentDateText }}</text>
+              <view v-else class="execution-date-list">
+                <button
+                  v-for="execution in parentExecutionDates"
+                  :key="execution.execution_date_id"
+                  class="execution-date-button"
+                  :class="getExecutionDisplayClass(execution)"
+                  hover-class="button-hover"
+                  @tap="goExecutionDetail(execution.execution_date_id)"
+                >
+                  <text class="execution-date-text">{{ formatTaskDate(execution.execute_date) }}</text>
+                  <text class="execution-date-status">{{ getExecutionDisplayLabel(execution) }}</text>
+                </button>
+              </view>
             </view>
-            <view class="info-card">
-              <text class="info-label">地址</text>
-              <text class="info-value">
-                {{ task.map_point.location_name }}{{ task.map_point.location_detail ? `，${task.map_point.location_detail}` : "" }}
+            <view class="task-info-divider" />
+            <view class="task-info-section address-section">
+              <view class="info-section-head">
+                <text class="info-label">地址</text>
+                <view class="address-pin" />
+              </view>
+              <text class="address-title">{{ task.map_point.location_name }}</text>
+              <text v-if="task.map_point.location_detail" class="address-detail">
+                {{ task.map_point.location_detail }}
               </text>
+              <text v-else class="address-detail">暂无详细地址</text>
             </view>
           </view>
 
           <view v-if="associatedPoi" class="section-card poi-section">
-            <text class="section-title">公共地点</text>
-            <text class="section-line">名称：{{ associatedPoi.name }}</text>
-            <text class="section-line">
-              类别：{{ associatedPoi.category || "腾讯地图点位" }}
-            </text>
-            <text class="section-line">
-              地址：{{ associatedPoi.address || "暂无地址" }}
-            </text>
+            <view class="section-head">
+              <text class="section-title">公共地点</text>
+              <button
+                class="poi-map-button"
+                hover-class="button-hover"
+                @tap="goViewAssociatedPoiOnMap"
+              >
+                地图查看
+              </button>
+            </view>
+            <view class="section-line">
+              <text class="section-line-label">名称</text>
+              <text class="section-line-value">{{ associatedPoi.name }}</text>
+            </view>
+            <view class="section-line">
+              <text class="section-line-label">类别</text>
+              <text class="section-line-value">
+                {{ associatedPoi.category || "腾讯地图点位" }}
+              </text>
+            </view>
+            <view class="section-line">
+              <text class="section-line-label">地址</text>
+              <text class="section-line-value">{{ associatedPoi.address || "暂无地址" }}</text>
+            </view>
           </view>
 
           <view class="section-card">
             <text class="section-title">任务要求</text>
-            <text class="section-line">物资：{{ task.required_items }}</text>
-            <text class="section-line">说明：{{ task.description }}</text>
-            <text class="section-line">
-              路线：{{ task.map_point.route_instruction || "暂无路线说明" }}
-            </text>
+            <view class="section-line">
+              <text class="section-line-label">物资</text>
+              <text class="section-line-value">{{ task.required_items }}</text>
+            </view>
+            <view class="section-line">
+              <text class="section-line-label">说明</text>
+              <text class="section-line-value">{{ task.description }}</text>
+            </view>
+            <view class="section-line">
+              <text class="section-line-label">路线</text>
+              <text class="section-line-value">
+                {{ task.map_point.route_instruction || "暂无路线说明" }}
+              </text>
+            </view>
           </view>
 
           <view class="section-card">
             <view class="section-head">
               <text class="section-title">任务动态</text>
-              <text class="section-meta">{{ task.activities.length }} 条</text>
+              <text class="section-meta">{{ activityCountText }}</text>
             </view>
-            <view v-if="task.activities.length" class="timeline">
+            <view v-if="isExecutionDetail && detailActivities.length" class="timeline">
               <view
-                v-for="activity in task.activities"
+                v-for="activity in detailActivities"
                 :key="activity.activity_id"
                 class="timeline-row"
               >
@@ -120,6 +166,34 @@
                 </view>
               </view>
             </view>
+            <view v-else-if="!isExecutionDetail && activityExecutionGroups.length" class="execution-groups">
+              <view
+                v-for="group in activityExecutionGroups"
+                :key="group.execution.execution_date_id"
+                class="execution-group-card"
+              >
+                <view class="execution-group-head">
+                  <text class="execution-group-date">{{ formatTaskDate(group.execution.execute_date) }}</text>
+                  <text class="execution-group-status" :class="getExecutionDisplayClass(group.execution)">
+                    {{ getExecutionDisplayLabel(group.execution) }}
+                  </text>
+                </view>
+                <view class="timeline compact-timeline">
+                  <view
+                    v-for="activity in group.activities"
+                    :key="activity.activity_id"
+                    class="timeline-row"
+                  >
+                    <view class="timeline-dot" />
+                    <view class="timeline-copy">
+                      <text class="timeline-title">{{ activity.title }}</text>
+                      <text class="timeline-content">{{ activity.content || "暂无备注" }}</text>
+                      <text class="timeline-time">{{ formatActivityTime(activity.created_at) }}</text>
+                    </view>
+                  </view>
+                </view>
+              </view>
+            </view>
             <text v-else class="empty-line">暂无任务动态</text>
           </view>
 
@@ -127,25 +201,69 @@
             <view class="section-head">
               <text class="section-title">完成照片</text>
               <button
+                v-if="isExecutionDetail"
                 class="small-button"
                 :loading="isUploading"
+                :disabled="!canCheckin || isUploading"
                 hover-class="button-hover"
                 @tap="chooseCheckinPhoto"
               >
                 上传
               </button>
             </view>
-            <view v-if="checkinPhotos.length" class="photo-strip">
-              <image
-                v-for="photo in checkinPhotos"
-                :key="photo.file_id || photo.file_url"
-                class="checkin-photo"
-                :src="photo.thumbnail_url || photo.file_url"
-                mode="aspectFill"
-                @tap="openCheckinPhotoPreview(photo)"
-              />
+            <view v-if="isExecutionDetail && displayCheckinPhotos.length" class="photo-strip">
+              <view
+                v-for="photo in displayCheckinPhotos"
+                :key="photo.key"
+                class="checkin-photo-cell"
+              >
+                <image
+                  class="checkin-photo"
+                  :src="photo.thumbnail_url || photo.file_url"
+                  mode="aspectFill"
+                  @tap="openCheckinPhotoPreview(photo)"
+                />
+                <button
+                  v-if="photo.can_delete"
+                  class="photo-delete-button"
+                  hover-class="button-hover"
+                  @tap.stop="confirmDeleteCheckinPhoto(photo)"
+                >
+                  删除
+                </button>
+              </view>
             </view>
-            <text v-else class="empty-line">完成投喂前可上传现场照片</text>
+            <view v-else-if="!isExecutionDetail && photoExecutionGroups.length" class="execution-groups">
+              <view
+                v-for="group in photoExecutionGroups"
+                :key="`photos-${group.execution.execution_date_id}`"
+                class="execution-group-card"
+              >
+                <view class="execution-group-head">
+                  <text class="execution-group-date">{{ formatTaskDate(group.execution.execute_date) }}</text>
+                  <text class="execution-group-status" :class="getExecutionDisplayClass(group.execution)">
+                    {{ getExecutionDisplayLabel(group.execution) }}
+                  </text>
+                </view>
+                <view class="photo-strip">
+                  <view
+                    v-for="photo in group.checkin_photos"
+                    :key="photo.photo_id"
+                    class="checkin-photo-cell"
+                  >
+                    <image
+                      class="checkin-photo"
+                      :src="photo.thumbnail_url || photo.file_url"
+                      mode="aspectFill"
+                      @tap="openGroupedCheckinPhotoPreview(group.checkin_photos, photo)"
+                    />
+                  </view>
+                </view>
+              </view>
+            </view>
+            <text v-else class="empty-line">
+              {{ isExecutionDetail ? "完成投喂前可上传现场照片" : "暂无完成照片" }}
+            </text>
           </view>
         </view>
       </view>
@@ -180,11 +298,15 @@
 import { onLoad } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
-import { uploadImage } from "@/api/files";
+import { deleteImageAsset, uploadImage } from "@/api/files";
 import {
   checkinTask,
+  deleteTaskCheckinPhoto,
   getTaskDetail,
+  type TaskCheckinPhotoDto,
   type TaskDetailDto,
+  type TaskExecutionDto,
+  type TaskExecutionGroupDto,
   type UploadedFileRef,
 } from "@/api/tasks";
 import ImagePreviewModal from "@/components/ImagePreviewModal.vue";
@@ -194,6 +316,8 @@ import { useUserStore } from "@/stores/user";
 import {
   buildUploadedTaskPhoto,
   formatTaskDate,
+  getExecutionDisplayLabel,
+  getExecutionDisplayTone,
   getTaskDetailActionState,
   getTaskPhotoDisplayUrl,
 } from "@/pages/tasks/task-page";
@@ -204,15 +328,25 @@ import taskIcon from "../../../素材/icon/任务.png";
 import loadingBackground from "../../../素材/加载页素材/加载页背景.jpg";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
+interface CheckinPhotoDisplay {
+  key: string;
+  photo_id: string | null;
+  file_id: string | null;
+  file_url: string;
+  thumbnail_url?: string | null;
+  can_delete: boolean;
+  is_pending: boolean;
+}
 
 const userStore = useUserStore();
 const taskId = ref("");
+const executionDateId = ref("");
 const task = ref<TaskDetailDto | null>(null);
 const loadState = ref<LoadState>("idle");
 const errorMessage = ref("");
 const isUploading = ref(false);
 const isSubmitting = ref(false);
-const checkinPhotos = ref<UploadedFileRef[]>([]);
+const pendingCheckinPhotos = ref<UploadedFileRef[]>([]);
 const failedHeroPhotoIds = ref<string[]>([]);
 const imagePreviewVisible = ref(false);
 const imagePreviewUrls = ref<string[]>([]);
@@ -231,31 +365,82 @@ const heroPhotos = computed(() => {
     }))
     .filter((photo) => photo.url && !failed.has(photo.photo_id));
 });
-const currentExecution = computed(() => task.value?.current_execution || task.value?.next_execution || null);
+const isExecutionDetail = computed(() => task.value?.detail_scope === "execution");
+const parentExecutionDates = computed<TaskExecutionDto[]>(() =>
+  task.value?.display_executions?.length
+    ? task.value.display_executions
+    : task.value?.execution_dates || [],
+);
+const currentExecution = computed(
+  () => task.value?.execution || task.value?.current_execution || task.value?.next_execution || null,
+);
 const currentDateText = computed(() => formatTaskDate(currentExecution.value?.execute_date));
 const associatedPoi = computed(() => task.value?.map_point.associated_poi || null);
+const detailActivities = computed(() => task.value?.activities || []);
+const executionGroups = computed<TaskExecutionGroupDto[]>(() => task.value?.execution_groups || []);
+const activityExecutionGroups = computed(() =>
+  executionGroups.value.filter((group) => group.activities.length),
+);
+const photoExecutionGroups = computed(() =>
+  executionGroups.value.filter((group) => group.checkin_photos.length),
+);
+const groupedActivityCount = computed(() =>
+  activityExecutionGroups.value.reduce((total, group) => total + group.activities.length, 0),
+);
+const activityCountText = computed(() => {
+  const count = isExecutionDetail.value ? detailActivities.value.length : groupedActivityCount.value;
+  return `${count}`;
+});
 const primaryActionState = computed(() =>
   getTaskDetailActionState({
-    can_checkin: Boolean(task.value?.actions.can_checkin && currentExecution.value),
+    can_checkin: Boolean(
+      isExecutionDetail.value && task.value?.actions.can_checkin && currentExecution.value,
+    ),
     checkin_disabled_reason: task.value?.actions.checkin_disabled_reason || null,
     current_execution: currentExecution.value
       ? {
           status: currentExecution.value.status,
+          display_status: currentExecution.value.display_status,
           execute_date: currentExecution.value.execute_date,
         }
       : null,
   }),
 );
-const canCheckin = computed(() => !primaryActionState.value.disabled);
+const canCheckin = computed(() => isExecutionDetail.value && !primaryActionState.value.disabled);
 const canAdminEditTask = computed(() =>
   Boolean(userStore.isAdmin && task.value?.actions.can_admin_edit),
 );
 const taskPhotoPreviewUrls = computed(() => heroPhotos.value.map((photo) => photo.url));
+const persistedCheckinPhotos = computed(() => task.value?.checkin_photos || []);
+const displayCheckinPhotos = computed<CheckinPhotoDisplay[]>(() => [
+  ...persistedCheckinPhotos.value.map((photo) => ({
+    key: `persisted-${photo.photo_id}`,
+    photo_id: photo.photo_id,
+    file_id: photo.file_id,
+    file_url: photo.file_url,
+    thumbnail_url: photo.thumbnail_url,
+    can_delete: photo.can_delete,
+    is_pending: false,
+  })),
+  ...pendingCheckinPhotos.value.map((photo, index) => ({
+    key: `pending-${photo.file_id || photo.file_url}-${index}`,
+    photo_id: null,
+    file_id: photo.file_id,
+    file_url: photo.file_url,
+    thumbnail_url: photo.thumbnail_url,
+    can_delete: true,
+    is_pending: true,
+  })),
+]);
 const checkinPhotoPreviewUrls = computed(() =>
-  checkinPhotos.value
+  displayCheckinPhotos.value
     .map((photo) => photo.file_url || photo.thumbnail_url || "")
     .filter((url) => url),
 );
+
+function getExecutionDisplayClass(execution: TaskExecutionDto): string {
+  return `execution-status-${getExecutionDisplayTone(execution)}`;
+}
 
 async function getAccessToken(): Promise<string | null> {
   const accessToken = await userStore.ensureFreshAccessToken();
@@ -305,9 +490,20 @@ function openTaskPhotoPreview(photoId: string) {
   openImagePreview(taskPhotoPreviewUrls.value, photo.url);
 }
 
-function openCheckinPhotoPreview(photo: UploadedFileRef) {
+function openCheckinPhotoPreview(photo: CheckinPhotoDisplay) {
   const current = photo.file_url || photo.thumbnail_url || "";
   openImagePreview(checkinPhotoPreviewUrls.value, current);
+}
+
+function openGroupedCheckinPhotoPreview(
+  photos: TaskCheckinPhotoDto[],
+  photo: TaskCheckinPhotoDto,
+) {
+  const urls = photos
+    .map((item) => item.file_url || item.thumbnail_url || "")
+    .filter((url) => url);
+  const current = photo.file_url || photo.thumbnail_url || "";
+  openImagePreview(urls, current);
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -324,9 +520,10 @@ async function loadTaskDetail(options: { retry?: boolean } = {}): Promise<void> 
 
   loadState.value = "loading";
   try {
-    task.value = await getTaskDetail(token, taskId.value);
+    task.value = await getTaskDetail(token, taskId.value, {
+      execution_date_id: executionDateId.value,
+    });
     failedHeroPhotoIds.value = [];
-    checkinPhotos.value = [];
     loadState.value = "ready";
   } catch (error) {
     if (options.retry) {
@@ -346,6 +543,14 @@ function retryTaskDetail() {
 }
 
 function chooseCheckinPhoto() {
+  if (!canCheckin.value) {
+    uni.showToast({
+      title: task.value?.actions.checkin_disabled_reason || "当前不可上传",
+      icon: "none",
+    });
+    return;
+  }
+
   uni.chooseImage({
     count: 3,
     sizeType: ["compressed"],
@@ -354,7 +559,25 @@ function chooseCheckinPhoto() {
       const paths = Array.isArray(result.tempFilePaths)
         ? result.tempFilePaths
         : [result.tempFilePaths].filter(Boolean);
-      void uploadCheckinPhotos(paths);
+      void confirmUploadCheckinPhotos(paths);
+    },
+  });
+}
+
+async function confirmUploadCheckinPhotos(paths: string[]) {
+  if (!paths.length) {
+    return;
+  }
+
+  uni.showModal({
+    title: "确认上传",
+    content: `确认上传 ${paths.length} 张完成照片？照片会随本次投喂记录提交，并在任务详情页展示。`,
+    confirmText: "上传",
+    cancelText: "取消",
+    success: (result) => {
+      if (result.confirm) {
+        void uploadCheckinPhotos(paths);
+      }
     },
   });
 }
@@ -374,7 +597,10 @@ async function uploadCheckinPhotos(paths: string[]) {
         visibility: "internal",
         caption: "投喂完成照片",
       });
-      checkinPhotos.value = [...checkinPhotos.value, buildUploadedTaskPhoto(asset)];
+      pendingCheckinPhotos.value = [
+        ...pendingCheckinPhotos.value,
+        buildUploadedTaskPhoto(asset),
+      ];
     }
     uni.showToast({ title: "照片已上传", icon: "success" });
   } catch (error) {
@@ -382,6 +608,82 @@ async function uploadCheckinPhotos(paths: string[]) {
     uni.showToast({ title: message, icon: "none" });
   } finally {
     isUploading.value = false;
+  }
+}
+
+function removePendingCheckinPhotoLocally(photo: CheckinPhotoDisplay) {
+  pendingCheckinPhotos.value = pendingCheckinPhotos.value.filter((item, index) => {
+    const key = `pending-${item.file_id || item.file_url}-${index}`;
+    return key !== photo.key;
+  });
+}
+
+async function deletePendingCheckinPhoto(photo: CheckinPhotoDisplay) {
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+
+  try {
+    if (photo.file_id) {
+      await deleteImageAsset(token, photo.file_id);
+    }
+    removePendingCheckinPhotoLocally(photo);
+    uni.showToast({ title: "照片已删除", icon: "success" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "删除失败";
+    uni.showToast({ title: message, icon: "none" });
+  }
+}
+
+function confirmDeleteCheckinPhoto(photo: CheckinPhotoDisplay) {
+  if (!photo.can_delete) {
+    return;
+  }
+
+  uni.showModal({
+    title: "删除照片",
+    content: "删除后其他成员将不再在任务详情页看到这张完成照片。",
+    confirmText: "删除",
+    confirmColor: "#d73546",
+    cancelText: "取消",
+    success: (result) => {
+      if (!result.confirm) {
+        return;
+      }
+      if (photo.is_pending) {
+        void deletePendingCheckinPhoto(photo);
+        return;
+      }
+      if (photo.photo_id) {
+        void deletePersistedCheckinPhoto(photo.photo_id);
+      }
+    },
+  });
+}
+
+async function deletePersistedCheckinPhoto(photoId: string) {
+  const token = await getAccessToken();
+  if (!token || !task.value) {
+    return;
+  }
+
+  try {
+    await deleteTaskCheckinPhoto(token, task.value.task_id, photoId);
+    task.value = {
+      ...task.value,
+      checkin_photos: task.value.checkin_photos.filter(
+        (photo: TaskCheckinPhotoDto) => photo.photo_id !== photoId,
+      ),
+      execution_groups: (task.value.execution_groups || []).map((group) => ({
+        ...group,
+        checkin_photos: group.checkin_photos.filter((photo) => photo.photo_id !== photoId),
+      })),
+    };
+    uni.showToast({ title: "照片已删除", icon: "success" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "删除失败";
+    uni.showToast({ title: message, icon: "none" });
   }
 }
 
@@ -406,9 +708,10 @@ async function completeFeedingTask() {
       is_completed: true,
       process_result: "已完成投喂",
       remark: "",
-      photos: checkinPhotos.value,
+      photos: pendingCheckinPhotos.value,
     });
     uni.showToast({ title: "投喂已完成", icon: "success" });
+    pendingCheckinPhotos.value = [];
     clearTaskListCache();
     await loadTaskDetail();
   } catch (error) {
@@ -425,16 +728,41 @@ function goNavigateToTaskPoint() {
   }
   uni.setStorageSync(MAP_PENDING_NAVIGATION_STORAGE_KEY, {
     source: "task_detail",
-    focus_only: true,
     task_id: task.value.task_id,
-    title: task.value.title,
-    map_point: {
-      ...task.value.map_point,
-      point_type: "task",
-      business_type: "feeding",
-      business_id: task.value.task_id,
+    map_point_id: task.value.map_point.map_point_id,
+    execution_date_id: currentExecution.value?.execution_date_id || null,
+    shell_item: {
+      id: task.value.task_id,
+      map_point_id: task.value.map_point.map_point_id,
+      type: "daily_task",
+      title: task.value.title,
+      subtitle: task.value.map_point.location_name,
+      description: task.value.map_point.location_detail,
+      distance_meters: null,
+      status_label: currentExecution.value
+        ? getExecutionDisplayLabel(currentExecution.value)
+        : task.value.status_label,
+      status_key: currentExecution.value?.display_status || task.value.status,
+      tag_label: "投喂任务",
+      lng: task.value.map_point.lng,
+      lat: task.value.map_point.lat,
+      cover_photo_url: task.value.cover_photo_url,
+      icon_key: "task_feeding",
+      associated_poi: task.value.map_point.associated_poi || null,
+      active_execution: currentExecution.value,
     },
-    route_instruction: task.value.map_point.route_instruction,
+  });
+  uni.switchTab({ url: "/pages/index/index" });
+}
+
+function goViewAssociatedPoiOnMap() {
+  const poi = associatedPoi.value;
+  if (!poi) {
+    return;
+  }
+  uni.setStorageSync(MAP_PENDING_NAVIGATION_STORAGE_KEY, {
+    source: "task_detail_poi",
+    poi,
   });
   uni.switchTab({ url: "/pages/index/index" });
 }
@@ -448,12 +776,20 @@ function goEditTask() {
   });
 }
 
+function goExecutionDetail(nextExecutionDateId: string) {
+  uni.navigateTo({
+    url: `/pages/tasks/detail?task_id=${taskId.value}&execution_date_id=${nextExecutionDateId}`,
+  });
+}
+
 function goBack() {
   uni.navigateBack();
 }
 
 onLoad((query) => {
   taskId.value = typeof query?.task_id === "string" ? query.task_id : "";
+  executionDateId.value =
+    typeof query?.execution_date_id === "string" ? query.execution_date_id : "";
   void loadTaskDetail({ retry: true });
 });
 </script>
@@ -512,6 +848,7 @@ onLoad((query) => {
 .retry-button::after,
 .small-button::after,
 .task-edit-button::after,
+.poi-map-button::after,
 .ghost-action::after,
 .primary-action::after {
   border: 0;
@@ -528,6 +865,8 @@ onLoad((query) => {
 .info-value,
 .section-title,
 .section-line,
+.section-line-label,
+.section-line-value,
 .section-meta,
 .empty-line,
 .timeline-title,
@@ -640,14 +979,7 @@ onLoad((query) => {
   line-height: 1.5;
 }
 
-.info-grid {
-  margin-top: 34rpx;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 18rpx;
-}
-
-.info-card,
+.task-info-panel,
 .section-card,
 .state-box {
   box-sizing: border-box;
@@ -656,9 +988,157 @@ onLoad((query) => {
   box-shadow: 0 14rpx 34rpx rgba(27, 54, 30, 0.09);
 }
 
-.info-card {
-  min-height: 156rpx;
-  padding: 26rpx;
+.task-info-panel {
+  margin-top: 34rpx;
+  overflow: hidden;
+  border: 2rpx solid rgba(212, 237, 208, 0.72);
+}
+
+.task-info-section {
+  padding: 28rpx;
+}
+
+.date-section {
+  background: rgba(247, 252, 246, 0.78);
+}
+
+.address-section {
+  background: rgba(255, 255, 255, 0.68);
+}
+
+.task-info-divider {
+  height: 1rpx;
+  margin: 0 28rpx;
+  background: rgba(189, 214, 185, 0.72);
+}
+
+.info-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.single-date-value,
+.address-title,
+.address-detail {
+  display: block;
+}
+
+.single-date-value {
+  margin-top: 18rpx;
+  color: #111827;
+  font-size: 32rpx;
+  font-weight: 900;
+}
+
+.address-title {
+  margin-top: 18rpx;
+  color: #111827;
+  font-size: 30rpx;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.address-detail {
+  margin-top: 10rpx;
+  color: #4b5563;
+  font-size: 25rpx;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+.address-pin {
+  position: relative;
+  width: 26rpx;
+  height: 26rpx;
+  border: 5rpx solid #63b95d;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: #ffffff;
+}
+
+.address-pin::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 8rpx;
+  height: 8rpx;
+  border-radius: 50%;
+  background: #63b95d;
+  content: "";
+  transform: translate(-50%, -50%);
+}
+
+.execution-date-list {
+  margin-top: 18rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.execution-date-button,
+.execution-group-status {
+  border: 0;
+  border-radius: 16rpx;
+  font-weight: 900;
+}
+
+.execution-date-button {
+  min-width: 160rpx;
+  height: 68rpx;
+  margin: 0;
+  padding: 8rpx 16rpx;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5rpx;
+}
+
+.execution-date-button::after {
+  border: 0;
+}
+
+.execution-date-text,
+.execution-date-status {
+  display: block;
+  overflow: hidden;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.execution-date-text {
+  font-size: 22rpx;
+}
+
+.execution-date-status {
+  font-size: 18rpx;
+}
+
+.execution-status-not_started {
+  background: #ffe7eb;
+  color: #d73546;
+}
+
+.execution-status-in_progress {
+  background: #fff4cc;
+  color: #a66f00;
+}
+
+.execution-status-completed {
+  background: #e6f6e4;
+  color: #238033;
+}
+
+.execution-status-cancelled {
+  background: #e5e7eb;
+  color: #667085;
+}
+
+.execution-status-default {
+  background: #edf4ff;
+  color: #2276ff;
 }
 
 .info-label,
@@ -668,14 +1148,6 @@ onLoad((query) => {
   color: #6b7280;
   font-size: 22rpx;
   font-weight: 700;
-}
-
-.info-value {
-  margin-top: 14rpx;
-  color: #111827;
-  font-size: 27rpx;
-  font-weight: 900;
-  line-height: 1.35;
 }
 
 .section-card,
@@ -709,11 +1181,41 @@ onLoad((query) => {
   font-weight: 900;
 }
 
+.poi-map-button {
+  width: 126rpx;
+  height: 56rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 18rpx;
+  background: #e9f7e9;
+  color: #287c31;
+  font-size: 23rpx;
+  font-weight: 900;
+  line-height: 56rpx;
+}
+
 .section-line {
   margin-top: 16rpx;
-  color: #465160;
+  display: flex;
+  align-items: flex-start;
+  gap: 10rpx;
+  line-height: 1.55;
+}
+
+.section-line-label {
+  flex: 0 0 70rpx;
+  color: #788293;
+  font-size: 24rpx;
+  font-weight: 800;
+}
+
+.section-line-value {
+  flex: 1;
+  min-width: 0;
+  color: #273040;
   font-size: 25rpx;
-  font-weight: 700;
+  font-weight: 900;
   line-height: 1.55;
 }
 
@@ -722,6 +1224,44 @@ onLoad((query) => {
   display: flex;
   flex-direction: column;
   gap: 22rpx;
+}
+
+.execution-groups {
+  margin-top: 22rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.execution-group-card {
+  box-sizing: border-box;
+  border: 2rpx solid rgba(197, 230, 193, 0.72);
+  border-radius: 22rpx;
+  padding: 20rpx;
+  background: rgba(247, 252, 246, 0.72);
+}
+
+.execution-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14rpx;
+}
+
+.execution-group-date {
+  color: #111827;
+  font-size: 26rpx;
+  font-weight: 900;
+}
+
+.execution-group-status {
+  padding: 8rpx 14rpx;
+  font-size: 20rpx;
+}
+
+.compact-timeline {
+  margin-top: 18rpx;
+  gap: 18rpx;
 }
 
 .timeline-row {
@@ -771,17 +1311,48 @@ onLoad((query) => {
   line-height: 58rpx;
 }
 
+.small-button[disabled] {
+  background: #edf1ed;
+  color: #9aa59a;
+}
+
 .photo-strip {
   margin-top: 22rpx;
   display: flex;
   gap: 14rpx;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;
+}
+
+.checkin-photo-cell {
+  position: relative;
+  flex: 0 0 126rpx;
+  width: 126rpx;
+  height: 126rpx;
 }
 
 .checkin-photo {
   width: 126rpx;
   height: 126rpx;
   border-radius: 20rpx;
+}
+
+.photo-delete-button {
+  position: absolute;
+  right: 6rpx;
+  top: 6rpx;
+  width: 58rpx;
+  height: 36rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 18rpx;
+  background: rgba(215, 53, 70, 0.92);
+  color: #ffffff;
+  font-size: 20rpx;
+  font-weight: 900;
+  line-height: 36rpx;
 }
 
 .empty-line {
@@ -837,6 +1408,13 @@ onLoad((query) => {
 
 .primary-action.action-completed,
 .primary-action.action-completed[disabled] {
+  background: #9ca3af;
+  color: #ffffff;
+  box-shadow: 0 14rpx 34rpx rgba(75, 85, 99, 0.14);
+}
+
+.primary-action.action-cancelled,
+.primary-action.action-cancelled[disabled] {
   background: #9ca3af;
   color: #ffffff;
   box-shadow: 0 14rpx 34rpx rgba(75, 85, 99, 0.14);

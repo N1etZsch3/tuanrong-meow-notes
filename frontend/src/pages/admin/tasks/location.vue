@@ -219,9 +219,7 @@ function selectAssociatedPoi(poi: TencentPoiDto) {
   selectedLocation.tencent_poi_lat = poi.lat;
   selectedLocation.tencent_poi_distance_meters = poi.distance_meters;
   selectedLocation.tencent_poi_match_method = "admin_selected";
-  if (!selectedLocation.location_detail?.trim()) {
-    selectedLocation.location_detail = poi.address || poi.name;
-  }
+  selectedLocation.location_detail = poi.name || poi.address || "";
 }
 
 function clearAssociatedPoi(options: { keepCandidates?: boolean } = {}) {

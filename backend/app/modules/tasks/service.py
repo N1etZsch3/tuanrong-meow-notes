@@ -8,11 +8,18 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.core.errors import APIError
+from app.core.errors import APIError, ErrorCode
 from app.modules.auth.models import AdminOperationLog, User
 from app.modules.files.models import FileAsset
 from app.modules.map.models import MapPoint
 from app.modules.map.service import associated_poi_payload, get_default_campus
+from app.modules.tasks.execution_state import (
+    active_execution,
+    active_execution_dates,
+    execution_display_status,
+    execution_display_status_label,
+    normalize_execution_date_states,
+)
 from app.modules.tasks.models import (
     Task,
     TaskActivityLog,
@@ -121,6 +128,14 @@ def _task_base_statement():
         selectinload(Task.photos).selectinload(TaskPhoto.file_asset),
         selectinload(Task.execution_dates).selectinload(TaskExecutionDate.completed_user),
         selectinload(Task.activities).selectinload(TaskActivityLog.actor).selectinload(User.profile),
+        selectinload(Task.checkins).selectinload(TaskCheckin.submitter).selectinload(User.profile),
+        selectinload(Task.checkins)
+        .selectinload(TaskCheckin.photos)
+        .selectinload(TaskCheckinPhoto.file_asset),
+        selectinload(Task.checkins)
+        .selectinload(TaskCheckin.photos)
+        .selectinload(TaskCheckinPhoto.uploader)
+        .selectinload(User.profile),
     )
 
 
@@ -144,7 +159,7 @@ def get_task_by_map_point(db: Session, map_point_id: UUID) -> Task | None:
 
 
 def _date_range_payload(execution_dates: list[TaskExecutionDate]) -> dict:
-    active_dates = [item for item in execution_dates if item.deleted_at is None]
+    active_dates = active_execution_dates(execution_dates)
     if not active_dates:
         return {
             "start_date": None,
@@ -176,13 +191,20 @@ def _date_range_payload(execution_dates: list[TaskExecutionDate]) -> dict:
     }
 
 
-def _execution_payload(execution_date: TaskExecutionDate | None) -> dict | None:
+def _execution_payload(
+    execution_date: TaskExecutionDate | None,
+    *,
+    today: date | None = None,
+) -> dict | None:
     if execution_date is None:
         return None
+    display_status = execution_display_status(execution_date, today=today or _today())
     return {
         "execution_date_id": execution_date.id,
         "execute_date": execution_date.execute_date.isoformat(),
         "status": execution_date.status,
+        "display_status": display_status,
+        "display_status_label": execution_display_status_label(display_status),
         "completed_by": _user_payload(execution_date.completed_user),
         "completed_at": execution_date.completed_at,
         "checkin_id": execution_date.checkin_id,
@@ -195,10 +217,7 @@ def _next_execution(
     today: date | None = None,
 ) -> TaskExecutionDate | None:
     today = today or _today()
-    active_dates = sorted(
-        (item for item in execution_dates if item.deleted_at is None),
-        key=lambda item: item.execute_date,
-    )
+    active_dates = active_execution_dates(execution_dates)
     future_pending = [
         item
         for item in active_dates
@@ -215,15 +234,7 @@ def _current_execution(
     current_date: date | None = None,
 ) -> TaskExecutionDate | None:
     current_date = current_date or _today()
-    active_dates = sorted(
-        (item for item in execution_dates if item.deleted_at is None),
-        key=lambda item: item.execute_date,
-    )
-    exact = next((item for item in active_dates if item.execute_date == current_date), None)
-    if exact:
-        return exact
-    fallback = active_dates[-1] if active_dates else None
-    return _next_execution(active_dates, today=current_date) or fallback
+    return active_execution(execution_dates, today=current_date)
 
 
 def _split_statuses(value: str | None) -> list[str]:
@@ -246,6 +257,77 @@ def _date_in_query_window(
     return True
 
 
+def _normalize_task_execution_dates(task: Task, *, today: date | None = None) -> bool:
+    today = today or _today()
+    return normalize_execution_date_states(
+        task.execution_dates,
+        today=today,
+        now=_now(),
+    )
+
+
+def _execution_matches_filters(
+    execution_date: TaskExecutionDate,
+    *,
+    execute_date: date | None = None,
+    execute_date_start: date | None = None,
+    execute_date_end: date | None = None,
+    execution_statuses: set[str] | None = None,
+    execution_display_statuses: set[str] | None = None,
+    today: date,
+) -> bool:
+    if not _date_in_query_window(
+        execution_date.execute_date,
+        execute_date=execute_date,
+        execute_date_start=execute_date_start,
+        execute_date_end=execute_date_end,
+    ):
+        return False
+    if execution_statuses and execution_date.status not in execution_statuses:
+        return False
+    display_status = execution_display_status(execution_date, today=today)
+    if execution_display_statuses and display_status not in execution_display_statuses:
+        return False
+    return True
+
+
+def _display_executions_payload(
+    execution_dates: list[TaskExecutionDate],
+    *,
+    execute_date: date | None = None,
+    execute_date_start: date | None = None,
+    execute_date_end: date | None = None,
+    execution_status: str | None = None,
+    execution_display_status: str | None = None,
+    today: date,
+) -> list[dict]:
+    storage_statuses = set(_split_statuses(execution_status))
+    display_statuses = set(_split_statuses(execution_display_status))
+    has_filter = bool(
+        execute_date
+        or execute_date_start
+        or execute_date_end
+        or storage_statuses
+        or display_statuses
+    )
+    active_dates = active_execution_dates(execution_dates)
+    if has_filter:
+        active_dates = [
+            item
+            for item in active_dates
+            if _execution_matches_filters(
+                item,
+                execute_date=execute_date,
+                execute_date_start=execute_date_start,
+                execute_date_end=execute_date_end,
+                execution_statuses=storage_statuses,
+                execution_display_statuses=display_statuses,
+                today=today,
+            )
+        ]
+    return [_execution_payload(item, today=today) for item in active_dates]
+
+
 def _list_display_execution(
     execution_dates: list[TaskExecutionDate],
     *,
@@ -253,16 +335,15 @@ def _list_display_execution(
     execute_date_start: date | None = None,
     execute_date_end: date | None = None,
     execution_status: str | None = None,
+    execution_display_status: str | None = None,
     today: date | None = None,
 ) -> TaskExecutionDate | None:
     today = today or _today()
-    active_dates = sorted(
-        (item for item in execution_dates if item.deleted_at is None),
-        key=lambda item: item.execute_date,
-    )
+    active_dates = active_execution_dates(execution_dates)
     statuses = set(_split_statuses(execution_status))
+    display_statuses = set(_split_statuses(execution_display_status))
     has_execution_filter = bool(
-        execute_date or execute_date_start or execute_date_end or statuses
+        execute_date or execute_date_start or execute_date_end or statuses or display_statuses
     )
     if not has_execution_filter:
         return _current_execution(active_dates, current_date=today)
@@ -270,13 +351,15 @@ def _list_display_execution(
     matching = [
         item
         for item in active_dates
-        if _date_in_query_window(
-            item.execute_date,
+        if _execution_matches_filters(
+            item,
             execute_date=execute_date,
             execute_date_start=execute_date_start,
             execute_date_end=execute_date_end,
+            execution_statuses=statuses,
+            execution_display_statuses=display_statuses,
+            today=today,
         )
-        and (not statuses or item.status in statuses)
     ]
     if not matching:
         return _current_execution(active_dates, current_date=today)
@@ -326,6 +409,95 @@ def _photo_payload(photo: TaskPhoto) -> dict:
         "is_cover": photo.is_cover,
         "created_at": photo.created_at,
     }
+
+
+def _is_admin(user: User | None) -> bool:
+    return user is not None and user.role in {"admin", "super_admin"}
+
+
+def _can_delete_checkin_photo(photo: TaskCheckinPhoto, viewer: User | None) -> bool:
+    return bool(_is_admin(viewer) or (viewer is not None and photo.uploaded_by == viewer.id))
+
+
+def _checkin_photo_payload(photo: TaskCheckinPhoto, viewer: User | None) -> dict:
+    file_url, thumbnail_url = _asset_backed_photo_urls(photo)
+    return {
+        "photo_id": photo.id,
+        "checkin_id": photo.checkin_id,
+        "task_id": photo.task_id,
+        "file_id": photo.file_id,
+        "file_url": file_url,
+        "thumbnail_url": thumbnail_url,
+        "caption": photo.caption,
+        "sort_order": photo.sort_order,
+        "uploaded_by": _user_payload(photo.uploader),
+        "can_delete": _can_delete_checkin_photo(photo, viewer),
+        "created_at": photo.created_at,
+    }
+
+
+def _task_checkin_photos_payload(
+    task: Task,
+    viewer: User | None,
+    *,
+    execution_date_id: UUID | None = None,
+) -> list[dict]:
+    photos: list[tuple[datetime, int, TaskCheckinPhoto]] = []
+    for checkin in task.checkins:
+        if checkin.deleted_at is not None:
+            continue
+        if execution_date_id is not None and checkin.task_execution_date_id != execution_date_id:
+            continue
+        submitted_at = checkin.submitted_at or checkin.created_at
+        for photo in checkin.photos:
+            if photo.deleted_at is None:
+                photos.append((submitted_at, photo.sort_order, photo))
+
+    ordered_photos = sorted(photos, key=lambda item: item[1])
+    ordered_photos = sorted(ordered_photos, key=lambda item: item[0], reverse=True)
+    return [
+        _checkin_photo_payload(photo, viewer)
+        for _, _, photo in ordered_photos
+    ]
+
+
+def _activities_payload(
+    activities: list[TaskActivityLog],
+    *,
+    execution_date_id: UUID | None = None,
+    limit: int | None = None,
+) -> list[dict]:
+    filtered = [
+        activity
+        for activity in sorted(activities, key=lambda item: item.created_at, reverse=True)
+        if execution_date_id is None or activity.task_execution_date_id == execution_date_id
+    ]
+    if limit is not None:
+        filtered = filtered[:limit]
+    return [_activity_payload(activity) for activity in filtered]
+
+
+def _execution_groups_payload(
+    task: Task,
+    *,
+    viewer: User | None,
+    today: date,
+) -> list[dict]:
+    return [
+        {
+            "execution": _execution_payload(execution, today=today),
+            "activities": _activities_payload(
+                task.activities,
+                execution_date_id=execution.id,
+            ),
+            "checkin_photos": _task_checkin_photos_payload(
+                task,
+                viewer,
+                execution_date_id=execution.id,
+            ),
+        }
+        for execution in active_execution_dates(task.execution_dates)
+    ]
 
 
 def _cover_photo_url(task: Task) -> str | None:
@@ -398,6 +570,7 @@ def task_list_item_payload(
     execute_date_start: date | None = None,
     execute_date_end: date | None = None,
     execution_status: str | None = None,
+    execution_display_status: str | None = None,
     today: date | None = None,
 ) -> dict:
     today = today or _today()
@@ -407,9 +580,19 @@ def task_list_item_payload(
         execute_date_start=execute_date_start,
         execute_date_end=execute_date_end,
         execution_status=execution_status,
+        execution_display_status=execution_display_status,
         today=today,
     )
     next_execution = _next_execution(task.execution_dates, today=today)
+    display_executions = _display_executions_payload(
+        task.execution_dates,
+        execute_date=execute_date,
+        execute_date_start=execute_date_start,
+        execute_date_end=execute_date_end,
+        execution_status=execution_status,
+        execution_display_status=execution_display_status,
+        today=today,
+    )
     return {
         "task_id": task.id,
         "title": task.title,
@@ -427,8 +610,9 @@ def task_list_item_payload(
             "lat": float(task.map_point.lat),
         },
         "date_range": _date_range_payload(task.execution_dates),
-        "current_execution": _execution_payload(current_execution),
-        "next_execution": _execution_payload(next_execution),
+        "current_execution": _execution_payload(current_execution, today=today),
+        "next_execution": _execution_payload(next_execution, today=today),
+        "display_executions": display_executions,
         "distance_meters": None,
         "published_at": task.published_at,
     }
@@ -457,17 +641,39 @@ def task_detail_payload(
     task: Task,
     *,
     current_date: date | None = None,
+    execution_date_id: UUID | None = None,
     activity_limit: int = 20,
     can_admin_edit: bool = False,
+    viewer: User | None = None,
 ) -> dict:
     today = current_date or _today()
-    current_execution = _current_execution(task.execution_dates, current_date=today)
+    selected_execution = None
+    if execution_date_id is not None:
+        selected_execution = next(
+            (
+                item
+                for item in task.execution_dates
+                if item.id == execution_date_id and item.deleted_at is None
+            ),
+            None,
+        )
+        if selected_execution is None:
+            raise APIError(
+                code=TASK_ERROR_EXECUTION_NOT_FOUND,
+                message="执行日期不存在",
+                status_code=404,
+            )
+    current_execution = selected_execution or _current_execution(
+        task.execution_dates,
+        current_date=today,
+    )
     next_execution = _next_execution(task.execution_dates, today=today)
     checkin_disabled_reason = _checkin_disabled_reason(
         task,
         current_execution,
         today=today,
     )
+    scoped_execution_id = selected_execution.id if selected_execution is not None else None
     return {
         "task_id": task.id,
         "task_no": task.task_no,
@@ -481,25 +687,38 @@ def task_detail_payload(
         "description": task.description,
         "required_items": task.required_items,
         "date_range": _date_range_payload(task.execution_dates),
-        "current_execution": _execution_payload(current_execution),
-        "next_execution": _execution_payload(next_execution),
+        "current_execution": _execution_payload(current_execution, today=today),
+        "next_execution": _execution_payload(next_execution, today=today),
+        "display_executions": _display_executions_payload(task.execution_dates, today=today),
+        "detail_scope": "execution" if selected_execution is not None else "parent",
+        "active_execution_id": current_execution.id if current_execution is not None else None,
+        "execution": (
+            _execution_payload(selected_execution, today=today)
+            if selected_execution is not None
+            else None
+        ),
         "map_point": _map_point_payload(task.map_point),
         "photos": [
             _photo_payload(photo)
             for photo in sorted(task.photos, key=lambda item: item.sort_order)
             if photo.deleted_at is None
         ],
+        "checkin_photos": _task_checkin_photos_payload(
+            task,
+            viewer,
+            execution_date_id=scoped_execution_id,
+        ),
         "execution_dates": [
-            _execution_payload(item)
+            _execution_payload(item, today=today)
             for item in sorted(task.execution_dates, key=lambda item: item.execute_date)
             if item.deleted_at is None
         ],
-        "activities": [
-            _activity_payload(activity)
-            for activity in sorted(task.activities, key=lambda item: item.created_at, reverse=True)[
-                :activity_limit
-            ]
-        ],
+        "execution_groups": _execution_groups_payload(task, viewer=viewer, today=today),
+        "activities": _activities_payload(
+            task.activities,
+            execution_date_id=scoped_execution_id,
+            limit=activity_limit,
+        ),
         "actions": {
             "can_navigate": True,
             "can_checkin": checkin_disabled_reason is None,
@@ -532,6 +751,7 @@ def list_tasks(
     execute_date_start: date | None = None,
     execute_date_end: date | None = None,
     execution_status: str | None = None,
+    execution_display_status: str | None = None,
     only_today: bool = False,
     page: int = 1,
     page_size: int = 20,
@@ -578,6 +798,34 @@ def list_tasks(
         statement = statement.where(Task.id.in_(task_ids))
 
     tasks = db.scalars(statement.order_by(Task.start_at.asc(), Task.published_at.desc())).all()
+    changed = False
+    for task in tasks:
+        changed = _normalize_task_execution_dates(task, today=today) or changed
+    if changed:
+        db.commit()
+        tasks = db.scalars(statement.order_by(Task.start_at.asc(), Task.published_at.desc())).all()
+
+    has_child_filter = bool(
+        query_date
+        or execute_date_start
+        or execute_date_end
+        or execution_status
+        or execution_display_status
+    )
+    if has_child_filter:
+        tasks = [
+            task
+            for task in tasks
+            if _display_executions_payload(
+                task.execution_dates,
+                execute_date=query_date,
+                execute_date_start=execute_date_start,
+                execute_date_end=execute_date_end,
+                execution_status=execution_status,
+                execution_display_status=execution_display_status,
+                today=today,
+            )
+        ]
     total = len(tasks)
     start = (page - 1) * page_size
     paged = tasks[start : start + page_size]
@@ -589,6 +837,7 @@ def list_tasks(
                 execute_date_start=execute_date_start,
                 execute_date_end=execute_date_end,
                 execution_status=execution_status,
+                execution_display_status=execution_display_status,
                 today=today,
             )
             for task in paged
@@ -815,16 +1064,23 @@ def get_task_detail(
     *,
     task_id: UUID,
     current_date: date | None = None,
+    execution_date_id: UUID | None = None,
     include_private: bool = False,
     activity_limit: int = 20,
     can_admin_edit: bool = False,
+    viewer: User | None = None,
 ) -> dict:
     task = get_task_or_raise(db, task_id, include_private=include_private)
+    if _normalize_task_execution_dates(task, today=current_date or _today()):
+        db.commit()
+        task = get_task_or_raise(db, task_id, include_private=include_private)
     return task_detail_payload(
         task,
         current_date=current_date,
+        execution_date_id=execution_date_id,
         activity_limit=activity_limit,
         can_admin_edit=can_admin_edit,
+        viewer=viewer,
     )
 
 
@@ -836,19 +1092,20 @@ def _checkin_photo(
     photo: UploadedFileRef,
     uploaded_by: User,
     sort_order: int,
-) -> None:
+) -> TaskCheckinPhoto:
     file_url, thumbnail_url = _resolve_uploaded_file_urls(db, photo)
-    db.add(
-        TaskCheckinPhoto(
-            checkin_id=checkin_id,
-            task_id=task_id,
-            file_id=photo.file_id,
-            file_url=file_url,
-            thumbnail_url=thumbnail_url,
-            sort_order=sort_order,
-            uploaded_by=uploaded_by.id,
-        )
+    checkin_photo = TaskCheckinPhoto(
+        checkin_id=checkin_id,
+        task_id=task_id,
+        file_id=photo.file_id,
+        file_url=file_url,
+        thumbnail_url=thumbnail_url,
+        sort_order=sort_order,
+        uploaded_by=uploaded_by.id,
     )
+    checkin_photo.uploader = uploaded_by
+    db.add(checkin_photo)
+    return checkin_photo
 
 
 def checkin_task(
@@ -873,6 +1130,9 @@ def checkin_task(
         )
 
     today = _today()
+    if _normalize_task_execution_dates(task, today=today):
+        db.commit()
+        task = get_task_or_raise(db, task_id)
     execute_date = payload.execute_date or today
     if execute_date > today:
         raise APIError(
@@ -925,15 +1185,19 @@ def checkin_task(
     )
     db.add(checkin)
     db.flush()
+    checkin_photos = []
     for index, photo in enumerate(payload.photos):
-        _checkin_photo(
-            db,
-            task_id=task.id,
-            checkin_id=checkin.id,
-            photo=photo,
-            uploaded_by=user,
-            sort_order=index,
+        checkin_photos.append(
+            _checkin_photo(
+                db,
+                task_id=task.id,
+                checkin_id=checkin.id,
+                photo=photo,
+                uploaded_by=user,
+                sort_order=index,
+            )
         )
+    db.flush()
 
     execution.status = "completed"
     execution.completed_by = user.id
@@ -982,8 +1246,47 @@ def checkin_task(
             "process_result": checkin.process_result,
             "remark": checkin.remark,
             "submitted_at": checkin.submitted_at,
-            "photos": [],
+            "photos": [
+                _checkin_photo_payload(photo, user)
+                for photo in sorted(checkin_photos, key=lambda item: item.sort_order)
+            ],
         },
+    }
+
+
+def delete_task_checkin_photo(
+    db: Session,
+    *,
+    task_id: UUID,
+    photo_id: UUID,
+    user: User,
+) -> dict:
+    photo = db.scalar(
+        select(TaskCheckinPhoto)
+        .options(selectinload(TaskCheckinPhoto.file_asset).selectinload(FileAsset.variants))
+        .where(
+            TaskCheckinPhoto.id == photo_id,
+            TaskCheckinPhoto.task_id == task_id,
+            TaskCheckinPhoto.deleted_at.is_(None),
+        )
+    )
+    if photo is None:
+        raise APIError(code=ErrorCode.RESOURCE_NOT_FOUND, message="照片不存在", status_code=404)
+    if not _can_delete_checkin_photo(photo, user):
+        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
+
+    deleted_at = _now()
+    photo.deleted_at = deleted_at
+    if photo.file_asset is not None and photo.file_asset.deleted_at is None:
+        photo.file_asset.process_status = "deleted"
+        photo.file_asset.deleted_at = deleted_at
+        for variant in photo.file_asset.variants:
+            if variant.deleted_at is None:
+                variant.deleted_at = deleted_at
+    db.commit()
+    return {
+        "photo_id": photo.id,
+        "deleted_at": deleted_at,
     }
 
 

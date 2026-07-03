@@ -168,6 +168,14 @@ export interface MapSearchResponse {
   suggestions: string[];
 }
 
+export interface MapTaskActiveExecutionDto {
+  execution_date_id: string;
+  execute_date: string;
+  status?: string | null;
+  display_status?: string | null;
+  display_status_label?: string | null;
+}
+
 export interface MapBottomContentItemDto {
   id: string;
   map_point_id?: string;
@@ -181,6 +189,7 @@ export interface MapBottomContentItemDto {
   cover_photo_url: string | null;
   lng?: number | null;
   lat?: number | null;
+  active_execution?: MapTaskActiveExecutionDto | null;
 }
 
 export interface MapBottomContentResponse {

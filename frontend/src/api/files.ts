@@ -6,6 +6,7 @@ import {
   ApiNetworkError,
   buildRequestUrl,
   createAuthorizationHeader,
+  request,
 } from "@/services/request";
 import type { ApiResponse } from "@/types/api";
 
@@ -17,6 +18,12 @@ export interface UploadedImageAsset {
   default_url: string;
   default_thumb_url: string | null;
   created_at?: string;
+}
+
+export interface DeleteImageAssetResponse {
+  asset_id: string;
+  deleted: boolean;
+  deleted_at: string;
 }
 
 export interface UploadImageOptions {
@@ -102,5 +109,16 @@ export function uploadImage(
         reject(new ApiNetworkError(error.errMsg));
       },
     });
+  });
+}
+
+export function deleteImageAsset(
+  accessToken: string,
+  assetId: string,
+): Promise<DeleteImageAssetResponse> {
+  return request<DeleteImageAssetResponse>({
+    url: API_ENDPOINTS.files.asset(assetId),
+    method: "DELETE",
+    token: accessToken,
   });
 }

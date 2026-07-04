@@ -337,10 +337,7 @@ export function shouldSyncMapScaleFromRegionChange(
   if (typeof input?.scale !== "number" || !Number.isFinite(input.scale)) {
     return false;
   }
-  if (input.causedBy === "drag" || input.causedBy === "update") {
-    return false;
-  }
-  return input.causedBy === "scale" || input.type === "end" || !input.causedBy;
+  return input.causedBy !== "update";
 }
 
 export function shouldQueryMapScaleFromRegionChange(

@@ -164,6 +164,18 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain("execution_date_id: executionDateId.value");
   });
 
+  it("binds the parent task detail bottom action to the active child execution", () => {
+    expect(taskDetailSource).toContain(
+      "can_checkin: Boolean(task.value?.actions.can_checkin && currentExecution.value)",
+    );
+    expect(taskDetailSource).toContain(
+      "const canCheckin = computed(() => !primaryActionState.value.disabled)",
+    );
+    expect(taskDetailSource).not.toContain(
+      "isExecutionDetail.value && task.value?.actions.can_checkin",
+    );
+  });
+
   it("builds task list date filter query parameters", () => {
     const baseDate = new Date(2026, 6, 2);
 

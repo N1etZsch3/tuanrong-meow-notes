@@ -334,6 +334,42 @@ describe("map page shell behavior", () => {
     expect(selectSource).toContain("upsertShellItemMapMarker(item)");
   });
 
+  it("keeps the selected point detail paired with a visible native marker", () => {
+    const loadSource = extractFunctionSource("loadPointSummary");
+    const refreshSource = extractFunctionSource("refreshMapPoints");
+
+    expect(indexPageSource).toContain("function ensureFocusedMarkerFromSummary");
+    expect(loadSource).toContain("ensureFocusedMarkerFromSummary(selectedSummary.value)");
+    expect(refreshSource).toContain("ensureFocusedMarkerFromSummary(selectedSummary.value)");
+  });
+
+  it("clears selected point state when the native map blank area is tapped", () => {
+    const tapSource = extractFunctionSource("handleNativeMapTap");
+    const clearSource = extractFunctionSource("clearSelectedMapPointState");
+
+    expect(indexPageSource).toContain('@tap="handleNativeMapTap"');
+    expect(tapSource).toContain("shouldIgnoreNativeMapTap()");
+    expect(tapSource).toContain("clearSelectedMapPointState()");
+    expect(clearSource).toContain("selectedSummary.value = null");
+    expect(clearSource).toContain("selectedPoiMarker.value = null");
+    expect(clearSource).toContain("filterMenuOpen.value = false");
+    expect(clearSource).not.toContain("activeFilter.value = null");
+    expect(clearSource).not.toContain("searchKeyword.value = \"\"");
+    expect(clearSource).not.toContain("clearNativeRoute()");
+  });
+
+  it("guards native map blank taps immediately after marker or poi taps", () => {
+    const markerTapSource = extractFunctionSource("handleNativeMarkerTap");
+    const poiTapSource = extractFunctionSource("handleNativePoiTap");
+    const guardSource = extractFunctionSource("shouldIgnoreNativeMapTap");
+
+    expect(indexPageSource).toContain("lastPointTapAt");
+    expect(indexPageSource).toContain("MAP_BLANK_TAP_GUARD_MS");
+    expect(markerTapSource).toContain("markPointTapInteraction()");
+    expect(poiTapSource).toContain("markPointTapInteraction()");
+    expect(guardSource).toContain("Date.now() - lastPointTapAt.value");
+  });
+
   it("deduplicates the selected point detail card before rendering text blocks", () => {
     expect(indexPageSource).toContain("summarySubtitleText");
     expect(indexPageSource).toContain("summaryDescriptionText");
@@ -583,7 +619,7 @@ describe("map page shell behavior", () => {
     expect(regionChangeSource).not.toContain("mapCenter.value = nextCenter");
   });
 
-  it("syncs native map scale only for scale gestures, not drag or programmatic updates", () => {
+  it("syncs native map scale whenever native regionchange provides a scale", () => {
     const regionChangeSource = extractFunctionSource("handleMapRegionChange");
 
     expect(indexPageSource).toContain("function syncMapScaleFromNative");
@@ -594,7 +630,6 @@ describe("map page shell behavior", () => {
     expect(regionChangeSource).toContain("shouldQueryMapScaleFromRegionChange(detail)");
     expect(regionChangeSource).toContain("syncMapScaleFromContext()");
     expect(regionChangeSource).not.toContain("mapScale.value = detail.scale");
-    expect(regionChangeSource).not.toContain('detail.causedBy !== "update"');
 
     expect(
       shouldSyncMapScaleFromRegionChange({
@@ -615,7 +650,7 @@ describe("map page shell behavior", () => {
         causedBy: "drag",
         scale: 15,
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldSyncMapScaleFromRegionChange({
         type: "end",
@@ -707,7 +742,7 @@ describe("map page shell behavior", () => {
   });
 
   it("keeps the filter menu in a native-map-safe cover layer", () => {
-    expect(indexPageSource).toContain('<cover-view class="map-filter-layer"');
+    expect(indexPageSource).toContain('class="map-filter-layer"');
     expect(indexPageSource).toContain('class="filter-panel-hit-layer"');
     expect(indexPageSource).toContain('@tap="toggleFilterMenu"');
     expect(indexPageSource).toContain(
@@ -722,6 +757,31 @@ describe("map page shell behavior", () => {
     expect(viewportIndex).toBeGreaterThan(-1);
     expect(layerIndex).toBeGreaterThan(viewportIndex);
     expect(layerIndex).toBeLessThan(drawerIndex);
+  });
+
+  it("hides the native filter cover layer while the image preview mask is open", () => {
+    const previewSource = extractFunctionSource("openImagePreview");
+
+    expect(indexPageSource).toContain('<cover-view v-if="!imagePreviewVisible" class="map-filter-layer"');
+    expect(previewSource).toContain("filterMenuOpen.value = false");
+  });
+
+  it("keeps native marker size aligned with main branch", () => {
+    expect(indexPageSource).toContain("const NATIVE_MARKER_HIT_SIZE = 34");
+    expect(indexPageSource).toContain("width: NATIVE_MARKER_HIT_SIZE");
+    expect(indexPageSource).toContain("height: NATIVE_MARKER_HIT_SIZE");
+  });
+
+  it("does not resize native markers on selection because native map marker size is not animatable", () => {
+    const nativeMarkerSource = indexPageSource.slice(
+      indexPageSource.indexOf("const nativeMapMarkers = computed"),
+      indexPageSource.indexOf("const nativeMapPolylines = computed"),
+    );
+
+    expect(indexPageSource).not.toContain("ACTIVE_NATIVE_MARKER_SIZE");
+    expect(indexPageSource).not.toContain("activeMapPointId");
+    expect(indexPageSource).not.toContain("function getNativeMarkerSize");
+    expect(nativeMarkerSource).not.toContain("markerSize");
   });
 
   it("keeps the filter menu animation native-map-safe on iOS", () => {

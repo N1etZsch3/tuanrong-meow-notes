@@ -5,7 +5,7 @@
         <button class="back-button" @tap="goBack">‹</button>
         <view>
           <text class="nav-title">管理员入口</text>
-          <text class="nav-subtitle">成员账号、喂食任务与物资点</text>
+          <text class="nav-subtitle">人员、喂食任务、物资点与地标点</text>
         </view>
       </view>
 
@@ -15,11 +15,11 @@
       </view>
 
       <view v-else class="admin-actions">
-        <button class="admin-action" @tap="goCreateUser">
-          <view class="action-icon">＋</view>
+        <button class="admin-action" @tap="goUserManagement">
+          <view class="action-icon">员</view>
           <view class="action-copy">
-            <text class="action-title">添加账户</text>
-            <text class="action-subtitle">创建成员喵喵号并要求首次登录改密</text>
+            <text class="action-title">人员管理</text>
+            <text class="action-subtitle">筛选成员、编辑资料并新增成员账号</text>
           </view>
           <text class="action-chevron">›</text>
         </button>
@@ -41,6 +41,15 @@
           </view>
           <text class="action-chevron">›</text>
         </button>
+
+        <button class="admin-action" @tap="goCreateLandmark">
+          <view class="action-icon action-icon-landmark">地</view>
+          <view class="action-copy">
+            <text class="action-title">新建地标点</text>
+            <text class="action-subtitle">插入长期地图地标、照片和路线说明</text>
+          </view>
+          <text class="action-chevron">›</text>
+        </button>
       </view>
     </view>
   </view>
@@ -51,8 +60,8 @@ import { useUserStore } from "@/stores/user";
 
 const userStore = useUserStore();
 
-function goCreateUser() {
-  uni.navigateTo({ url: "/pages/admin/create-user" });
+function goUserManagement() {
+  uni.navigateTo({ url: "/pages/admin/users/index" });
 }
 
 function goPublishTask() {
@@ -61,6 +70,10 @@ function goPublishTask() {
 
 function goCreateSupplyPoint() {
   uni.navigateTo({ url: "/pages/admin/supplies/create" });
+}
+
+function goCreateLandmark() {
+  uni.navigateTo({ url: "/pages/admin/landmarks/create" });
 }
 
 function goBack() {
@@ -168,6 +181,12 @@ function goBack() {
 
 .action-icon-supply {
   background: #287c31;
+  font-size: 34rpx;
+  line-height: 72rpx;
+}
+
+.action-icon-landmark {
+  background: #2d72d9;
   font-size: 34rpx;
   line-height: 72rpx;
 }

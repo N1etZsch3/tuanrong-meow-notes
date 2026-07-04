@@ -5,7 +5,7 @@
         <view class="nav-row">
           <button class="back-button" @tap="goBack">‹</button>
           <view>
-            <text class="nav-title">添加账户</text>
+            <text class="nav-title">新增成员</text>
             <text class="nav-subtitle">创建成员喵喵号</text>
           </view>
         </view>
@@ -63,10 +63,10 @@
           </label>
         </view>
 
-        <button class="submit-button" :loading="isSubmitting" @tap="submitCreateUser">创建账户</button>
+        <button class="submit-button" :loading="isSubmitting" @tap="submitCreateUser">新增成员</button>
 
         <view v-if="createdAccount" class="result-card">
-          <text class="result-title">账户已创建</text>
+          <text class="result-title">成员已新增</text>
           <text class="result-line">喵喵号：{{ createdAccount.meow_no }}</text>
           <text class="result-line">初始密码：{{ createdPassword }}</text>
           <text class="result-tip">请提醒成员首次登录后立即修改密码。</text>

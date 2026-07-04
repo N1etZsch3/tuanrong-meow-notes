@@ -109,7 +109,21 @@
 			"path": "pages/admin/create-user",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTitleText": "添加账户"
+				"navigationBarTitleText": "新增成员"
+			}
+		},
+		{
+			"path": "pages/admin/users/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "人员管理"
+			}
+		},
+		{
+			"path": "pages/admin/users/detail",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "成员资料"
 			}
 		},
 		{
@@ -138,6 +152,27 @@
 			"style": {
 				"navigationStyle": "custom",
 				"navigationBarTitleText": "选择物资点位置"
+			}
+		},
+		{
+			"path": "pages/admin/landmarks/create",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "新建地标点"
+			}
+		},
+		{
+			"path": "pages/admin/landmarks/location",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "选择地标位置"
+			}
+		},
+		{
+			"path": "pages/landmarks/detail",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "地标详情"
 			}
 		},
 		{

@@ -13,6 +13,7 @@ from app.modules.auth.schemas import (
     AdminResetPasswordRequest,
     AdminUpdateRoleRequest,
     AdminUpdateStatusRequest,
+    AdminUpdateUserRequest,
 )
 
 router = APIRouter(tags=["Admin Users"])
@@ -26,6 +27,9 @@ def list_users(
     keyword: str | None = None,
     role: str | None = None,
     status: str | None = None,
+    department: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = Query(default="desc", pattern="^(asc|desc)$"),
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
@@ -36,6 +40,9 @@ def list_users(
         keyword=keyword,
         role=role,
         status=status,
+        department=department,
+        sort_by=sort_by,
+        sort_order=sort_order,
     )
     return api_success(data=data, trace_id=request.state.trace_id)
 
@@ -59,6 +66,29 @@ def create_user(
     return api_success(data=data, trace_id=request.state.trace_id, message="成员账号创建成功")
 
 
+@router.get("/{user_id}", summary="Get member account detail")
+def get_user_detail(
+    user_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    data = service.get_user_detail(db, user_id=user_id)
+    return api_success(data=data, trace_id=request.state.trace_id)
+
+
+@router.patch("/{user_id}", summary="Update member account detail")
+def update_user_detail(
+    user_id: UUID,
+    payload: AdminUpdateUserRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    data = service.update_user_detail(db, admin=admin, user_id=user_id, payload=payload)
+    return api_success(data=data, trace_id=request.state.trace_id, message="成员资料已更新")
+
+
 @router.patch("/{user_id}/password", summary="Reset member password")
 def reset_password(
     user_id: UUID,
@@ -73,6 +103,17 @@ def reset_password(
         trace_id=request.state.trace_id,
         message="密码已重置",
     )
+
+
+@router.patch("/{user_id}/reset-password", summary="Reset member password")
+def reset_password_alias(
+    user_id: UUID,
+    payload: AdminResetPasswordRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    return reset_password(user_id=user_id, payload=payload, request=request, db=db, admin=admin)
 
 
 @router.patch("/{user_id}/status", summary="Update member status")

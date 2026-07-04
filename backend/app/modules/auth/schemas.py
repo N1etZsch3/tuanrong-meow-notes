@@ -95,10 +95,12 @@ class ChangePasswordResponse(BaseModel):
 
 class AdminUserProfileRequest(BaseModel):
     nickname: str = Field(default="", max_length=64)
+    avatar_url: str | None = Field(default=None, max_length=512)
     real_name: str | None = Field(default=None, max_length=64)
     department: str | None = Field(default=None, max_length=128)
     grade: str | None = Field(default=None, max_length=32)
     joined_at: date | None = None
+    contact_info: str | None = Field(default=None, max_length=128)
 
 
 class AdminCreateUserRequest(BaseModel):
@@ -149,6 +151,12 @@ class AdminUserListResponse(BaseModel):
     page_size: int
     total: int
     has_more: bool
+
+
+class AdminUpdateUserRequest(BaseModel):
+    role: str | None = None
+    status: str | None = None
+    profile: AdminUserProfileRequest | None = None
 
 
 class AdminResetPasswordRequest(BaseModel):

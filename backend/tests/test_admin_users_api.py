@@ -2,6 +2,13 @@ from app.modules.auth.models import User
 from tests.test_auth_api import create_captcha, create_token, create_user
 
 
+def set_profile_department(db_session, user: User, department: str) -> None:
+    user.profile.department = department
+    db_session.add(user.profile)
+    db_session.commit()
+    db_session.refresh(user)
+
+
 def test_admin_can_create_member_account(api_client, db_session):
     admin = create_user(
         db_session,
@@ -212,3 +219,143 @@ def test_admin_can_list_reset_status_and_role(api_client, db_session):
     )
     assert role_response.status_code == 200
     assert role_response.json()["data"]["role"] == "admin"
+
+
+def test_admin_user_list_filters_by_department_and_sorts_by_meow_no(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    first = create_user(
+        db_session,
+        student_no="trmx0003",
+        must_change_password=False,
+    )
+    second = create_user(
+        db_session,
+        student_no="trmx0001",
+        role="summer_volunteer",
+        must_change_password=False,
+    )
+    third = create_user(
+        db_session,
+        student_no="trmx0002",
+        must_change_password=False,
+    )
+    set_profile_department(db_session, first, "活动部")
+    set_profile_department(db_session, second, "生存保障部")
+    set_profile_department(db_session, third, "活动部")
+    token = create_token(admin)
+
+    asc_response = api_client.get(
+        "/api/v1/admin/users?department=活动部&sort_by=meow_no&sort_order=asc&page_size=10",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert asc_response.status_code == 200
+    asc_items = asc_response.json()["data"]["items"]
+    assert [item["meow_no"] for item in asc_items] == ["trmx0002", "trmx0003"]
+
+    desc_response = api_client.get(
+        "/api/v1/admin/users?department=活动部&sort_by=meow_no&sort_order=desc&page_size=10",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert desc_response.status_code == 200
+    desc_items = desc_response.json()["data"]["items"]
+    assert [item["meow_no"] for item in desc_items] == ["trmx0003", "trmx0002"]
+
+
+def test_admin_can_view_and_update_non_admin_member_detail(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    member = create_user(
+        db_session,
+        student_no="trmx0101",
+        must_change_password=False,
+    )
+    token = create_token(admin)
+
+    detail_response = api_client.get(
+        f"/api/v1/admin/users/{member.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert detail["meow_no"] == "trmx0101"
+    assert detail["editable"] is True
+    assert detail["can_reset_password"] is True
+
+    update_response = api_client.patch(
+        f"/api/v1/admin/users/{member.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "role": "summer_volunteer",
+            "status": "active",
+            "profile": {
+                "nickname": "新昵称",
+                "real_name": "新姓名",
+                "department": "宣传部",
+                "grade": "2026",
+                "contact_info": "wx-cat-helper",
+            },
+        },
+    )
+
+    assert update_response.status_code == 200
+    updated = update_response.json()["data"]
+    assert updated["meow_no"] == "trmx0101"
+    assert updated["role"] == "summer_volunteer"
+    assert updated["profile"]["nickname"] == "新昵称"
+    assert updated["profile"]["department"] == "宣传部"
+    assert updated["profile"]["contact_info"] == "wx-cat-helper"
+
+
+def test_admin_cannot_modify_or_reset_admin_account(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    target_admin = create_user(
+        db_session,
+        student_no="admin002",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    token = create_token(admin)
+
+    detail_response = api_client.get(
+        f"/api/v1/admin/users/{target_admin.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert detail["editable"] is False
+    assert detail["can_reset_password"] is False
+
+    update_response = api_client.patch(
+        f"/api/v1/admin/users/{target_admin.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"profile": {"nickname": "不能修改"}},
+    )
+    assert update_response.status_code == 403
+
+    reset_response = api_client.patch(
+        f"/api/v1/admin/users/{target_admin.id}/reset-password",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"new_password": "ResetPassword123", "must_change_password": True},
+    )
+    assert reset_response.status_code == 403

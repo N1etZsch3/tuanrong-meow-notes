@@ -1,0 +1,602 @@
+<template>
+  <view class="location-page">
+    <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
+    <view class="location-inner">
+      <view class="nav-row">
+        <button class="back-button" hover-class="button-hover" @tap="goBack">‹</button>
+        <view class="nav-copy">
+          <text class="nav-title">选择地标位置</text>
+          <text class="nav-subtitle">点击地图即可插入地标点</text>
+        </view>
+        <button class="top-confirm" hover-class="button-hover" @tap="confirmLocation">
+          确认
+        </button>
+      </view>
+
+      <view class="map-shell">
+        <map
+          class="native-map"
+          :longitude="selectedLocation.lng"
+          :latitude="selectedLocation.lat"
+          :scale="17"
+          :markers="markers"
+          :show-location="true"
+          :enable-zoom="true"
+          :enable-scroll="true"
+          @tap="selectLocationFromMap"
+        />
+        <view class="map-tip">点击地图可重新选点</view>
+        <button class="map-control reset-control" hover-class="button-hover" @tap="resetLocation">
+          重置
+        </button>
+      </view>
+
+      <scroll-view class="selected-card" scroll-y :show-scrollbar="false">
+        <text class="card-label">已选位置</text>
+        <view class="readonly-name">
+          <text>{{ selectedLocation.location_name || "地标名称来自创建表单" }}</text>
+        </view>
+        <input
+          v-model.trim="selectedLocation.location_detail"
+          class="location-input"
+          maxlength="40"
+          placeholder="位置补充说明"
+          placeholder-class="placeholder"
+        />
+        <view class="coord-grid">
+          <view>
+            <text class="coord-label">经度</text>
+            <text class="coord-value">{{ selectedLocation.lng.toFixed(6) }}</text>
+          </view>
+          <view>
+            <text class="coord-label">纬度</text>
+            <text class="coord-value">{{ selectedLocation.lat.toFixed(6) }}</text>
+          </view>
+        </view>
+        <view v-if="currentAssociatedPoi" class="poi-card is-linked">
+          <text class="poi-title">已关联附近地标：{{ currentAssociatedPoi.name }}</text>
+          <text class="poi-desc">
+            {{ currentAssociatedPoi.category || "腾讯地图点位" }} · {{ currentAssociatedPoi.address || "暂无地址" }}
+          </text>
+          <button class="poi-ghost-button" hover-class="button-hover" @tap="clearAssociatedPoi">
+            取消关联
+          </button>
+        </view>
+        <view v-else-if="poiLoadState === 'loading'" class="poi-card">
+          <text class="poi-title">正在查找附近地标</text>
+          <text class="poi-desc">请稍候</text>
+        </view>
+        <view v-else-if="associatedPoiCandidates.length" class="poi-card">
+          <text class="poi-title">附近地标</text>
+          <view class="poi-list">
+            <button
+              v-for="poi in associatedPoiCandidates"
+              :key="poi.poi_id || `${poi.name}-${poi.lng}-${poi.lat}`"
+              class="poi-option"
+              hover-class="button-hover"
+              @tap="selectAssociatedPoi(poi)"
+            >
+              <view class="poi-option-copy">
+                <text class="poi-option-name">{{ poi.name }}</text>
+                <text class="poi-option-desc">
+                  {{ poi.category || "腾讯地图点位" }} · 距离 {{ poi.distance_meters ?? "未知" }}m
+                </text>
+              </view>
+              <text class="poi-option-action">关联</text>
+            </button>
+          </view>
+          <button class="poi-ghost-button poi-clear-button" hover-class="button-hover" @tap="clearAssociatedPoi">
+            不关联地标
+          </button>
+        </view>
+        <view v-else-if="poiLoadState === 'ready'" class="poi-card">
+          <text class="poi-title">附近暂无地标</text>
+          <text class="poi-desc">可以直接使用当前选点创建地标点。</text>
+        </view>
+        <text class="info-line">该位置将用于地图中的地标点</text>
+      </scroll-view>
+    </view>
+
+    <view class="bottom-actions">
+      <button class="cancel-button" hover-class="button-hover" @tap="goBack">取消</button>
+      <button class="confirm-button" hover-class="button-hover" @tap="confirmLocation">
+        确认此位置
+      </button>
+    </view>
+  </view>
+</template>
+
+<script setup lang="ts">
+import { onLoad } from "@dcloudio/uni-app";
+import { computed, reactive, ref } from "vue";
+
+import { getNearbyMapPois, type TencentPoiDto } from "@/api/map";
+import { useUserStore } from "@/stores/user";
+import {
+  HBNU_DEFAULT_LANDMARK_LOCATION,
+  LANDMARK_LOCATION_STORAGE_KEY,
+  selectedLocationAssociatedPoi,
+  type SelectedLandmarkLocation,
+} from "@/pages/admin/landmarks/landmark-page";
+
+import landmarkMarkerIcon from "../../../../素材/png/地图点/地标.png";
+import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
+
+type PoiLoadState = "idle" | "loading" | "ready" | "error";
+
+const userStore = useUserStore();
+const selectedLocation = reactive<SelectedLandmarkLocation>({
+  ...HBNU_DEFAULT_LANDMARK_LOCATION,
+});
+const associatedPoiCandidates = ref<TencentPoiDto[]>([]);
+const poiLoadState = ref<PoiLoadState>("idle");
+const initialName = ref("");
+const currentAssociatedPoi = computed(() => selectedLocationAssociatedPoi(selectedLocation));
+const markers = computed(() => [
+  {
+    id: 1,
+    longitude: selectedLocation.lng,
+    latitude: selectedLocation.lat,
+    iconPath: landmarkMarkerIcon,
+    width: 42,
+    height: 42,
+    callout: {
+      content: selectedLocation.location_name || "地标坐标",
+      color: "#111827",
+      fontSize: 12,
+      borderRadius: 8,
+      bgColor: "#ffffff",
+      padding: 8,
+      display: "ALWAYS",
+    },
+  },
+]);
+
+function readLocationDraft() {
+  const value = uni.getStorageSync(LANDMARK_LOCATION_STORAGE_KEY);
+  if (value && typeof value === "object") {
+    Object.assign(selectedLocation, value as SelectedLandmarkLocation);
+  }
+  initialName.value = selectedLocation.location_name || "";
+}
+
+function selectLocationFromMap(event: any) {
+  const lng = Number(event.detail?.longitude);
+  const lat = Number(event.detail?.latitude);
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+    return;
+  }
+  selectedLocation.lng = Number(lng.toFixed(7));
+  selectedLocation.lat = Number(lat.toFixed(7));
+  selectedLocation.location_name = initialName.value;
+  clearAssociatedPoi({ keepCandidates: false });
+  void loadNearbyPoiCandidates();
+}
+
+function resetLocation() {
+  Object.assign(selectedLocation, {
+    ...HBNU_DEFAULT_LANDMARK_LOCATION,
+    location_name: initialName.value,
+  });
+  clearAssociatedPoi({ keepCandidates: false });
+  poiLoadState.value = "idle";
+}
+
+async function loadNearbyPoiCandidates() {
+  const token = await userStore.ensureFreshAccessToken();
+  if (!token) {
+    poiLoadState.value = "error";
+    return;
+  }
+  poiLoadState.value = "loading";
+  try {
+    const response = await getNearbyMapPois(token, {
+      lng: selectedLocation.lng,
+      lat: selectedLocation.lat,
+      keyword: selectedLocation.location_name || "湖北师范大学",
+      radius: 180,
+      limit: 6,
+    });
+    associatedPoiCandidates.value = response.candidates;
+    poiLoadState.value = "ready";
+  } catch {
+    associatedPoiCandidates.value = [];
+    poiLoadState.value = "error";
+  }
+}
+
+function selectAssociatedPoi(poi: TencentPoiDto) {
+  selectedLocation.tencent_poi_id = poi.poi_id;
+  selectedLocation.tencent_poi_name = poi.name;
+  selectedLocation.tencent_poi_address = poi.address;
+  selectedLocation.tencent_poi_category = poi.category;
+  selectedLocation.tencent_poi_lng = poi.lng;
+  selectedLocation.tencent_poi_lat = poi.lat;
+  selectedLocation.tencent_poi_distance_meters = poi.distance_meters;
+  selectedLocation.tencent_poi_match_method = "admin_selected";
+  selectedLocation.location_detail = poi.name || poi.address || "";
+  selectedLocation.location_name = initialName.value;
+}
+
+function clearAssociatedPoi(options: { keepCandidates?: boolean } = {}) {
+  selectedLocation.tencent_poi_id = null;
+  selectedLocation.tencent_poi_name = null;
+  selectedLocation.tencent_poi_address = null;
+  selectedLocation.tencent_poi_category = null;
+  selectedLocation.tencent_poi_lng = null;
+  selectedLocation.tencent_poi_lat = null;
+  selectedLocation.tencent_poi_distance_meters = null;
+  selectedLocation.tencent_poi_match_method = null;
+  if (!options.keepCandidates) {
+    associatedPoiCandidates.value = [];
+  }
+}
+
+function confirmLocation() {
+  selectedLocation.location_name = initialName.value;
+  if (!selectedLocation.location_name.trim()) {
+    uni.showToast({ title: "请先在表单填写地标名称", icon: "none" });
+    return;
+  }
+  if (!selectedLocation.location_detail?.trim()) {
+    uni.showToast({ title: "请输入位置补充说明", icon: "none" });
+    return;
+  }
+  uni.setStorageSync(LANDMARK_LOCATION_STORAGE_KEY, { ...selectedLocation });
+  uni.navigateBack();
+}
+
+function goBack() {
+  uni.navigateBack();
+}
+
+onLoad(() => {
+  readLocationDraft();
+});
+</script>
+
+<style scoped>
+.location-page {
+  position: relative;
+  height: 100vh;
+  overflow: hidden;
+  color: #111827;
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+}
+
+.page-bg {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+.location-inner {
+  position: relative;
+  z-index: 1;
+  box-sizing: border-box;
+  height: 100vh;
+  padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx)
+    calc(env(safe-area-inset-bottom) + 160rpx);
+  display: flex;
+  flex-direction: column;
+}
+
+.nav-row {
+  display: grid;
+  grid-template-columns: 72rpx minmax(0, 1fr) 96rpx;
+  align-items: center;
+  gap: 22rpx;
+}
+
+.back-button,
+.top-confirm,
+.cancel-button,
+.confirm-button,
+.map-control,
+.poi-ghost-button,
+.poi-option {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.back-button {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  color: #111827;
+  font-size: 58rpx;
+  line-height: 62rpx;
+  box-shadow: 0 12rpx 28rpx rgba(26, 52, 30, 0.12);
+}
+
+.back-button::after,
+.top-confirm::after,
+.cancel-button::after,
+.confirm-button::after,
+.map-control::after,
+.poi-ghost-button::after,
+.poi-option::after {
+  border: 0;
+}
+
+.nav-title,
+.nav-subtitle,
+.card-label,
+.coord-label,
+.coord-value,
+.info-line,
+.poi-title,
+.poi-desc,
+.poi-option-name,
+.poi-option-desc {
+  display: block;
+}
+
+.nav-title {
+  color: #111827;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.nav-subtitle {
+  margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
+  color: #6b7280;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
+  font-weight: 700;
+}
+
+.top-confirm {
+  height: 62rpx;
+  border-radius: 20rpx;
+  background: transparent;
+  color: #287c31;
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 62rpx;
+}
+
+.map-shell {
+  position: relative;
+  flex-shrink: 0;
+  height: 640rpx;
+  margin-top: 34rpx;
+  border-radius: 30rpx;
+  overflow: hidden;
+  background: #dff2d2;
+  box-shadow: 0 16rpx 40rpx rgba(27, 54, 30, 0.12);
+}
+
+.native-map {
+  width: 100%;
+  height: 100%;
+}
+
+.map-tip {
+  position: absolute;
+  top: 26rpx;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 14rpx 24rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.92);
+  color: #263324;
+  font-size: 24rpx;
+  font-weight: 900;
+  box-shadow: 0 8rpx 20rpx rgba(26, 52, 30, 0.1);
+}
+
+.map-control {
+  position: absolute;
+  right: 22rpx;
+  bottom: 28rpx;
+  width: 96rpx;
+  height: 84rpx;
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.94);
+  color: #287c31;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 84rpx;
+  box-shadow: 0 8rpx 20rpx rgba(26, 52, 30, 0.1);
+}
+
+.selected-card {
+  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  margin-top: 28rpx;
+  padding: 30rpx;
+  border-radius: 28rpx;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 14rpx 34rpx rgba(27, 54, 30, 0.09);
+}
+
+.card-label {
+  color: #287c31;
+  font-size: 24rpx;
+  font-weight: 900;
+}
+
+.readonly-name,
+.location-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 76rpx;
+  margin-top: 18rpx;
+  padding: 0 20rpx;
+  border-radius: 20rpx;
+  color: #111827;
+  font-size: 26rpx;
+  font-weight: 800;
+}
+
+.readonly-name {
+  background: #edf8e8;
+  color: #287c31;
+  line-height: 76rpx;
+}
+
+.location-input {
+  border: 2rpx solid rgba(40, 124, 49, 0.25);
+  background: #ffffff;
+}
+
+.placeholder {
+  color: #8b919b;
+}
+
+.coord-grid {
+  margin-top: 24rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18rpx;
+}
+
+.coord-label {
+  color: #6b7280;
+  font-size: 22rpx;
+  font-weight: 700;
+}
+
+.coord-value {
+  margin-top: 8rpx;
+  color: #111827;
+  font-size: 25rpx;
+  font-weight: 900;
+}
+
+.poi-card {
+  margin-top: 22rpx;
+  padding: 18rpx;
+  border-radius: 20rpx;
+  background: #f6fbf2;
+  border: 2rpx solid rgba(40, 124, 49, 0.14);
+}
+
+.poi-card.is-linked {
+  background: #edf8e8;
+}
+
+.poi-title {
+  color: #1f6f29;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.poi-desc {
+  margin-top: 8rpx;
+  color: #65705f;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.poi-ghost-button {
+  height: 58rpx;
+  margin-top: 14rpx;
+  border-radius: 18rpx;
+  background: #ffffff;
+  color: #287c31;
+  font-size: 22rpx;
+  font-weight: 900;
+  line-height: 58rpx;
+}
+
+.poi-list {
+  margin-top: 16rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.poi-option {
+  width: 100%;
+  min-height: 74rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 18rpx;
+  background: #ffffff;
+  color: #111827;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70rpx;
+  align-items: center;
+  gap: 14rpx;
+  text-align: left;
+}
+
+.poi-option-name {
+  color: #1f6f29;
+  font-size: 23rpx;
+  font-weight: 900;
+}
+
+.poi-option-desc {
+  margin-top: 6rpx;
+  color: #65705f;
+  font-size: 20rpx;
+  font-weight: 800;
+}
+
+.poi-option-action {
+  color: #287c31;
+  font-size: 22rpx;
+  font-weight: 900;
+  text-align: right;
+}
+
+.poi-clear-button {
+  width: 100%;
+}
+
+.info-line {
+  margin-top: 24rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 18rpx;
+  background: #edf8e8;
+  color: #287c31;
+  font-size: 23rpx;
+  font-weight: 900;
+}
+
+.bottom-actions {
+  position: fixed;
+  z-index: 4;
+  left: 32rpx;
+  right: 32rpx;
+  bottom: calc(env(safe-area-inset-bottom) + 24rpx);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.18fr);
+  gap: 22rpx;
+}
+
+.cancel-button,
+.confirm-button {
+  height: 92rpx;
+  border-radius: 30rpx;
+  font-size: 30rpx;
+  font-weight: 900;
+  line-height: 92rpx;
+}
+
+.cancel-button {
+  border: 2rpx solid #287c31;
+  background: rgba(255, 255, 255, 0.96);
+  color: #287c31;
+}
+
+.confirm-button {
+  background: #287c31;
+  color: #ffffff;
+  box-shadow: 0 14rpx 34rpx rgba(40, 124, 49, 0.22);
+}
+
+.button-hover {
+  opacity: 0.9;
+  transform: translateY(2rpx);
+}
+</style>

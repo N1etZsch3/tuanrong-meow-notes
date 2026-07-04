@@ -1494,6 +1494,8 @@ def detail_path(
         if supply:
             return f"/pages/supplies/detail?supply_point_id={supply.id}"
         return f"/pages/supplies/detail?map_point_id={point.id}"
+    if point.point_type == "landmark":
+        return f"/pages/landmarks/detail?landmark_id={point.id}"
     return f"/pages/map/points/detail?point_id={point.id}"
 
 

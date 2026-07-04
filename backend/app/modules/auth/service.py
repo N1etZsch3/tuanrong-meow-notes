@@ -20,12 +20,14 @@ from app.modules.auth.schemas import (
     AdminResetPasswordRequest,
     AdminUpdateRoleRequest,
     AdminUpdateStatusRequest,
+    AdminUpdateUserRequest,
     ChangePasswordRequest,
     LoginRequest,
 )
 
 VALID_ROLES = {"member", "summer_volunteer", "admin"}
 VALID_STATUSES = {"active", "blocked", "left", "deleted"}
+ADMIN_ROLES = {"admin", "super_admin"}
 MEOW_NO_PREFIX = "trmx"
 MEOW_NO_WIDTH = 4
 PASSWORD_ALLOWED_PATTERN = re.compile(r"^[A-Za-z0-9@_!]+$")
@@ -82,11 +84,11 @@ def profile_payload(profile: UserProfile | None) -> dict:
     if profile is None:
         return {
             "nickname": "",
-            "avatar_url": None,
-            "real_name": None,
-            "department": None,
-            "grade": None,
-            "contact_info": None,
+        "avatar_url": None,
+        "real_name": None,
+        "department": None,
+        "grade": None,
+        "contact_info": None,
         }
     return {
         "nickname": clean_initial_display_text(profile.nickname),
@@ -321,6 +323,34 @@ def log_admin_operation(
     )
 
 
+def is_admin_account(user: User) -> bool:
+    return user.role in ADMIN_ROLES
+
+
+def admin_user_payload(user: User) -> dict:
+    return {
+        "id": user.id,
+        "student_no": user.student_no,
+        "meow_no": user.student_no,
+        "role": user.role,
+        "status": user.status,
+        "must_change_password": user.must_change_password,
+        "profile_completed": is_profile_completed(user.profile),
+        "last_login_at": user.last_login_at,
+        "profile": profile_payload(user.profile),
+        "editable": not is_admin_account(user),
+        "can_reset_password": not is_admin_account(user),
+    }
+
+
+def admin_user_log_payload(user: User) -> dict:
+    payload = admin_user_payload(user)
+    payload["id"] = str(payload["id"])
+    if payload["last_login_at"] is not None:
+        payload["last_login_at"] = payload["last_login_at"].isoformat()
+    return payload
+
+
 def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequest) -> User:
     if payload.role not in VALID_ROLES:
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
@@ -372,13 +402,18 @@ def list_users(
     keyword: str | None = None,
     role: str | None = None,
     status: str | None = None,
+    department: str | None = None,
+    sort_by: str | None = None,
+    sort_order: str = "desc",
 ) -> dict:
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
     statement = select(User).options(selectinload(User.profile)).where(User.deleted_at.is_(None))
+    if keyword or department:
+        statement = statement.join(UserProfile, isouter=True)
     if keyword:
         like = f"%{keyword}%"
-        statement = statement.join(UserProfile, isouter=True).where(
+        statement = statement.where(
             or_(
                 User.student_no.ilike(like),
                 UserProfile.nickname.ilike(like),
@@ -389,26 +424,19 @@ def list_users(
         statement = statement.where(User.role == role)
     if status:
         statement = statement.where(User.status == status)
+    if department:
+        statement = statement.where(UserProfile.department == department)
 
     total = len(db.scalars(statement).all())
+    if sort_by == "meow_no":
+        order_clause = User.student_no.asc() if sort_order == "asc" else User.student_no.desc()
+    else:
+        order_clause = User.created_at.desc()
     users = db.scalars(
-        statement.order_by(User.created_at.desc()).offset((page - 1) * page_size).limit(page_size)
+        statement.order_by(order_clause).offset((page - 1) * page_size).limit(page_size)
     ).all()
     return {
-        "items": [
-            {
-                "id": user.id,
-                "student_no": user.student_no,
-                "meow_no": user.student_no,
-                "role": user.role,
-                "status": user.status,
-                "must_change_password": user.must_change_password,
-                "profile_completed": is_profile_completed(user.profile),
-                "last_login_at": user.last_login_at,
-                "profile": profile_payload(user.profile),
-            }
-            for user in users
-        ],
+        "items": [admin_user_payload(user) for user in users],
         "page": page,
         "page_size": page_size,
         "total": total,
@@ -417,10 +445,73 @@ def list_users(
 
 
 def get_target_user(db: Session, user_id: UUID) -> User:
-    user = db.get(User, user_id)
+    user = db.scalar(
+        select(User)
+        .options(selectinload(User.profile))
+        .where(User.id == user_id, User.deleted_at.is_(None))
+    )
     if user is None or user.deleted_at is not None:
         raise APIError(code=ErrorCode.RESOURCE_NOT_FOUND, message="用户不存在", status_code=404)
     return user
+
+
+def get_user_detail(db: Session, *, user_id: UUID) -> dict:
+    return admin_user_payload(get_target_user(db, user_id))
+
+
+def ensure_target_is_editable(user: User) -> None:
+    if is_admin_account(user):
+        raise APIError(code=ErrorCode.FORBIDDEN, message="不能修改管理员账号", status_code=403)
+
+
+def update_user_detail(
+    db: Session,
+    *,
+    admin: User,
+    user_id: UUID,
+    payload: AdminUpdateUserRequest,
+) -> dict:
+    if admin.id == user_id:
+        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
+    user = get_target_user(db, user_id)
+    ensure_target_is_editable(user)
+    before = admin_user_log_payload(user)
+
+    if payload.role is not None:
+        if payload.role not in VALID_ROLES:
+            raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
+        user.role = payload.role
+        user.token_version += 1
+    if payload.status is not None:
+        if payload.status not in VALID_STATUSES:
+            raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
+        user.status = payload.status
+        if payload.status != "active":
+            user.token_version += 1
+    if payload.profile is not None:
+        if user.profile is None:
+            user.profile = UserProfile(user_id=user.id, nickname="")
+        profile = user.profile
+        profile.nickname = clean_initial_display_text(payload.profile.nickname)
+        profile.avatar_url = clean_initial_text(payload.profile.avatar_url)
+        profile.real_name = clean_initial_text(payload.profile.real_name)
+        profile.department = clean_initial_text(payload.profile.department)
+        profile.grade = clean_initial_text(payload.profile.grade)
+        profile.joined_at = payload.profile.joined_at
+        profile.contact_info = clean_initial_text(payload.profile.contact_info)
+
+    log_admin_operation(
+        db,
+        admin=admin,
+        operation_type="user_update_detail",
+        target_id=user.id,
+        summary=f"更新成员资料 {user.student_no}",
+        before_data=before,
+        after_data=admin_user_log_payload(user),
+    )
+    db.commit()
+    db.refresh(user)
+    return admin_user_payload(user)
 
 
 def reset_user_password(
@@ -432,6 +523,7 @@ def reset_user_password(
 ) -> User:
     validate_password_strength(payload.new_password)
     user = get_target_user(db, user_id)
+    ensure_target_is_editable(user)
     before = {
         "must_change_password": user.must_change_password,
         "token_version": user.token_version,
@@ -468,6 +560,7 @@ def update_user_status(
     if admin.id == user_id:
         raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
     user = get_target_user(db, user_id)
+    ensure_target_is_editable(user)
     before = {"status": user.status, "token_version": user.token_version}
     user.status = payload.status
     if payload.status != "active":
@@ -498,6 +591,7 @@ def update_user_role(
     if admin.id == user_id:
         raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
     user = get_target_user(db, user_id)
+    ensure_target_is_editable(user)
     before = {"role": user.role, "token_version": user.token_version}
     user.role = payload.role
     user.token_version += 1

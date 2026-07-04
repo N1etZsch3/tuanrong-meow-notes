@@ -1,8 +1,8 @@
 <template>
   <view class="tasks-page">
     <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
-    <scroll-view class="task-scroll" scroll-y :show-scrollbar="false">
-      <view class="task-inner">
+    <view class="task-inner">
+      <view class="task-fixed">
         <view class="page-title">
           <view class="title-copy">
             <view class="title-row">
@@ -110,7 +110,10 @@
             </view>
           </picker>
         </view>
+      </view>
 
+      <scroll-view class="task-scroll" scroll-y :show-scrollbar="false">
+        <view class="task-list-body">
         <view v-if="loadState === 'loading'" class="state-box">
           <text class="state-title">正在加载投喂任务</text>
           <text class="state-copy">稍等一下，任务列表马上就好。</text>
@@ -175,7 +178,8 @@
           <text class="state-copy">发布后的喂食点会显示在这里和地图上。</text>
         </view>
       </view>
-    </scroll-view>
+      </scroll-view>
+    </view>
     <AppTabBar active-key="tasks" />
   </view>
 </template>
@@ -462,16 +466,28 @@ onShow(() => {
 }
 
 .task-scroll {
-  position: relative;
-  z-index: 1;
-  height: 100vh;
+  flex: 1;
+  min-height: 0;
+  margin-top: 28rpx;
 }
 
 .task-inner {
+  position: relative;
+  z-index: 1;
   box-sizing: border-box;
-  min-height: 100vh;
+  height: 100vh;
   padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx)
     calc(env(safe-area-inset-bottom) + 164rpx);
+  display: flex;
+  flex-direction: column;
+}
+
+.task-fixed {
+  flex: 0 0 auto;
+}
+
+.task-list-body {
+  padding-bottom: 24rpx;
 }
 
 .page-title {
@@ -676,7 +692,6 @@ onShow(() => {
 }
 
 .task-list {
-  margin-top: 28rpx;
   display: flex;
   flex-direction: column;
   gap: 22rpx;
@@ -872,7 +887,6 @@ onShow(() => {
 }
 
 .state-box {
-  margin-top: 42rpx;
   box-sizing: border-box;
   padding: 46rpx 34rpx;
   border-radius: 28rpx;

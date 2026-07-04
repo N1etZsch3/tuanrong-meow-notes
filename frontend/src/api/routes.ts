@@ -50,6 +50,12 @@ export const API_ENDPOINTS = {
   },
   admin: {
     users: "/admin/users",
+    user: (userId: ApiPathParam) => `/admin/users/${encodePathParam(userId)}`,
+    userResetPassword: (userId: ApiPathParam) =>
+      `/admin/users/${encodePathParam(userId)}/reset-password`,
+    landmarkPoints: "/admin/landmarks",
+    landmarkPoint: (landmarkId: ApiPathParam) =>
+      `/admin/landmarks/${encodePathParam(landmarkId)}`,
     supplyPoints: "/admin/supply-points",
     supplyPoint: (supplyPointId: ApiPathParam) =>
       `/admin/supply-points/${encodePathParam(supplyPointId)}`,
@@ -85,6 +91,10 @@ export const API_ENDPOINTS = {
     poiResolve: "/map/poi/resolve",
     poiNearby: "/map/poi/nearby",
     walkingRoute: "/map/route/walking",
+  },
+  landmarks: {
+    detail: (landmarkId: ApiPathParam) =>
+      `/landmarks/${encodePathParam(landmarkId)}`,
   },
   me: {
     dashboard: "/me/dashboard",

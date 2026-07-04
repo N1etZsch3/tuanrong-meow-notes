@@ -2,17 +2,8 @@
   <view class="cats-page">
     <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
 
-    <scroll-view
-      class="cats-scroll"
-      scroll-y
-      refresher-enabled
-      :refresher-triggered="isRefreshing"
-      lower-threshold="180"
-      :show-scrollbar="false"
-      @refresherrefresh="refreshPage"
-      @scrolltolower="loadMoreCats"
-    >
-      <view class="page-inner">
+    <view class="cats-inner">
+      <view class="cats-fixed">
         <view class="page-title">
           <view class="page-title-row">
             <text class="page-title-text">猫咪库</text>
@@ -128,7 +119,19 @@
             <text>清除筛选</text>
           </button>
         </view>
+      </view>
 
+      <scroll-view
+        class="cats-scroll"
+        scroll-y
+        refresher-enabled
+        :refresher-triggered="isRefreshing"
+        lower-threshold="180"
+        :show-scrollbar="false"
+        @refresherrefresh="refreshPage"
+        @scrolltolower="loadMoreCats"
+      >
+        <view class="cats-list-body">
         <view v-if="isLoading && cats.length === 0" class="state-panel">
           <text class="state-title">正在加载猫咪档案...</text>
         </view>
@@ -194,7 +197,8 @@
           </view>
         </view>
       </view>
-    </scroll-view>
+      </scroll-view>
+    </view>
 
     <AppTabBar active-key="cats" />
   </view>
@@ -506,16 +510,27 @@ onShow(() => {
 }
 
 .cats-scroll {
-  position: relative;
-  z-index: 1;
-  height: 100vh;
-  box-sizing: border-box;
+  flex: 1;
+  min-height: 0;
+  margin-top: 24rpx;
 }
 
-.page-inner {
+.cats-inner {
+  position: relative;
+  z-index: 1;
   box-sizing: border-box;
-  min-height: 100vh;
+  height: 100vh;
   padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx) calc(env(safe-area-inset-bottom) + 154rpx);
+  display: flex;
+  flex-direction: column;
+}
+
+.cats-fixed {
+  flex: 0 0 auto;
+}
+
+.cats-list-body {
+  padding-bottom: 24rpx;
 }
 
 .page-title {
@@ -844,7 +859,6 @@ onShow(() => {
 }
 
 .state-panel {
-  margin-top: 28rpx;
   border-radius: 28rpx;
   padding: 44rpx 30rpx;
   text-align: center;
@@ -880,7 +894,6 @@ onShow(() => {
 }
 
 .cat-list {
-  margin-top: 28rpx;
   display: flex;
   flex-direction: column;
   gap: 18rpx;

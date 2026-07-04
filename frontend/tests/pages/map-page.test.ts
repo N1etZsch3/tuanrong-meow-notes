@@ -208,6 +208,30 @@ describe("map page shell behavior", () => {
     expect(drawerMoveSource).not.toContain("callMethod");
   });
 
+  it("reveals a pre-sized native map instead of resizing the map component during drawer drag", () => {
+    const applyProgressSource = drawerWxsSource.slice(
+      drawerWxsSource.indexOf("function applyProgress"),
+      drawerWxsSource.indexOf("function applyFinalProgress"),
+    );
+    const nativeMapStyleSource = applyProgressSource.slice(
+      applyProgressSource.indexOf("var nativeMapInstance"),
+      applyProgressSource.indexOf("var filterLayer"),
+    );
+
+    expect(drawerWxsSource).toContain("STABLE_MAP_BOTTOM_RPX");
+    expect(indexPageSource).toMatch(
+      /\.native-map\s*{[^}]*position: absolute;[^}]*width: 750rpx;[^}]*height: calc\(100vh - 288rpx\);/s,
+    );
+    expect(applyProgressSource).toContain("ownerInstance.selectComponent('.native-map')");
+    expect(nativeMapStyleSource).toContain("transform");
+    expect(nativeMapStyleSource).not.toContain("top:");
+    expect(nativeMapStyleSource).not.toContain("bottom:");
+    expect(nativeMapStyleSource).not.toContain("left:");
+    expect(nativeMapStyleSource).not.toContain("right:");
+    expect(nativeMapStyleSource).not.toContain("height:");
+    expect(nativeMapStyleSource).not.toContain("width:");
+  });
+
   it("does not call missing Vue methods from the filter menu WXS module", () => {
     expect(indexPageSource).toContain('@tap="toggleFilterMenu"');
     expect(indexPageSource).not.toContain('@tap="filterMenu.toggle"');

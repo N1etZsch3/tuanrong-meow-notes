@@ -2814,8 +2814,13 @@ onBeforeUnmount(() => {
 }
 
 .native-map {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 750rpx;
+  height: calc(100vh - 288rpx);
+  transform: translate(-24rpx, -194rpx);
+  transform-origin: left top;
 }
 
 .map-placeholder {

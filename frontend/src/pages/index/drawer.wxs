@@ -5,6 +5,7 @@ var config = {
 var MAX_DRAWER_PROGRESS = 3;
 var MAX_DRAWER_TOP_GAP_RPX = 210;
 var FILTER_LAYER_MIN_TOP_RPX = 176;
+var STABLE_MAP_BOTTOM_RPX = 288;
 var currentProgress = 1; // 1 = Normal
 var startProgress = 1;
 var startY = 0;
@@ -39,7 +40,7 @@ function applyProgress(progress, ownerInstance, transition) {
   
   if (progress < 1) {
     drawerH = interpolate(progress, 0, 1, 132, 500);
-    mapB = interpolate(progress, 0, 1, 288, 646);
+    mapB = interpolate(progress, 0, 1, STABLE_MAP_BOTTOM_RPX, 646);
     mapT = interpolate(progress, 0, 1, 0, 194);
     mapL = interpolate(progress, 0, 1, 0, 24);
     mapRad = interpolate(progress, 0, 1, 0, 28);
@@ -99,6 +100,14 @@ function applyProgress(progress, ownerInstance, transition) {
       borderRadius: px(mapRad) + 'px',
       opacity: mapOp, 
       transition: trans 
+    });
+  }
+
+  var nativeMapInstance = ownerInstance.selectComponent('.native-map');
+  if (nativeMapInstance) {
+    nativeMapInstance.setStyle({
+      transform: 'translate(' + px(-mapL) + 'px, ' + px(-mapT) + 'px)',
+      transition: trans
     });
   }
 

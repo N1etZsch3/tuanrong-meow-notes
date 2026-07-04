@@ -122,11 +122,18 @@ function applyFinalProgress(progress, ownerInstance) {
   applyProgress(progress, ownerInstance, 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)');
 }
 
+function setDrawerResizeInProgress(ownerInstance, active) {
+  if (ownerInstance && ownerInstance.callMethod) {
+    ownerInstance.callMethod('setDrawerResizeInProgress', active);
+  }
+}
+
 function touchstart(e, ownerInstance) {
   var touch = e.touches[0] || e.changedTouches[0];
   startY = touch.clientY;
   startProgress = currentProgress;
   isDragging = true;
+  setDrawerResizeInProgress(ownerInstance, true);
 }
 
 function touchmove(e, ownerInstance) {
@@ -161,9 +168,11 @@ function touchend(e, ownerInstance) {
   targetProgress = clamp(targetProgress, 0, MAX_DRAWER_PROGRESS);
   currentProgress = targetProgress;
   applyFinalProgress(targetProgress, ownerInstance);
+  setDrawerResizeInProgress(ownerInstance, false);
 }
 
 function tap(e, ownerInstance) {
+  setDrawerResizeInProgress(ownerInstance, true);
   // Toggle between 0 and 1, or reset from the expanded state.
   if (currentProgress >= 1) {
     currentProgress = 0;
@@ -171,6 +180,7 @@ function tap(e, ownerInstance) {
     currentProgress = 1;
   }
   applyFinalProgress(currentProgress, ownerInstance);
+  setDrawerResizeInProgress(ownerInstance, false);
 }
 
 module.exports = {

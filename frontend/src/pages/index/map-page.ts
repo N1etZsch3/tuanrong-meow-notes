@@ -352,10 +352,10 @@ export function shouldQueryMapScaleFromRegionChange(
   if (typeof input.scale === "number" && Number.isFinite(input.scale)) {
     return false;
   }
-  if (input.causedBy === "drag" || input.causedBy === "update") {
+  if (input.causedBy === "update") {
     return false;
   }
-  return input.causedBy === "scale" || input.type === "end";
+  return input.causedBy === "scale" || input.causedBy === "drag" || input.type === "end";
 }
 
 export function isLngLatInsideBounds(

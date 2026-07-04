@@ -192,6 +192,22 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).not.toContain("amapInstance.resize");
   });
 
+  it("guards native map region changes while the drawer is resizing the viewport", () => {
+    const regionChangeSource = extractFunctionSource("handleMapRegionChange");
+    const drawerMoveSource = drawerWxsSource.slice(
+      drawerWxsSource.indexOf("function touchmove"),
+      drawerWxsSource.indexOf("function touchend"),
+    );
+
+    expect(indexPageSource).toContain("drawerResizeInProgress");
+    expect(indexPageSource).toContain("DRAWER_RESIZE_SETTLE_MS");
+    expect(indexPageSource).toContain("function setDrawerResizeInProgress");
+    expect(regionChangeSource).toContain("if (drawerResizeInProgress.value)");
+    expect(regionChangeSource).toContain("return;");
+    expect(drawerWxsSource).toContain("callMethod('setDrawerResizeInProgress'");
+    expect(drawerMoveSource).not.toContain("callMethod");
+  });
+
   it("does not call missing Vue methods from the filter menu WXS module", () => {
     expect(indexPageSource).toContain('@tap="toggleFilterMenu"');
     expect(indexPageSource).not.toContain('@tap="filterMenu.toggle"');
@@ -478,7 +494,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain(':scale="mapScale"');
     expect(indexPageSource).toContain(':show-location="Boolean(userLocation)"');
     expect(locateMeSource).toContain("getCachedUserLocation()");
-    expect(locateMeSource).toContain("mapScale.value = getUserLocationFocusScale()");
+    expect(locateMeSource).toContain("setControlledMapScale(getUserLocationFocusScale())");
     expect(locateMeSource).toContain("centerMapToPoint(point, { smooth: true })");
     expect(locateMeSource).not.toContain("getLocationWithFallback");
     expect(locateMeSource).not.toContain("getWechatMiniProgramLocation");
@@ -573,7 +589,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).not.toContain("marker-callout-thumb");
     expect(indexPageSource).not.toContain("marker-callout-preview");
     expect(regionChangeSource).toContain("shouldSyncMapScaleFromRegionChange(detail)");
-    expect(regionChangeSource).toContain("syncMapScaleFromNative(Number(detail.scale))");
+    expect(regionChangeSource).toContain("recordNativeMapScale(Number(detail.scale))");
     expect(regionChangeSource).toContain("shouldQueryMapScaleFromRegionChange(detail)");
     expect(regionChangeSource).toContain("syncMapScaleFromContext()");
     expect(displayModeSource).toContain(
@@ -591,7 +607,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("const MAP_POINT_FOCUS_SCALE");
     expect(indexPageSource).toContain("function animateMapCenterToPoint");
     expect(indexPageSource).toContain("function focusMapToPoint");
-    expect(indexPageSource).toContain("mapScale.value = getMapPointFocusScale()");
+    expect(indexPageSource).toContain("setControlledMapScale(getMapPointFocusScale())");
     expect(poiTapSource).toContain("focusMapToPoint({ lng: summary.lng, lat: summary.lat })");
     expect(markerTapSource).toContain("focusMapToPoint({ lng: marker.lng, lat: marker.lat })");
     expect(indexPageSource).not.toContain("moveToLocation({");
@@ -619,17 +635,21 @@ describe("map page shell behavior", () => {
     expect(regionChangeSource).not.toContain("mapCenter.value = nextCenter");
   });
 
-  it("syncs native map scale whenever native regionchange provides a scale", () => {
+  it("records native map scale without writing gesture values back to the controlled scale prop", () => {
     const regionChangeSource = extractFunctionSource("handleMapRegionChange");
 
-    expect(indexPageSource).toContain("function syncMapScaleFromNative");
+    expect(indexPageSource).toContain("const observedMapScale");
+    expect(indexPageSource).toContain("function setControlledMapScale");
+    expect(indexPageSource).toContain("function recordNativeMapScale");
     expect(indexPageSource).toContain("function syncMapScaleFromContext");
     expect(indexPageSource).toContain("mapContext.getScale");
     expect(regionChangeSource).toContain("shouldSyncMapScaleFromRegionChange(detail)");
-    expect(regionChangeSource).toContain("syncMapScaleFromNative(Number(detail.scale))");
+    expect(regionChangeSource).toContain("recordNativeMapScale(Number(detail.scale))");
     expect(regionChangeSource).toContain("shouldQueryMapScaleFromRegionChange(detail)");
     expect(regionChangeSource).toContain("syncMapScaleFromContext()");
     expect(regionChangeSource).not.toContain("mapScale.value = detail.scale");
+    expect(regionChangeSource).not.toContain("setControlledMapScale(Number(detail.scale))");
+    expect(regionChangeSource).not.toContain("syncMapScaleFromNative(Number(detail.scale))");
 
     expect(
       shouldSyncMapScaleFromRegionChange({
@@ -681,13 +701,23 @@ describe("map page shell behavior", () => {
         type: "end",
         causedBy: "drag",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldQueryMapScaleFromRegionChange({
         type: "end",
         causedBy: "update",
       }),
     ).toBe(false);
+  });
+
+  it("keeps map zoom values fractional instead of rounding them into stepped levels", () => {
+    expect(indexPageSource).toContain(":min-scale=\"campusMapConfig.min_zoom\"");
+    expect(indexPageSource).toContain(":max-scale=\"campusMapConfig.max_zoom\"");
+    expect(indexPageSource).toContain("const mapScale = ref(HBNU_CAMPUS.default_zoom)");
+    expect(indexPageSource).toContain("observedMapScale.value");
+    expect(indexPageSource).not.toContain("Math.round(HBNU_CAMPUS.default_zoom)");
+    expect(indexPageSource).not.toContain("mapScale.value = Math.round(campusMapConfig.value.default_zoom)");
+    expect(extractFunctionSource("getClampedMapScale")).not.toContain("Math.round");
   });
 
   it("lowers and compacts the map title, map viewport, filter, and content drawer", () => {

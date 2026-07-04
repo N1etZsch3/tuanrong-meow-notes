@@ -28,8 +28,8 @@
         :scale="mapScale"
         :markers="nativeMapMarkers"
         :polyline="nativeMapPolylines"
-        :min-scale="Math.round(campusMapConfig.min_zoom)"
-        :max-scale="Math.round(campusMapConfig.max_zoom)"
+        :min-scale="campusMapConfig.min_zoom"
+        :max-scale="campusMapConfig.max_zoom"
         :show-location="Boolean(userLocation)"
         :enable-poi="true"
         :enable-zoom="true"
@@ -461,7 +461,8 @@ const contentLoadState = ref<ContentLoadState>("idle");
 const contentErrorMessage = ref("");
 const campusMapConfig = ref<CampusMapConfig>(HBNU_CAMPUS);
 const mapCenter = ref<LngLat>({ ...HBNU_CAMPUS.center });
-const mapScale = ref(Math.round(HBNU_CAMPUS.default_zoom));
+const mapScale = ref(HBNU_CAMPUS.default_zoom);
+const observedMapScale = ref(HBNU_CAMPUS.default_zoom);
 const userLocation = ref<LngLat | null>(null);
 const mapPointMarkers = ref<MapPointMarkerDto[]>([]);
 const nativeRoutePoints = ref<NativeRoutePoint[]>([]);
@@ -477,6 +478,7 @@ const pendingPoiResolveKey = ref<string | null>(null);
 const lastResolvedPoiTapKey = ref<string | null>(null);
 const nativePoiTapSuppressedUntil = ref(0);
 const lastPointTapAt = ref(0);
+const drawerResizeInProgress = ref(false);
 const mapPointEditMode = ref(false);
 const editedPointLocation = ref<LngLat | null>(null);
 const editableMarkerScreenPosition = ref<{ x: number; y: number } | null>(null);
@@ -495,6 +497,7 @@ const MAP_FILTER_ICON_SRC: Record<string, string> = {
 const MARKER_LONG_PRESS_HIT_METERS = 60;
 const NATIVE_MARKER_HIT_SIZE = 34;
 const MAP_BLANK_TAP_GUARD_MS = 250;
+const DRAWER_RESIZE_SETTLE_MS = 360;
 const MAP_CENTER_ANIMATION_DURATION_MS = 320;
 const MAP_CENTER_ANIMATION_STEPS = 12;
 const MAP_CENTER_SYNC_EPSILON_METERS = 0.75;
@@ -505,6 +508,7 @@ const USER_LOCATION_FOCUS_SCALE = 18;
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let mapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let mapCenterAnimationTimer: ReturnType<typeof setTimeout> | null = null;
+let drawerResizeResumeTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeUserLocation: (() => void) | null = null;
 let poiResolveRequestSeq = 0;
 
@@ -932,6 +936,24 @@ function shouldIgnoreNativeMapTap(): boolean {
   return Date.now() - lastPointTapAt.value < MAP_BLANK_TAP_GUARD_MS;
 }
 
+function setDrawerResizeInProgress(active: boolean) {
+  if (drawerResizeResumeTimer) {
+    clearTimeout(drawerResizeResumeTimer);
+    drawerResizeResumeTimer = null;
+  }
+
+  if (active) {
+    drawerResizeInProgress.value = true;
+    return;
+  }
+
+  drawerResizeResumeTimer = setTimeout(() => {
+    drawerResizeInProgress.value = false;
+    drawerResizeResumeTimer = null;
+    syncMapScaleFromContext();
+  }, DRAWER_RESIZE_SETTLE_MS);
+}
+
 function clearSelectedMapPointState() {
   filterMenuOpen.value = false;
   poiResolveRequestSeq += 1;
@@ -950,7 +972,7 @@ function getNativeMarkerDisplayMode(marker: MapPointMarkerDto): MapMarkerDisplay
   if (selectedPointId && selectedPointId !== marker.point_id) return "icon";
 
   return getMarkerDisplayMode({
-    zoom: mapScale.value,
+    zoom: observedMapScale.value,
     visibleMarkerCount: nativeMarkerSourceMarkers.value.length,
     previewEnabled: marker.preview_enabled || Boolean(marker.cover_photo_url),
     labelMinZoom: marker.label_min_zoom,
@@ -1424,7 +1446,7 @@ function syncUserLocation(point: LngLat | null) {
 }
 
 function focusMapToPoint(point: LngLat) {
-  mapScale.value = getMapPointFocusScale();
+  setControlledMapScale(getMapPointFocusScale());
   centerMapToPoint(point, { smooth: true });
 }
 
@@ -1438,13 +1460,19 @@ function syncMapCenterFromNative(nextCenter: LngLat) {
   }
 }
 
-function syncMapScaleFromNative(nextScale: number) {
-  const minScale = Math.round(campusMapConfig.value.min_zoom);
-  const maxScale = Math.round(campusMapConfig.value.max_zoom);
-  const clampedScale = Math.min(Math.max(nextScale, minScale), maxScale);
+function recordNativeMapScale(nextScale: number) {
+  const clampedScale = getClampedMapScale(nextScale);
+  if (Math.abs(observedMapScale.value - clampedScale) >= MAP_SCALE_SYNC_EPSILON) {
+    observedMapScale.value = clampedScale;
+  }
+}
+
+function setControlledMapScale(nextScale: number) {
+  const clampedScale = getClampedMapScale(nextScale);
   if (Math.abs(mapScale.value - clampedScale) >= MAP_SCALE_SYNC_EPSILON) {
     mapScale.value = clampedScale;
   }
+  recordNativeMapScale(clampedScale);
 }
 
 function syncMapScaleFromContext(onComplete?: () => void) {
@@ -1463,7 +1491,7 @@ function syncMapScaleFromContext(onComplete?: () => void) {
   };
   mapContext.getScale({
     success: (result) => {
-      syncMapScaleFromNative(Number(result.scale));
+      recordNativeMapScale(Number(result.scale));
       completeOnce();
     },
     fail: completeOnce,
@@ -1473,8 +1501,8 @@ function syncMapScaleFromContext(onComplete?: () => void) {
 }
 
 function getClampedMapScale(targetScale: number): number {
-  const minScale = Math.round(campusMapConfig.value.min_zoom);
-  const maxScale = Math.round(campusMapConfig.value.max_zoom);
+  const minScale = campusMapConfig.value.min_zoom;
+  const maxScale = campusMapConfig.value.max_zoom;
   return Math.min(Math.max(targetScale, minScale), maxScale);
 }
 
@@ -1755,7 +1783,7 @@ function applyMapInit(data: MapInitResponse) {
     core_bounds: coreBounds,
     limit_bounds: limitBounds,
   };
-  mapScale.value = Math.round(campusMapConfig.value.default_zoom);
+  setControlledMapScale(campusMapConfig.value.default_zoom);
   centerMapToPoint(campusMapConfig.value.center);
   applyMapFilterOptions(data);
 }
@@ -2416,8 +2444,11 @@ function getMapRegionChangeDetail(event: Event): NativeRegionChangeDetail {
 
 function handleMapRegionChange(event: Event) {
   const detail = getMapRegionChangeDetail(event);
+  if (drawerResizeInProgress.value) {
+    return;
+  }
   if (shouldSyncMapScaleFromRegionChange(detail)) {
-    syncMapScaleFromNative(Number(detail.scale));
+    recordNativeMapScale(Number(detail.scale));
   } else if (shouldQueryMapScaleFromRegionChange(detail)) {
     syncMapScaleFromContext();
   }
@@ -2638,7 +2669,7 @@ function locateMe() {
   }
   clearNativePoiSelection();
   suppressNativePoiTaps();
-  mapScale.value = getUserLocationFocusScale();
+  setControlledMapScale(getUserLocationFocusScale());
   centerMapToPoint(point, { smooth: true });
 }
 
@@ -2705,6 +2736,10 @@ onBeforeUnmount(() => {
 
   if (mapRefreshTimer) {
     clearTimeout(mapRefreshTimer);
+  }
+
+  if (drawerResizeResumeTimer) {
+    clearTimeout(drawerResizeResumeTimer);
   }
 
   clearNativeRoute();

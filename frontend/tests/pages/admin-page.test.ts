@@ -2,7 +2,33 @@ import { describe, expect, it } from "vitest";
 
 import adminCreateUserSource from "../../src/pages/admin/create-user.vue?raw";
 import adminIndexSource from "../../src/pages/admin/index.vue?raw";
+import adminLandmarkCreateSource from "../../src/pages/admin/landmarks/create.vue?raw";
+import adminLandmarkLocationSource from "../../src/pages/admin/landmarks/location.vue?raw";
 import pagesJson from "../../src/pages.json?raw";
+
+function extractFunctionSource(source: string, functionName: string): string {
+  const normalStart = source.indexOf(`function ${functionName}`);
+  const asyncStart = source.indexOf(`async function ${functionName}`);
+  const start = normalStart >= 0 ? normalStart : asyncStart;
+  expect(start).toBeGreaterThanOrEqual(0);
+  const bodyStart = source.indexOf("{", start);
+  expect(bodyStart).toBeGreaterThan(start);
+
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return source.slice(start);
+}
 
 describe("admin entry pages", () => {
   it("registers admin entry, personnel, create user, and landmark routes", () => {
@@ -43,5 +69,20 @@ describe("admin entry pages", () => {
     expect(adminIndexSource).toContain("var(--catmap-page-title-font-size, 52rpx)");
     expect(adminCreateUserSource).toContain("var(--catmap-page-title-top, 92rpx)");
     expect(adminCreateUserSource).toContain("var(--catmap-page-title-font-size, 52rpx)");
+  });
+
+  it("searches nearby landmark POIs independently from the landmark point name", () => {
+    const nearbySource = extractFunctionSource(adminLandmarkLocationSource, "loadNearbyPoiCandidates");
+
+    expect(nearbySource).toContain("keyword: getLocationPickerPoiKeyword()");
+    expect(nearbySource).not.toContain("keyword: selectedLocation.location_name");
+  });
+
+  it("uses one-shot location handoff storage instead of keeping landmark drafts", () => {
+    const pickerReadSource = extractFunctionSource(adminLandmarkLocationSource, "readLocationTransfer");
+    const formReadSource = extractFunctionSource(adminLandmarkCreateSource, "readSelectedLocation");
+
+    expect(pickerReadSource).toContain("uni.removeStorageSync(LANDMARK_LOCATION_STORAGE_KEY)");
+    expect(formReadSource).toContain("uni.removeStorageSync(LANDMARK_LOCATION_STORAGE_KEY)");
   });
 });

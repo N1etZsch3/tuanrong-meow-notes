@@ -123,6 +123,7 @@ import landmarkMarkerIcon from "../../../../素材/png/地图点/地标.png";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 
 type PoiLoadState = "idle" | "loading" | "ready" | "error";
+const LOCATION_PICKER_POI_KEYWORD = "\u6e56\u5317\u5e08\u8303\u5927\u5b66";
 
 const userStore = useUserStore();
 const selectedLocation = reactive<SelectedLandmarkLocation>({
@@ -152,10 +153,15 @@ const markers = computed(() => [
   },
 ]);
 
-function readLocationDraft() {
+function getLocationPickerPoiKeyword(): string {
+  return LOCATION_PICKER_POI_KEYWORD;
+}
+
+function readLocationTransfer() {
   const value = uni.getStorageSync(LANDMARK_LOCATION_STORAGE_KEY);
   if (value && typeof value === "object") {
     Object.assign(selectedLocation, value as SelectedLandmarkLocation);
+    uni.removeStorageSync(LANDMARK_LOCATION_STORAGE_KEY);
   }
   initialName.value = selectedLocation.location_name || "";
 }
@@ -193,7 +199,7 @@ async function loadNearbyPoiCandidates() {
     const response = await getNearbyMapPois(token, {
       lng: selectedLocation.lng,
       lat: selectedLocation.lat,
-      keyword: selectedLocation.location_name || "湖北师范大学",
+      keyword: getLocationPickerPoiKeyword(),
       radius: 180,
       limit: 6,
     });
@@ -251,7 +257,7 @@ function goBack() {
 }
 
 onLoad(() => {
-  readLocationDraft();
+  readLocationTransfer();
 });
 </script>
 

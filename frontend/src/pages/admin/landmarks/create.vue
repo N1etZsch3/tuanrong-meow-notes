@@ -339,6 +339,7 @@ function readSelectedLocation() {
       ...location,
       location_name: form.name.trim() || location.location_name,
     };
+    uni.removeStorageSync(LANDMARK_LOCATION_STORAGE_KEY);
   }
 }
 

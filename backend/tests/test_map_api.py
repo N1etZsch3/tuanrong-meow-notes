@@ -514,6 +514,51 @@ def test_map_resolves_poi_and_recommends_nearby_tencent_pois(
     ]
 
 
+def test_nearby_pois_falls_back_when_custom_point_name_has_no_matches(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    user = create_member(db_session)
+    seed_map_data(db_session)
+    calls: list[str] = []
+    campus_keyword = "\u6e56\u5317\u5e08\u8303\u5927\u5b66"
+
+    def fake_tencent_json(path, params):
+        assert path == "/ws/place/v1/search"
+        calls.append(params["keyword"])
+        if params["keyword"] == "111":
+            return {"status": 0, "data": []}
+        assert params["keyword"] == campus_keyword
+        return {
+            "status": 0,
+            "data": [
+                {
+                    "id": "hbnu-main-gate",
+                    "title": "HBNU Main Gate",
+                    "category": "campus",
+                    "address": "inside campus",
+                    "location": {"lng": 115.06172, "lat": 30.23108},
+                    "_distance": 8,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(map_service, "_request_tencent_json", fake_tencent_json, raising=False)
+
+    nearby = api_client.get(
+        "/api/v1/map/poi/nearby?lng=115.0617&lat=30.2311&keyword=111",
+        headers=auth_headers(user),
+    )
+
+    assert nearby.status_code == 200
+    nearby_data = nearby.json()["data"]
+    assert calls == ["111", campus_keyword]
+    assert nearby_data["query"]["keyword"] == "111"
+    assert nearby_data["query"]["fallback_keyword"] == campus_keyword
+    assert nearby_data["recommended"]["poi_id"] == "hbnu-main-gate"
+
+
 def test_admin_can_edit_map_point_and_location(api_client, db_session):
     admin = create_member(db_session, role="admin")
     points = seed_map_data(db_session)

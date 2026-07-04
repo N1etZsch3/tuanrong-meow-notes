@@ -651,6 +651,7 @@ function readSelectedLocation() {
     const location = value as SelectedTaskLocation;
     form.location = location;
     form.route_instruction = location.route_instruction || form.route_instruction;
+    uni.removeStorageSync(TASK_PUBLISH_LOCATION_STORAGE_KEY);
   }
 }
 

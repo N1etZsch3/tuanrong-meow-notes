@@ -35,6 +35,7 @@ HBNU_CAMPUS_SEARCH_BOUNDS = {
     "south_west": {"lng": 115.0558, "lat": 30.2248},
     "north_east": {"lng": 115.0693, "lat": 30.2342},
 }
+HBNU_CAMPUS_POI_KEYWORD = "\u6e56\u5317\u5e08\u8303\u5927\u5b66"
 HBNU_CAMPUS_BOUNDS_PADDING_RATIO = 0.35
 ALL_MARKER_FILTER_OPTION = {
     "key": "all",
@@ -1214,7 +1215,7 @@ def nearby_pois(
     radius: int = 180,
     limit: int = 8,
 ) -> dict:
-    normalized_keyword = (keyword or "湖北师范大学").strip() or "湖北师范大学"
+    normalized_keyword = (keyword or HBNU_CAMPUS_POI_KEYWORD).strip() or HBNU_CAMPUS_POI_KEYWORD
     boundary = f"nearby({format_coord(lat)},{format_coord(lng)},{max(min(radius, 1000), 10)})"
     candidates = search_tencent_pois(
         keyword=normalized_keyword,
@@ -1224,13 +1225,27 @@ def nearby_pois(
         limit=limit,
         match_method="nearby",
     )
+    fallback_keyword = None
+    if not candidates and normalized_keyword != HBNU_CAMPUS_POI_KEYWORD:
+        fallback_keyword = HBNU_CAMPUS_POI_KEYWORD
+        candidates = search_tencent_pois(
+            keyword=fallback_keyword,
+            boundary=boundary,
+            anchor_lng=lng,
+            anchor_lat=lat,
+            limit=limit,
+            match_method="nearby_fallback",
+        )
+    query = {
+        "keyword": normalized_keyword,
+        "lng": lng,
+        "lat": lat,
+        "radius": radius,
+    }
+    if fallback_keyword:
+        query["fallback_keyword"] = fallback_keyword
     return {
-        "query": {
-            "keyword": normalized_keyword,
-            "lng": lng,
-            "lat": lat,
-            "radius": radius,
-        },
+        "query": query,
         "recommended": candidates[0] if candidates else None,
         "candidates": candidates,
     }

@@ -504,6 +504,7 @@ function readSelectedLocation() {
       location_name: form.name.trim() || location.location_name,
     };
     form.route_instruction = location.route_instruction || form.route_instruction;
+    uni.removeStorageSync(SUPPLY_LOCATION_STORAGE_KEY);
   }
 }
 

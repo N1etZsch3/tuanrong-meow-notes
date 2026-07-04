@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import adminSupplyCreateSource from "../../src/pages/admin/supplies/create.vue?raw";
+import adminSupplyLocationSource from "../../src/pages/admin/supplies/location.vue?raw";
 import supplyDetailSource from "../../src/pages/supplies/detail.vue?raw";
 import suppliesApiSource from "../../src/api/supplies.ts?raw";
 
@@ -28,6 +30,21 @@ function extractFunctionSource(source: string, functionName: string): string {
 }
 
 describe("supply point detail page", () => {
+  it("searches nearby public POIs independently from the supply point name", () => {
+    const nearbySource = extractFunctionSource(adminSupplyLocationSource, "loadNearbyPoiCandidates");
+
+    expect(nearbySource).toContain("keyword: getLocationPickerPoiKeyword()");
+    expect(nearbySource).not.toContain("keyword: selectedLocation.location_name");
+  });
+
+  it("uses one-shot location handoff storage instead of keeping supply drafts", () => {
+    const pickerReadSource = extractFunctionSource(adminSupplyLocationSource, "readLocationTransfer");
+    const formReadSource = extractFunctionSource(adminSupplyCreateSource, "readSelectedLocation");
+
+    expect(pickerReadSource).toContain("uni.removeStorageSync(SUPPLY_LOCATION_STORAGE_KEY)");
+    expect(formReadSource).toContain("uni.removeStorageSync(SUPPLY_LOCATION_STORAGE_KEY)");
+  });
+
   it("lets members adjust selected supply quantities before submitting a record", () => {
     const payloadSource = extractFunctionSource(supplyDetailSource, "recordPayloadItems");
 

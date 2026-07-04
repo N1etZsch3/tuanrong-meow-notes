@@ -34,6 +34,7 @@
         :enable-poi="true"
         :enable-zoom="true"
         :enable-scroll="true"
+        @tap="handleNativeMapTap"
         @markertap="handleNativeMarkerTap"
         @poitap="handleNativePoiTap"
         @markerlongpress="handleNativeMarkerLongPress"
@@ -79,7 +80,7 @@
       </view>
     </view>
 
-    <cover-view class="map-filter-layer">
+    <cover-view v-if="!imagePreviewVisible" class="map-filter-layer">
       <cover-view class="filter-panel-hit-layer">
         <cover-view
           class="filter-chip"
@@ -475,6 +476,7 @@ const selectedPoiMarker = ref<MapPointMarkerDto | null>(null);
 const pendingPoiResolveKey = ref<string | null>(null);
 const lastResolvedPoiTapKey = ref<string | null>(null);
 const nativePoiTapSuppressedUntil = ref(0);
+const lastPointTapAt = ref(0);
 const mapPointEditMode = ref(false);
 const editedPointLocation = ref<LngLat | null>(null);
 const editableMarkerScreenPosition = ref<{ x: number; y: number } | null>(null);
@@ -491,6 +493,8 @@ const MAP_FILTER_ICON_SRC: Record<string, string> = {
   filter_none: filterDefaultIcon,
 };
 const MARKER_LONG_PRESS_HIT_METERS = 60;
+const NATIVE_MARKER_HIT_SIZE = 34;
+const MAP_BLANK_TAP_GUARD_MS = 250;
 const MAP_CENTER_ANIMATION_DURATION_MS = 320;
 const MAP_CENTER_ANIMATION_STEPS = 12;
 const MAP_CENTER_SYNC_EPSILON_METERS = 0.75;
@@ -733,6 +737,7 @@ function openImagePreview(urls: string[], current: string) {
   const uniqueUrls = Array.from(new Set(urls.filter((url) => url)));
   const resolvedUrls = uniqueUrls.length ? uniqueUrls : [current];
   const currentIndex = Math.max(0, resolvedUrls.indexOf(current));
+  filterMenuOpen.value = false;
   imagePreviewUrls.value = resolvedUrls;
   imagePreviewIndex.value = currentIndex;
   imagePreviewVisible.value = true;
@@ -919,6 +924,23 @@ function clearNativePoiSelection() {
   }
 }
 
+function markPointTapInteraction() {
+  lastPointTapAt.value = Date.now();
+}
+
+function shouldIgnoreNativeMapTap(): boolean {
+  return Date.now() - lastPointTapAt.value < MAP_BLANK_TAP_GUARD_MS;
+}
+
+function clearSelectedMapPointState() {
+  filterMenuOpen.value = false;
+  poiResolveRequestSeq += 1;
+  pendingPoiResolveKey.value = null;
+  lastResolvedPoiTapKey.value = null;
+  selectedSummary.value = null;
+  selectedPoiMarker.value = null;
+}
+
 function getNativeMarkerDisplayMode(marker: MapPointMarkerDto): MapMarkerDisplayMode {
   if (isExternalPoiMarker(marker)) {
     return "icon";
@@ -1027,8 +1049,8 @@ const nativeMapMarkers = computed(() => {
       longitude: marker.lng,
       latitude: marker.lat,
       iconPath: getNativeMarkerIcon(type, marker),
-      width: 34,
-      height: 34,
+      width: NATIVE_MARKER_HIT_SIZE,
+      height: NATIVE_MARKER_HIT_SIZE,
       anchor: { x: 0.5, y: 1 },
       callout:
         displayMode === "label"
@@ -1768,6 +1790,9 @@ async function refreshMapPoints() {
 
   if (!filterKey) {
     mapPointMarkers.value = [];
+    if (selectedSummary.value && selectedSummary.value.business_type !== "tencent_poi") {
+      ensureFocusedMarkerFromSummary(selectedSummary.value);
+    }
     if (!isSearchMode.value) {
       await loadBottomContent();
     }
@@ -1898,6 +1923,7 @@ async function loadPointSummary(pointId: string) {
   selectedPoiMarker.value = null;
   try {
     selectedSummary.value = await getMapPointSummary(token, pointId);
+    ensureFocusedMarkerFromSummary(selectedSummary.value);
     const summaryPoint = {
       lng: selectedSummary.value.lng,
       lat: selectedSummary.value.lat,
@@ -2080,9 +2106,13 @@ function upsertFocusedMapMarker(marker: MapPointMarkerDto) {
   mapPointMarkers.value = [...mapPointMarkers.value, marker];
 }
 
-function syncFocusedMarkerFromSummary(summary: MapPointSummaryResponse) {
+function ensureFocusedMarkerFromSummary(summary: MapPointSummaryResponse) {
   const marker = createFocusedMarkerFromSummary(summary);
   upsertFocusedMapMarker(marker);
+}
+
+function syncFocusedMarkerFromSummary(summary: MapPointSummaryResponse) {
+  ensureFocusedMarkerFromSummary(summary);
   bottomContentItems.value = mapPointMarkers.value.map(mapMarkerToShellItem);
 }
 
@@ -2169,6 +2199,7 @@ async function refreshMapFilterOptions() {
 }
 
 function handleNativeMarkerTap(event: Event) {
+  markPointTapInteraction();
   const markerId = (event as CustomEvent<{ markerId?: number }>).detail?.markerId;
   if (!markerId) {
     return;
@@ -2183,10 +2214,18 @@ function handleNativeMarkerTap(event: Event) {
   handleMapMarkerSelected(marker);
 }
 
+function handleNativeMapTap() {
+  if (mapPointEditMode.value || shouldIgnoreNativeMapTap()) {
+    return;
+  }
+  clearSelectedMapPointState();
+}
+
 async function handleNativePoiTap(event: Event) {
   if (isNativePoiTapSuppressed()) {
     return;
   }
+  markPointTapInteraction();
   const detail = (event as CustomEvent<Record<string, any>>).detail || {};
   const rawPoi = detail.poi || {};
   const lng = Number(detail.longitude ?? detail.lng ?? rawPoi.longitude ?? rawPoi.lng);

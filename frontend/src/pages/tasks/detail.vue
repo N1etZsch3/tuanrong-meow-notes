@@ -393,9 +393,7 @@ const activityCountText = computed(() => {
 });
 const primaryActionState = computed(() =>
   getTaskDetailActionState({
-    can_checkin: Boolean(
-      isExecutionDetail.value && task.value?.actions.can_checkin && currentExecution.value,
-    ),
+    can_checkin: Boolean(task.value?.actions.can_checkin && currentExecution.value),
     checkin_disabled_reason: task.value?.actions.checkin_disabled_reason || null,
     current_execution: currentExecution.value
       ? {
@@ -406,7 +404,7 @@ const primaryActionState = computed(() =>
       : null,
   }),
 );
-const canCheckin = computed(() => isExecutionDetail.value && !primaryActionState.value.disabled);
+const canCheckin = computed(() => !primaryActionState.value.disabled);
 const canAdminEditTask = computed(() =>
   Boolean(userStore.isAdmin && task.value?.actions.can_admin_edit),
 );

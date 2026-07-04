@@ -214,25 +214,52 @@
         </view>
         <text class="modal-hint">勾选当前物资点实际拥有的物资，并上传一张现场照片。</text>
         <view class="record-tag-grid">
-          <button
+          <view
             v-for="item in recordSelectableItems"
             :key="item.item_id || item.label"
-            class="record-select-tag"
-            :class="[
-              `item-${item.color_key || 'gray'}`,
-              { selected: isRecordItemSelected(item.item_id) },
-            ]"
-            hover-class="button-hover"
-            @tap="toggleRecordItem(item.item_id)"
+            class="record-item-control"
           >
-            <image
-              v-if="getSupplyItemIcon(item.icon_key)"
-              class="item-icon"
-              :src="getSupplyItemIcon(item.icon_key)"
-              mode="aspectFit"
-            />
-            {{ item.label }}
-          </button>
+            <button
+              class="record-select-tag"
+              :class="[
+                `item-${item.color_key || 'gray'}`,
+                { selected: isRecordItemSelected(item.item_id) },
+              ]"
+              hover-class="button-hover"
+              @tap="toggleRecordItem(item.item_id)"
+            >
+              <image
+                v-if="getSupplyItemIcon(item.icon_key)"
+                class="item-icon"
+                :src="getSupplyItemIcon(item.icon_key)"
+                mode="aspectFit"
+              />
+              {{ item.label }}
+            </button>
+            <view v-if="isRecordItemSelected(item.item_id)" class="record-quantity-stepper">
+              <button
+                class="quantity-button"
+                hover-class="button-hover"
+                @tap="changeRecordItemQuantity(item.item_id, -1)"
+              >
+                -
+              </button>
+              <input
+                class="quantity-input"
+                type="number"
+                :value="String(getRecordItemQuantity(item.item_id))"
+                @input="inputRecordItemQuantity(item.item_id, $event)"
+              />
+              <button
+                class="quantity-button"
+                hover-class="button-hover"
+                @tap="changeRecordItemQuantity(item.item_id, 1)"
+              >
+                +
+              </button>
+              <text class="quantity-unit">{{ item.unit || "件" }}</text>
+            </view>
+          </view>
         </view>
         <view class="record-photo-box">
           <image
@@ -276,6 +303,9 @@
           <button class="modal-close" hover-class="button-hover" @tap="closeRecordModal">×</button>
         </view>
         <text class="modal-hint">{{ formatRecordTime(viewingRecord.recorded_at) }}</text>
+        <text v-if="viewingRecord.remark" class="modal-record-remark">
+          {{ viewingRecord.remark }}
+        </text>
         <view class="item-tags modal-tags">
           <view
             v-for="item in viewingRecord.items"
@@ -318,6 +348,7 @@ import { uploadImage } from "@/api/files";
 import {
   createSupplyRecord,
   getSupplyPointDetail,
+  getSupplyRecords,
   type SupplyItemDto,
   type SupplyPointDetailDto,
   type SupplyRecordDto,
@@ -346,6 +377,10 @@ import waterIcon from "../../../素材/svg/物资点/水.svg";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
+type RecordQuantityInputEvent = {
+  detail?: { value?: string | number } | string | number;
+  target?: { value?: string | number } | null;
+};
 
 const userStore = useUserStore();
 const supplyPointId = ref("");
@@ -355,6 +390,7 @@ const errorMessage = ref("");
 const recordFilter = ref<SupplyRecordFilterValue>("all");
 const recordFormVisible = ref(false);
 const selectedRecordItemIds = ref<string[]>([]);
+const recordItemQuantities = ref<Record<string, number>>({});
 const recordPhoto = ref<UploadedFileRef | null>(null);
 const recordRemark = ref("");
 const isUploadingRecordPhoto = ref(false);
@@ -429,15 +465,67 @@ async function loadSupplyDetail() {
   }
 }
 
+async function loadSupplyRecordsOnly() {
+  const token = await getAccessToken();
+  if (!token || !supplyPointId.value || !supply.value) {
+    return;
+  }
+
+  try {
+    const records = await getSupplyRecords(token, supplyPointId.value, {
+      ...buildSupplyRecordFilterQuery(recordFilter.value),
+      page: 1,
+      page_size: 50,
+    });
+    supply.value = {
+      ...supply.value,
+      records,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "加载记录失败";
+    uni.showToast({ title: message, icon: "none" });
+  }
+}
+
 function changeRecordFilter(value: SupplyRecordFilterValue) {
   recordFilter.value = value;
-  void loadSupplyDetail();
+  void loadSupplyRecordsOnly();
+}
+
+function normalizeRecordQuantity(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  return Math.max(0, Math.round(value));
+}
+
+function getDefaultRecordItemQuantity(itemId: string): number {
+  const currentItem = (supply.value?.current_items || []).find(
+    (item) => (item.source_item_id || item.item_id) === itemId,
+  );
+  if (currentItem) {
+    return normalizeRecordQuantity(currentItem.quantity);
+  }
+
+  const initialItem = recordSelectableItems.value.find((item) => item.item_id === itemId);
+  return normalizeRecordQuantity(initialItem?.quantity ?? 0);
+}
+
+function buildRecordItemQuantities(): Record<string, number> {
+  const quantities: Record<string, number> = {};
+  for (const item of recordSelectableItems.value) {
+    if (item.item_id) {
+      quantities[item.item_id] = getDefaultRecordItemQuantity(item.item_id);
+    }
+  }
+  return quantities;
 }
 
 function openRecordForm() {
   selectedRecordItemIds.value = (supply.value?.current_items || [])
     .map((item) => item.source_item_id || item.item_id || "")
     .filter((id) => id);
+  recordItemQuantities.value = buildRecordItemQuantities();
   recordPhoto.value = null;
   recordRemark.value = "";
   recordFormVisible.value = true;
@@ -462,7 +550,49 @@ function toggleRecordItem(itemId: string | null) {
     selectedRecordItemIds.value = selectedRecordItemIds.value.filter((id) => id !== itemId);
     return;
   }
+  if (recordItemQuantities.value[itemId] === undefined) {
+    recordItemQuantities.value = {
+      ...recordItemQuantities.value,
+      [itemId]: getDefaultRecordItemQuantity(itemId),
+    };
+  }
   selectedRecordItemIds.value = [...selectedRecordItemIds.value, itemId];
+}
+
+function getRecordItemQuantity(itemId: string | null): number {
+  if (!itemId) {
+    return 0;
+  }
+  return normalizeRecordQuantity(recordItemQuantities.value[itemId] ?? 0);
+}
+
+function changeRecordItemQuantity(itemId: string | null, delta: number) {
+  if (!itemId) {
+    return;
+  }
+  const nextQuantity = normalizeRecordQuantity(getRecordItemQuantity(itemId) + delta);
+  recordItemQuantities.value = {
+    ...recordItemQuantities.value,
+    [itemId]: nextQuantity,
+  };
+}
+
+function inputRecordItemQuantity(
+  itemId: string | null,
+  event: InputEvent | RecordQuantityInputEvent,
+) {
+  if (!itemId) {
+    return;
+  }
+  const detail = event.detail;
+  const targetValue = (event.target as { value?: string | number } | null)?.value;
+  const rawValue =
+    typeof detail === "object" && detail !== null ? detail.value : detail ?? targetValue;
+  const nextQuantity = normalizeRecordQuantity(Number(rawValue));
+  recordItemQuantities.value = {
+    ...recordItemQuantities.value,
+    [itemId]: nextQuantity,
+  };
 }
 
 function chooseRecordPhoto() {
@@ -513,7 +643,9 @@ function recordPayloadItems() {
       return item
         ? {
             item_id: itemId,
-            quantity: item.quantity,
+            quantity: normalizeRecordQuantity(
+              recordItemQuantities.value[itemId] ?? item.quantity,
+            ),
           }
         : null;
     })
@@ -1236,6 +1368,61 @@ onLoad((query) => {
   box-shadow: 0 8rpx 18rpx rgba(40, 124, 49, 0.16);
 }
 
+.record-item-control {
+  min-width: 210rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.record-item-control .record-select-tag {
+  width: 100%;
+}
+
+.record-quantity-stepper {
+  display: grid;
+  grid-template-columns: 48rpx 72rpx 48rpx auto;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.quantity-button {
+  width: 48rpx;
+  height: 48rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 16rpx;
+  background: #e8f5e6;
+  color: #287c31;
+  font-size: 30rpx;
+  font-weight: 900;
+  line-height: 48rpx;
+}
+
+.quantity-button::after {
+  border: 0;
+}
+
+.quantity-input {
+  box-sizing: border-box;
+  width: 72rpx;
+  height: 48rpx;
+  border: 2rpx solid rgba(40, 124, 49, 0.22);
+  border-radius: 16rpx;
+  background: #ffffff;
+  color: #111827;
+  font-size: 24rpx;
+  font-weight: 900;
+  text-align: center;
+}
+
+.quantity-unit {
+  color: #526070;
+  font-size: 22rpx;
+  font-weight: 800;
+}
+
 .record-photo-box {
   margin-top: 24rpx;
 }
@@ -1287,6 +1474,18 @@ onLoad((query) => {
   font-size: 28rpx;
   font-weight: 900;
   line-height: 84rpx;
+}
+
+.modal-record-remark {
+  display: block;
+  margin-top: 18rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 20rpx;
+  background: #f4fbef;
+  color: #273040;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 1.5;
 }
 
 .modal-record-image {

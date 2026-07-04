@@ -92,6 +92,12 @@ export interface AdminResetPasswordResponse {
   must_change_password: boolean;
 }
 
+export interface AdminDeleteUserResponse {
+  user_id: string;
+  status: UserStatus | string;
+  deleted_at: string | null;
+}
+
 export function createAdminUser(
   payload: AdminCreateUserPayload,
   accessToken: string,
@@ -149,6 +155,17 @@ export function resetAdminUserPassword(
     url: API_ENDPOINTS.admin.userResetPassword(userId),
     method: "PATCH",
     data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function deleteAdminUser(
+  accessToken: string,
+  userId: string,
+): Promise<AdminDeleteUserResponse> {
+  return request<AdminDeleteUserResponse>({
+    url: API_ENDPOINTS.admin.user(userId),
+    method: "DELETE",
     token: accessToken,
   });
 }

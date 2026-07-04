@@ -133,6 +133,15 @@
           </button>
           <button
             v-if="!readonlyMode"
+            class="exit-button"
+            :loading="isDeleting"
+            hover-class="button-hover"
+            @tap="confirmMemberExit"
+          >
+            成员退出
+          </button>
+          <button
+            v-if="!readonlyMode"
             class="save-button"
             :loading="isSaving"
             hover-class="button-hover"
@@ -178,6 +187,7 @@ import { computed, reactive, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 
 import {
+  deleteAdminUser,
   getAdminUserDetail,
   resetAdminUserPassword,
   updateAdminUser,
@@ -214,6 +224,7 @@ const isSaving = ref(false);
 const resetVisible = ref(false);
 const resetPassword = ref("");
 const isResetting = ref(false);
+const isDeleting = ref(false);
 
 const form = reactive({
   nickname: "",
@@ -384,6 +395,46 @@ async function submitResetPassword() {
   }
 }
 
+function confirmMemberExit() {
+  if (readonlyMode.value || isDeleting.value) {
+    return;
+  }
+  uni.showModal({
+    title: "成员退出",
+    content: "成员退出后将从人员列表移除，账号不能继续登录。",
+    confirmText: "成员退出",
+    confirmColor: "#d14343",
+    success: (result) => {
+      if (result.confirm) {
+        void deleteMember();
+      }
+    },
+  });
+}
+
+async function deleteMember() {
+  if (readonlyMode.value || isDeleting.value || !userId.value) {
+    return;
+  }
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  isDeleting.value = true;
+  try {
+    await deleteAdminUser(token, userId.value);
+    uni.showToast({ title: "成员已退出", icon: "success" });
+    setTimeout(() => {
+      uni.redirectTo({ url: "/pages/admin/users/index" });
+    }, 350);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "成员退出失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    isDeleting.value = false;
+  }
+}
+
 function goBack() {
   uni.navigateBack();
 }
@@ -433,6 +484,7 @@ onLoad((query) => {
 .back-button,
 .save-button,
 .reset-button,
+.exit-button,
 .modal-cancel,
 .modal-confirm {
   margin: 0;
@@ -454,6 +506,7 @@ onLoad((query) => {
 .back-button::after,
 .save-button::after,
 .reset-button::after,
+.exit-button::after,
 .modal-cancel::after,
 .modal-confirm::after {
   border: 0;
@@ -594,7 +647,8 @@ onLoad((query) => {
 }
 
 .reset-button,
-.save-button {
+.save-button,
+.exit-button {
   height: 88rpx;
   margin-top: 28rpx;
   border-radius: 28rpx;
@@ -607,6 +661,11 @@ onLoad((query) => {
   border: 2rpx solid #d14343;
   background: rgba(255, 255, 255, 0.94);
   color: #d14343;
+}
+
+.exit-button {
+  background: #d14343;
+  color: #ffffff;
 }
 
 .save-button {

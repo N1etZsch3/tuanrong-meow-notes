@@ -6,6 +6,9 @@ var MAX_DRAWER_PROGRESS = 3;
 var MAX_DRAWER_TOP_GAP_RPX = 210;
 var FILTER_LAYER_MIN_TOP_RPX = 176;
 var STABLE_MAP_BOTTOM_RPX = 288;
+var DRAWER_SNAP_TRANSITION = 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+var MAP_SNAP_TRANSITION = 'none';
+var NATIVE_MAP_SNAP_TRANSITION = 'none';
 var currentProgress = 1; // 1 = Normal
 var startProgress = 1;
 var startY = 0;
@@ -32,7 +35,7 @@ function interpolate(p, p0, p1, v0, v1) {
   return v0 + (v1 - v0) * (p - p0) / (p1 - p0);
 }
 
-function applyProgress(progress, ownerInstance, transition) {
+function applyProgress(progress, ownerInstance, transition, mapTransition, nativeMapTransition) {
   progress = clamp(progress, 0, MAX_DRAWER_PROGRESS);
   var maxDrawerH = config.windowHeight / config.rpxRatio - MAX_DRAWER_TOP_GAP_RPX;
   var drawerH, mapB, mapT, titleOp, titleTrans, mapOp;
@@ -77,6 +80,8 @@ function applyProgress(progress, ownerInstance, transition) {
   }
 
   var trans = transition || 'none';
+  var mapTrans = mapTransition || trans;
+  var nativeMapTrans = nativeMapTransition || 'none';
 
   var drawerInstance = ownerInstance.selectComponent('.content-drawer');
   if (drawerInstance) {
@@ -99,7 +104,7 @@ function applyProgress(progress, ownerInstance, transition) {
       right: px(mapL) + 'px',
       borderRadius: px(mapRad) + 'px',
       opacity: mapOp, 
-      transition: trans 
+      transition: mapTrans
     });
   }
 
@@ -107,7 +112,7 @@ function applyProgress(progress, ownerInstance, transition) {
   if (nativeMapInstance) {
     nativeMapInstance.setStyle({
       transform: 'translate(' + px(-mapL) + 'px, ' + px(-mapT) + 'px)',
-      transition: trans
+      transition: nativeMapTrans
     });
   }
 
@@ -117,7 +122,7 @@ function applyProgress(progress, ownerInstance, transition) {
       top: px(Math.max(mapT + 34, FILTER_LAYER_MIN_TOP_RPX)) + 'px',
       left: px(mapL + 28) + 'px',
       opacity: mapOp,
-      transition: trans
+      transition: mapTrans
     });
   }
 
@@ -128,7 +133,13 @@ function applyProgress(progress, ownerInstance, transition) {
 }
 
 function applyFinalProgress(progress, ownerInstance) {
-  applyProgress(progress, ownerInstance, 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)');
+  applyProgress(
+    progress,
+    ownerInstance,
+    DRAWER_SNAP_TRANSITION,
+    MAP_SNAP_TRANSITION,
+    NATIVE_MAP_SNAP_TRANSITION
+  );
 }
 
 function setDrawerResizeInProgress(ownerInstance, active) {

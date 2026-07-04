@@ -4,6 +4,8 @@ import adminCreateUserSource from "../../src/pages/admin/create-user.vue?raw";
 import adminIndexSource from "../../src/pages/admin/index.vue?raw";
 import adminLandmarkCreateSource from "../../src/pages/admin/landmarks/create.vue?raw";
 import adminLandmarkLocationSource from "../../src/pages/admin/landmarks/location.vue?raw";
+import adminUsersApiSource from "../../src/api/admin-users.ts?raw";
+import adminUsersDetailSource from "../../src/pages/admin/users/detail.vue?raw";
 import pagesJson from "../../src/pages.json?raw";
 
 function extractFunctionSource(source: string, functionName: string): string {
@@ -84,5 +86,14 @@ describe("admin entry pages", () => {
 
     expect(pickerReadSource).toContain("uni.removeStorageSync(LANDMARK_LOCATION_STORAGE_KEY)");
     expect(formReadSource).toContain("uni.removeStorageSync(LANDMARK_LOCATION_STORAGE_KEY)");
+  });
+
+  it("lets admins soft delete editable members from member detail", () => {
+    expect(adminUsersApiSource).toContain("deleteAdminUser");
+    expect(adminUsersApiSource).toContain('method: "DELETE"');
+    expect(adminUsersDetailSource).toContain("deleteAdminUser");
+    expect(adminUsersDetailSource).toContain("confirmMemberExit");
+    expect(adminUsersDetailSource).toContain('v-if="!readonlyMode"');
+    expect(adminUsersDetailSource).toContain("exit-button");
   });
 });

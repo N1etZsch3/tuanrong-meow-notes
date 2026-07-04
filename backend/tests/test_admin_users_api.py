@@ -320,6 +320,53 @@ def test_admin_can_view_and_update_non_admin_member_detail(api_client, db_sessio
     assert updated["profile"]["contact_info"] == "wx-cat-helper"
 
 
+def test_admin_can_soft_delete_non_admin_member(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    member = create_user(
+        db_session,
+        student_no="trmx0201",
+        must_change_password=False,
+    )
+    token = create_token(admin)
+    original_token_version = member.token_version
+
+    response = api_client.delete(
+        f"/api/v1/admin/users/{member.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["user_id"] == str(member.id)
+    assert data["status"] == "left"
+    assert data["deleted_at"]
+
+    db_session.refresh(member)
+    assert member.status == "left"
+    assert member.deleted_at is not None
+    assert member.token_version == original_token_version + 1
+
+    list_response = api_client.get(
+        "/api/v1/admin/users?page_size=10",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert list_response.status_code == 200
+    list_data = list_response.json()["data"]
+    assert all(item["id"] != str(member.id) for item in list_data["items"])
+
+    detail_response = api_client.get(
+        f"/api/v1/admin/users/{member.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail_response.status_code == 404
+
+
 def test_admin_cannot_modify_or_reset_admin_account(api_client, db_session):
     admin = create_user(
         db_session,
@@ -359,3 +406,11 @@ def test_admin_cannot_modify_or_reset_admin_account(api_client, db_session):
         json={"new_password": "ResetPassword123", "must_change_password": True},
     )
     assert reset_response.status_code == 403
+
+    delete_response = api_client.delete(
+        f"/api/v1/admin/users/{target_admin.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert delete_response.status_code == 403
+    db_session.refresh(target_admin)
+    assert target_admin.deleted_at is None

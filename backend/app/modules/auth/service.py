@@ -579,6 +579,41 @@ def update_user_status(
     return user
 
 
+def soft_delete_user(
+    db: Session,
+    *,
+    admin: User,
+    user_id: UUID,
+) -> User:
+    if admin.id == user_id:
+        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
+    user = get_target_user(db, user_id)
+    ensure_target_is_editable(user)
+    before = {
+        "status": user.status,
+        "token_version": user.token_version,
+        "deleted_at": None,
+    }
+    user.status = "left"
+    user.deleted_at = now_utc()
+    user.token_version += 1
+    log_admin_operation(
+        db,
+        admin=admin,
+        operation_type="user_soft_delete",
+        target_id=user.id,
+        summary=f"成员退出 {user.student_no}",
+        before_data=before,
+        after_data={
+            "status": user.status,
+            "deleted_at": user.deleted_at.isoformat(),
+        },
+    )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
 def update_user_role(
     db: Session,
     *,

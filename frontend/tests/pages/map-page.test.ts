@@ -249,6 +249,37 @@ describe("map page shell behavior", () => {
     expect(nativeMapStyleSource).not.toContain("width:");
   });
 
+  it("keeps native map out of the drawer snap transition", () => {
+    const applyProgressSource = drawerWxsSource.slice(
+      drawerWxsSource.indexOf("function applyProgress"),
+      drawerWxsSource.indexOf("function applyFinalProgress"),
+    );
+    const mapViewportStyleSource = applyProgressSource.slice(
+      applyProgressSource.indexOf("var mapInstance"),
+      applyProgressSource.indexOf("var nativeMapInstance"),
+    );
+    const nativeMapStyleSource = applyProgressSource.slice(
+      applyProgressSource.indexOf("var nativeMapInstance"),
+      applyProgressSource.indexOf("var filterLayer"),
+    );
+    const applyFinalProgressSource = drawerWxsSource.slice(
+      drawerWxsSource.indexOf("function applyFinalProgress"),
+      drawerWxsSource.indexOf("function setDrawerResizeInProgress"),
+    );
+
+    expect(drawerWxsSource).toContain("var DRAWER_SNAP_TRANSITION");
+    expect(drawerWxsSource).toContain("var MAP_SNAP_TRANSITION = 'none'");
+    expect(drawerWxsSource).toContain("var NATIVE_MAP_SNAP_TRANSITION = 'none'");
+    expect(applyFinalProgressSource).toContain("DRAWER_SNAP_TRANSITION");
+    expect(applyFinalProgressSource).toContain("MAP_SNAP_TRANSITION");
+    expect(applyFinalProgressSource).toContain("NATIVE_MAP_SNAP_TRANSITION");
+    expect(mapViewportStyleSource).toContain("transition: mapTrans");
+    expect(nativeMapStyleSource).toContain("transition: nativeMapTrans");
+    expect(mapViewportStyleSource).not.toContain("transition: trans");
+    expect(nativeMapStyleSource).not.toContain("transition: trans");
+    expect(indexPageSource).toContain("const DRAWER_RESIZE_SETTLE_MS = 520");
+  });
+
   it("does not call missing Vue methods from the filter menu WXS module", () => {
     expect(indexPageSource).toContain('@tap="toggleFilterMenu"');
     expect(indexPageSource).not.toContain('@tap="filterMenu.toggle"');

@@ -116,6 +116,21 @@ def reset_password_alias(
     return reset_password(user_id=user_id, payload=payload, request=request, db=db, admin=admin)
 
 
+@router.delete("/{user_id}", summary="Soft delete member account")
+def delete_user(
+    user_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    user = service.soft_delete_user(db, admin=admin, user_id=user_id)
+    return api_success(
+        data={"user_id": user.id, "status": user.status, "deleted_at": user.deleted_at},
+        trace_id=request.state.trace_id,
+        message="成员已退出",
+    )
+
+
 @router.patch("/{user_id}/status", summary="Update member status")
 def update_status(
     user_id: UUID,

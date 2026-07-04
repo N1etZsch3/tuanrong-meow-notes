@@ -93,7 +93,7 @@
             <cover-image class="filter-arrow-icon" :src="filterArrowIcon" />
           </cover-view>
         </cover-view>
-        <cover-view class="filter-menu" :class="{ 'is-open': filterMenuOpen }">
+        <cover-view v-if="filterMenuOpen" class="filter-menu">
           <cover-view
             v-for="option in filterOptions"
             :key="option.key"
@@ -309,7 +309,7 @@
 
 <script setup lang="ts">
 import { onHide, onShow } from "@dcloudio/uni-app";
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, shallowRef, watch } from "vue";
 
 import {
   getMapBottomContent,
@@ -474,10 +474,13 @@ const imagePreviewVisible = ref(false);
 const imagePreviewUrls = ref<string[]>([]);
 const imagePreviewIndex = ref(0);
 const selectedPoiMarker = ref<MapPointMarkerDto | null>(null);
+const nativeMarkerLookup = shallowRef(new Map<number, MapPointMarkerDto>());
+const pendingPointSummaryRequestId = ref<number | null>(null);
 const pendingPoiResolveKey = ref<string | null>(null);
 const lastResolvedPoiTapKey = ref<string | null>(null);
 const nativePoiTapSuppressedUntil = ref(0);
 const lastPointTapAt = ref(0);
+const suppressUnselectedMarkerLabels = ref(false);
 const drawerResizeInProgress = ref(false);
 const mapPointEditMode = ref(false);
 const editedPointLocation = ref<LngLat | null>(null);
@@ -510,6 +513,7 @@ let mapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 let mapCenterAnimationTimer: ReturnType<typeof setTimeout> | null = null;
 let drawerResizeResumeTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeUserLocation: (() => void) | null = null;
+let pointSummaryRequestSeq = 0;
 let poiResolveRequestSeq = 0;
 
 const isPageVisible = ref(true);
@@ -902,7 +906,32 @@ function isNativePoiTapSuppressed(): boolean {
   return Date.now() < nativePoiTapSuppressedUntil.value;
 }
 
+function startPointSummaryRequest(): number {
+  pointSummaryRequestSeq += 1;
+  pendingPointSummaryRequestId.value = pointSummaryRequestSeq;
+  return pointSummaryRequestSeq;
+}
+
+function isCurrentPointSummaryRequest(requestId: number): boolean {
+  return (
+    requestId === pointSummaryRequestSeq &&
+    pendingPointSummaryRequestId.value === requestId
+  );
+}
+
+function cancelPointSummaryRequest() {
+  pointSummaryRequestSeq += 1;
+  pendingPointSummaryRequestId.value = null;
+}
+
+function finishPointSummaryRequest(requestId: number) {
+  if (pendingPointSummaryRequestId.value === requestId) {
+    pendingPointSummaryRequestId.value = null;
+  }
+}
+
 function startPoiResolve(poiTapKey: string): number {
+  cancelPointSummaryRequest();
   poiResolveRequestSeq += 1;
   pendingPoiResolveKey.value = poiTapKey;
   return poiResolveRequestSeq;
@@ -954,13 +983,26 @@ function setDrawerResizeInProgress(active: boolean) {
   }, DRAWER_RESIZE_SETTLE_MS);
 }
 
+defineExpose({
+  setDrawerResizeInProgress,
+});
+
 function clearSelectedMapPointState() {
+  const hadPendingPointSummary = pendingPointSummaryRequestId.value !== null;
+  const hadSelectedPoint = Boolean(selectedSummary.value || selectedPoiMarker.value);
+  cancelPointSummaryRequest();
   filterMenuOpen.value = false;
   poiResolveRequestSeq += 1;
   pendingPoiResolveKey.value = null;
   lastResolvedPoiTapKey.value = null;
   selectedSummary.value = null;
   selectedPoiMarker.value = null;
+  if (hadSelectedPoint) {
+    suppressUnselectedMarkerLabels.value = true;
+  }
+  if (hadPendingPointSummary && contentLoadState.value === "loading") {
+    contentLoadState.value = "ready";
+  }
 }
 
 function getNativeMarkerDisplayMode(marker: MapPointMarkerDto): MapMarkerDisplayMode {
@@ -978,6 +1020,7 @@ function getNativeMarkerDisplayMode(marker: MapPointMarkerDto): MapMarkerDisplay
     labelMinZoom: marker.label_min_zoom,
     previewMinZoom: marker.preview_min_zoom,
     selected: selectedPointId === marker.point_id,
+    suppressUnselectedLabels: !selectedPointId && suppressUnselectedMarkerLabels.value,
   });
 }
 
@@ -1015,18 +1058,7 @@ function getNativeMarkerStableId(marker: MapPointMarkerDto): number {
 }
 
 function findNativeMarkerByStableId(markerId: number): MapPointMarkerDto | null {
-  const usedMarkerIds = new Set<number>();
-  for (const marker of nativeMarkerSourceMarkers.value) {
-    let stableId = getNativeMarkerStableId(marker);
-    while (usedMarkerIds.has(stableId)) {
-      stableId += 1;
-    }
-    usedMarkerIds.add(stableId);
-    if (stableId === markerId) {
-      return marker;
-    }
-  }
-  return null;
+  return nativeMarkerLookup.value.get(markerId) || null;
 }
 
 function buildNativeMarkerTitleCallout(title: string): NonNullable<NativeMapMarker["callout"]> {
@@ -1057,6 +1089,7 @@ function buildNativeMarkerTitleCallout(title: string): NonNullable<NativeMapMark
 
 const nativeMapMarkers = computed(() => {
   const usedMarkerIds = new Set<number>();
+  const markerLookup = new Map<number, MapPointMarkerDto>();
   const markers: NativeMapMarker[] = nativeMarkerSourceMarkers.value.map((marker) => {
     const type = resolveMapShellItemType(marker.point_type, marker.business_type);
     const displayMode = getNativeMarkerDisplayMode(marker);
@@ -1065,6 +1098,7 @@ const nativeMapMarkers = computed(() => {
       markerId += 1;
     }
     usedMarkerIds.add(markerId);
+    markerLookup.set(markerId, marker);
 
     return {
       id: markerId,
@@ -1100,6 +1134,7 @@ const nativeMapMarkers = computed(() => {
       },
     });
   }
+  nativeMarkerLookup.value = markerLookup;
   return markers;
 });
 const nativeMapPolylines = computed(() => {
@@ -1121,6 +1156,7 @@ const nativeMapPolylines = computed(() => {
 });
 function selectFilter(option: MapFilterOption) {
   filterMenuOpen.value = false;
+  suppressUnselectedMarkerLabels.value = false;
   selectedSummary.value = null;
   selectedPoiMarker.value = null;
   activeFilter.value = option.key === NO_MAP_FILTER_KEY ? null : option.key;
@@ -1942,28 +1978,43 @@ async function runSearch(keyword: string) {
 }
 
 async function loadPointSummary(pointId: string) {
-  const token = await getAccessToken();
-  if (!token) {
-    return;
-  }
-
+  const requestId = startPointSummaryRequest();
   contentLoadState.value = "loading";
   selectedPoiMarker.value = null;
   try {
-    selectedSummary.value = await getMapPointSummary(token, pointId);
-    ensureFocusedMarkerFromSummary(selectedSummary.value);
+    const token = await getAccessToken();
+    if (!isCurrentPointSummaryRequest(requestId)) {
+      return;
+    }
+    if (!token) {
+      contentLoadState.value = "ready";
+      return;
+    }
+
+    const summary = await getMapPointSummary(token, pointId);
+    if (!isCurrentPointSummaryRequest(requestId)) {
+      return;
+    }
+
+    selectedSummary.value = summary;
+    ensureFocusedMarkerFromSummary(summary);
     const summaryPoint = {
-      lng: selectedSummary.value.lng,
-      lat: selectedSummary.value.lat,
+      lng: summary.lng,
+      lat: summary.lat,
     };
     if (isFiniteLngLat(summaryPoint)) {
       focusMapToPoint(summaryPoint);
     }
     contentLoadState.value = "ready";
   } catch (error) {
+    if (!isCurrentPointSummaryRequest(requestId)) {
+      return;
+    }
     selectedSummary.value = null;
     contentLoadState.value = "error";
     handleMapError(error, "点位详情加载失败");
+  } finally {
+    finishPointSummaryRequest(requestId);
   }
 }
 
@@ -2446,6 +2497,9 @@ function handleMapRegionChange(event: Event) {
   const detail = getMapRegionChangeDetail(event);
   if (drawerResizeInProgress.value) {
     return;
+  }
+  if (detail.causedBy === "drag" || detail.causedBy === "scale") {
+    suppressUnselectedMarkerLabels.value = false;
   }
   if (shouldSyncMapScaleFromRegionChange(detail)) {
     recordNativeMapScale(Number(detail.scale));
@@ -2943,13 +2997,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 6rpx;
-  opacity: 0;
-  transform: translateY(-8rpx) scaleY(0.96);
+  opacity: 1;
+  transform: translateY(0);
   transform-origin: top left;
-  pointer-events: none;
-}
-
-.filter-menu.is-open {
   pointer-events: auto;
 }
 

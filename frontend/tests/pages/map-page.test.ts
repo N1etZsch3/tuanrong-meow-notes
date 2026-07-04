@@ -166,6 +166,16 @@ describe("map page shell behavior", () => {
     ).toBe("label");
     expect(
       getMarkerDisplayMode({
+        zoom: 18,
+        visibleMarkerCount: 40,
+        suppressUnselectedLabels: true,
+        previewEnabled: true,
+        labelMinZoom: 16,
+        previewMinZoom: 18,
+      }),
+    ).toBe("icon");
+    expect(
+      getMarkerDisplayMode({
         zoom: 18.8,
         visibleMarkerCount: 1,
         previewEnabled: true,
@@ -206,6 +216,13 @@ describe("map page shell behavior", () => {
     expect(regionChangeSource).toContain("return;");
     expect(drawerWxsSource).toContain("callMethod('setDrawerResizeInProgress'");
     expect(drawerMoveSource).not.toContain("callMethod");
+  });
+
+  it("exposes the drawer resize handler before WXS calls into the page instance", () => {
+    expect(drawerWxsSource).toContain("callMethod('setDrawerResizeInProgress'");
+    expect(indexPageSource).toMatch(
+      /defineExpose\s*\(\s*{[^}]*setDrawerResizeInProgress/s,
+    );
   });
 
   it("reveals a pre-sized native map instead of resizing the map component during drawer drag", () => {
@@ -379,7 +396,9 @@ describe("map page shell behavior", () => {
     const refreshSource = extractFunctionSource("refreshMapPoints");
 
     expect(indexPageSource).toContain("function ensureFocusedMarkerFromSummary");
-    expect(loadSource).toContain("ensureFocusedMarkerFromSummary(selectedSummary.value)");
+    expect(loadSource).toMatch(
+      /ensureFocusedMarkerFromSummary\((selectedSummary\.value|summary)\)/,
+    );
     expect(refreshSource).toContain("ensureFocusedMarkerFromSummary(selectedSummary.value)");
   });
 
@@ -396,6 +415,29 @@ describe("map page shell behavior", () => {
     expect(clearSource).not.toContain("activeFilter.value = null");
     expect(clearSource).not.toContain("searchKeyword.value = \"\"");
     expect(clearSource).not.toContain("clearNativeRoute()");
+  });
+
+  it("cancels stale point summary loads when a blank map tap clears selection", () => {
+    const clearSource = extractFunctionSource("clearSelectedMapPointState");
+    const loadSource = extractFunctionSource("loadPointSummary");
+    const staleGuardIndex = loadSource.indexOf(
+      "if (!isCurrentPointSummaryRequest(requestId))",
+    );
+    const summaryWriteIndex = loadSource.indexOf("selectedSummary.value = summary");
+
+    expect(indexPageSource).toContain("const pendingPointSummaryRequestId");
+    expect(indexPageSource).toContain("let pointSummaryRequestSeq = 0");
+    expect(indexPageSource).toContain("function startPointSummaryRequest");
+    expect(indexPageSource).toContain("function cancelPointSummaryRequest");
+    expect(clearSource).toContain("cancelPointSummaryRequest()");
+    expect(clearSource).toContain("contentLoadState.value = \"ready\"");
+    expect(loadSource).toContain("const requestId = startPointSummaryRequest()");
+    expect(loadSource).not.toContain(
+      "selectedSummary.value = await getMapPointSummary(token, pointId)",
+    );
+    expect(staleGuardIndex).toBeGreaterThanOrEqual(0);
+    expect(summaryWriteIndex).toBeGreaterThan(staleGuardIndex);
+    expect(loadSource).toContain("finishPointSummaryRequest(requestId)");
   });
 
   it("guards native map blank taps immediately after marker or poi taps", () => {
@@ -637,6 +679,21 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).not.toContain("moveToLocation({");
   });
 
+  it("looks up native marker taps from the rendered marker id snapshot", () => {
+    const nativeMapMarkersSource = indexPageSource.slice(
+      indexPageSource.indexOf("const nativeMapMarkers = computed"),
+      indexPageSource.indexOf("const nativeMapPolylines = computed"),
+    );
+    const markerLookupSource = extractFunctionSource("findNativeMarkerByStableId");
+
+    expect(indexPageSource).toContain("const nativeMarkerLookup = shallowRef");
+    expect(nativeMapMarkersSource).toContain("const markerLookup = new Map");
+    expect(nativeMapMarkersSource).toContain("markerLookup.set(markerId, marker)");
+    expect(nativeMapMarkersSource).toContain("nativeMarkerLookup.value = markerLookup");
+    expect(markerLookupSource).toContain("nativeMarkerLookup.value.get(markerId)");
+    expect(markerLookupSource).not.toContain("nativeMarkerSourceMarkers.value");
+  });
+
   it("syncs manual map drags so the location button can recenter repeatedly", () => {
     const regionChangeSource = extractFunctionSource("handleMapRegionChange");
     const locateMeSource = extractFunctionSource("locateMe");
@@ -845,15 +902,23 @@ describe("map page shell behavior", () => {
     expect(filterMenuWxsSource).toContain("rotate(180deg)");
     expect(filterMenuWxsSource).toContain("rotate(0deg)");
     expect(indexPageSource).toContain(
-      '<cover-view class="filter-menu" :class="{ \'is-open\': filterMenuOpen }">',
+      '<cover-view v-if="filterMenuOpen" class="filter-menu">',
     );
-    expect(indexPageSource).toContain(".filter-menu.is-open");
+    expect(indexPageSource).not.toContain(':class="{ \'is-open\': filterMenuOpen }"');
     expect(filterMenuWxsSource).toContain("opacity 0.18s ease");
     expect(filterMenuWxsSource).toContain("transform 0.18s ease");
     expect(filterMenuWxsSource).not.toContain("transition: trans");
     expect(filterMenuWxsSource).not.toContain("transition || 'none'");
     expect(filterMenuWxsSource).not.toContain("pointerEvents");
     expect(filterMenuWxsSource).not.toContain("scaleY");
+  });
+
+  it("does not leave transparent filter options over the native map when the menu is closed", () => {
+    expect(indexPageSource).toContain('<cover-view v-if="filterMenuOpen" class="filter-menu">');
+    expect(indexPageSource).not.toContain(
+      '<cover-view class="filter-menu" :class="{ \'is-open\': filterMenuOpen }">',
+    );
+    expect(indexPageSource).not.toContain(".filter-menu.is-open");
   });
 
   it("navigates summary card view-detail actions to the task detail page", () => {

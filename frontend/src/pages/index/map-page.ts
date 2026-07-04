@@ -93,6 +93,7 @@ export interface MapMarkerDisplayModeInput {
   labelMinZoom?: number | null;
   previewMinZoom?: number | null;
   selected?: boolean;
+  suppressUnselectedLabels?: boolean;
 }
 
 export interface MapRegionScaleSyncInput {
@@ -326,6 +327,10 @@ export function getMarkerDisplayMode(
 ): MapMarkerDisplayMode {
   if (input.selected) {
     return "label";
+  }
+
+  if (input.suppressUnselectedLabels) {
+    return "icon";
   }
 
   return input.zoom >= MARKER_LABEL_MIN_VISIBLE_ZOOM ? "label" : "icon";

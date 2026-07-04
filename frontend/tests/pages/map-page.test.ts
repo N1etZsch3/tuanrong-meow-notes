@@ -417,6 +417,19 @@ describe("map page shell behavior", () => {
     expect(clearSource).not.toContain("clearNativeRoute()");
   });
 
+  it("keeps unselected marker labels suppressed when filter selection clears a selected point", () => {
+    const filterSource = extractFunctionSource("selectFilter");
+
+    expect(filterSource).toContain(
+      "const hadSelectedPoint = Boolean(selectedSummary.value || selectedPoiMarker.value);",
+    );
+    expect(filterSource).toContain("cancelPointSummaryRequest()");
+    expect(filterSource).toContain("selectedSummary.value = null");
+    expect(filterSource).toContain("selectedPoiMarker.value = null");
+    expect(filterSource).toContain("suppressUnselectedMarkerLabels.value = hadSelectedPoint");
+    expect(filterSource).not.toContain("suppressUnselectedMarkerLabels.value = false");
+  });
+
   it("cancels stale point summary loads when a blank map tap clears selection", () => {
     const clearSource = extractFunctionSource("clearSelectedMapPointState");
     const loadSource = extractFunctionSource("loadPointSummary");

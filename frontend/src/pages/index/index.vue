@@ -1155,10 +1155,12 @@ const nativeMapPolylines = computed(() => {
   ];
 });
 function selectFilter(option: MapFilterOption) {
+  const hadSelectedPoint = Boolean(selectedSummary.value || selectedPoiMarker.value);
+  cancelPointSummaryRequest();
   filterMenuOpen.value = false;
-  suppressUnselectedMarkerLabels.value = false;
   selectedSummary.value = null;
   selectedPoiMarker.value = null;
+  suppressUnselectedMarkerLabels.value = hadSelectedPoint;
   activeFilter.value = option.key === NO_MAP_FILTER_KEY ? null : option.key;
 }
 

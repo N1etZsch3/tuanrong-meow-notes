@@ -46,7 +46,14 @@
 			"path": "pages/tasks/index",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTitleText": "任务"
+				"navigationBarTitleText": "喵记"
+			}
+		},
+		{
+			"path": "pages/tasks/list",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "任务列表"
 			}
 		},
 		{
@@ -54,6 +61,13 @@
 			"style": {
 				"navigationStyle": "custom",
 				"navigationBarTitleText": "任务详情"
+			}
+		},
+		{
+			"path": "pages/supplies/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "物资列表"
 			}
 		},
 		{
@@ -169,6 +183,13 @@
 			}
 		},
 		{
+			"path": "pages/landmarks/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "校园地标"
+			}
+		},
+		{
 			"path": "pages/landmarks/detail",
 			"style": {
 				"navigationStyle": "custom",
@@ -205,7 +226,7 @@
 			},
 			{
 				"pagePath": "pages/tasks/index",
-				"text": "任务"
+				"text": "喵记"
 			},
 			{
 				"pagePath": "pages/profile/index",

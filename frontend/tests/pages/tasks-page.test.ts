@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import adminCreateTaskSource from "../../src/pages/admin/tasks/create.vue?raw";
 import adminTaskLocationSource from "../../src/pages/admin/tasks/location.vue?raw";
 import taskDetailSource from "../../src/pages/tasks/detail.vue?raw";
-import taskIndexSource from "../../src/pages/tasks/index.vue?raw";
+import meowNotesSource from "../../src/pages/tasks/index.vue?raw";
+import taskListSource from "../../src/pages/tasks/list.vue?raw";
 import pagesJson from "../../src/pages.json?raw";
 import {
   DEFAULT_REQUIRED_ITEMS,
@@ -22,15 +23,32 @@ import {
 describe("summer feeding task pages", () => {
   it("registers task list, task detail, publish and map location pages", () => {
     expect(pagesJson).toContain("pages/tasks/index");
+    expect(pagesJson).toContain("pages/tasks/list");
     expect(pagesJson).toContain("pages/tasks/detail");
     expect(pagesJson).toContain("pages/admin/tasks/create");
     expect(pagesJson).toContain("pages/admin/tasks/location");
   });
 
+  it("turns the task tab into a Meow Notes bookshelf entry page", () => {
+    expect(meowNotesSource).toContain("喵记");
+    expect(meowNotesSource).toContain("noteBooks");
+    expect(meowNotesSource).toContain('class="meow-shelf"');
+    expect(meowNotesSource).toContain('class="note-book"');
+    expect(meowNotesSource).toContain("任务");
+    expect(meowNotesSource).toContain("物资");
+    expect(meowNotesSource).toContain("校园地标");
+    expect(meowNotesSource).toContain("药品");
+    expect(meowNotesSource).toContain('/pages/tasks/list');
+    expect(meowNotesSource).toContain('/pages/supplies/index');
+    expect(meowNotesSource).toContain('/pages/landmarks/index');
+    expect(meowNotesSource).toContain("药品管理暂未开放");
+    expect(meowNotesSource).not.toContain("getTasks");
+  });
+
   it("uses real task list and detail pages instead of the development placeholder", () => {
-    expect(taskIndexSource).toContain("getTasks");
-    expect(taskIndexSource).toContain("/pages/tasks/detail?task_id=");
-    expect(taskIndexSource).not.toContain("任务模块建设中");
+    expect(taskListSource).toContain("getTasks");
+    expect(taskListSource).toContain("/pages/tasks/detail?task_id=");
+    expect(taskListSource).not.toContain("任务模块建设中");
     expect(taskDetailSource).toContain("getTaskDetail");
     expect(taskDetailSource).toContain("完成投喂");
   });
@@ -72,8 +90,8 @@ describe("summer feeding task pages", () => {
   });
 
   it("uses a mini-program-safe png arrow in task list filters", () => {
-    expect(taskIndexSource).toContain("地图点/箭头.png");
-    expect(taskIndexSource).not.toContain("地图点/箭头.svg");
+    expect(taskListSource).toContain("地图点/箭头.png");
+    expect(taskListSource).not.toContain("地图点/箭头.svg");
   });
 
   it("uses a mini-program-safe png marker on the admin location picker map", () => {
@@ -95,53 +113,53 @@ describe("summer feeding task pages", () => {
   });
 
   it("uses cached task list data on tab re-entry and invalidates after checkin", () => {
-    expect(taskIndexSource).toContain("getCachedTaskList");
-    expect(taskIndexSource).toContain("setCachedTaskList");
-    expect(taskIndexSource).toContain("silent: true");
+    expect(taskListSource).toContain("getCachedTaskList");
+    expect(taskListSource).toContain("setCachedTaskList");
+    expect(taskListSource).toContain("silent: true");
     expect(taskDetailSource).toContain("clearTaskListCache");
   });
 
   it("adds task search and three picker filters using the cat library filter layout", () => {
-    expect(taskIndexSource).toContain('class="search-box"');
-    expect(taskIndexSource).toContain('placeholder="搜索任务 / 喂食点 / 位置"');
-    expect(taskIndexSource).toContain("handleSearchConfirm");
-    expect(taskIndexSource).toContain('class="filter-card"');
-    expect(taskIndexSource).toContain("taskTypeOptions");
-    expect(taskIndexSource).toContain("taskStatusOptions");
-    expect(taskIndexSource).toContain("dateFilterOptions");
-    expect(taskIndexSource).toContain("selectedTaskTypeLabel");
-    expect(taskIndexSource).toContain("selectedTaskStatusLabel");
-    expect(taskIndexSource).toContain("selectedDateFilterLabel");
-    expect(taskIndexSource).toContain("任务类型");
-    expect(taskIndexSource).toContain("任务状态");
-    expect(taskIndexSource).toContain("日期");
-    expect(taskIndexSource).toContain("本日");
-    expect(taskIndexSource).toContain("本周");
-    expect(taskIndexSource).toContain("本月");
-    expect(taskIndexSource).toContain("特定日期");
-    expect(taskIndexSource).not.toContain("全部任务类型");
-    expect(taskIndexSource).not.toContain("全部任务状态");
-    expect(taskIndexSource).not.toContain("今日任务");
-    expect(taskIndexSource).not.toContain("刷新");
-    expect(taskIndexSource).not.toContain("toggleToday");
-    expect(taskIndexSource).not.toContain("refreshTasks");
-    expect(taskIndexSource).not.toContain("only_today");
-    expect(taskIndexSource).toContain("clearFilters");
-    expect(taskIndexSource).toContain("keyword: searchKeyword.value.trim()");
-    expect(taskIndexSource).toContain("status: DEFAULT_TASK_STATUS_QUERY");
-    expect(taskIndexSource).toContain("execution_display_status: selectedTaskStatus.value");
+    expect(taskListSource).toContain('class="search-box"');
+    expect(taskListSource).toContain('placeholder="搜索任务 / 喂食点 / 位置"');
+    expect(taskListSource).toContain("handleSearchConfirm");
+    expect(taskListSource).toContain('class="filter-card"');
+    expect(taskListSource).toContain("taskTypeOptions");
+    expect(taskListSource).toContain("taskStatusOptions");
+    expect(taskListSource).toContain("dateFilterOptions");
+    expect(taskListSource).toContain("selectedTaskTypeLabel");
+    expect(taskListSource).toContain("selectedTaskStatusLabel");
+    expect(taskListSource).toContain("selectedDateFilterLabel");
+    expect(taskListSource).toContain("任务类型");
+    expect(taskListSource).toContain("任务状态");
+    expect(taskListSource).toContain("日期");
+    expect(taskListSource).toContain("本日");
+    expect(taskListSource).toContain("本周");
+    expect(taskListSource).toContain("本月");
+    expect(taskListSource).toContain("特定日期");
+    expect(taskListSource).not.toContain("全部任务类型");
+    expect(taskListSource).not.toContain("全部任务状态");
+    expect(taskListSource).not.toContain("今日任务");
+    expect(taskListSource).not.toContain("刷新");
+    expect(taskListSource).not.toContain("toggleToday");
+    expect(taskListSource).not.toContain("refreshTasks");
+    expect(taskListSource).not.toContain("only_today");
+    expect(taskListSource).toContain("clearFilters");
+    expect(taskListSource).toContain("keyword: searchKeyword.value.trim()");
+    expect(taskListSource).toContain("status: DEFAULT_TASK_STATUS_QUERY");
+    expect(taskListSource).toContain("execution_display_status: selectedTaskStatus.value");
   });
 
   it("renders recurring child execution cards inside each parent task card", () => {
-    expect(taskIndexSource).toContain("display_executions");
-    expect(taskIndexSource).toContain('class="execution-strip"');
-    expect(taskIndexSource).toContain('scroll-x');
-    expect(taskIndexSource).toContain("goExecutionDetail(task.task_id, execution.execution_date_id)");
-    expect(taskIndexSource).toContain("getExecutionDisplayLabel(execution)");
-    expect(taskIndexSource).toContain("getExecutionDisplayClass(execution)");
-    expect(taskIndexSource).toContain("-webkit-line-clamp: 1");
-    expect(taskIndexSource).not.toContain('class="task-location"');
-    expect(taskIndexSource).not.toContain("task.required_items");
+    expect(taskListSource).toContain("display_executions");
+    expect(taskListSource).toContain('class="execution-strip"');
+    expect(taskListSource).toContain('scroll-x');
+    expect(taskListSource).toContain("goExecutionDetail(task.task_id, execution.execution_date_id)");
+    expect(taskListSource).toContain("getExecutionDisplayLabel(execution)");
+    expect(taskListSource).toContain("getExecutionDisplayClass(execution)");
+    expect(taskListSource).toContain("-webkit-line-clamp: 1");
+    expect(taskListSource).not.toContain('class="task-location"');
+    expect(taskListSource).not.toContain("task.required_items");
   });
 
   it("supports parent and child scoped task detail pages", () => {
@@ -244,14 +262,14 @@ describe("summer feeding task pages", () => {
   });
 
   it("filters and colors task status pills by parent task status", () => {
-    expect(taskIndexSource).toContain(":class=\"taskStatusClass(task)\"");
-    expect(taskIndexSource).toContain("task-status-in-progress");
-    expect(taskIndexSource).toContain("task-status-completed");
-    expect(taskIndexSource).toContain("task-status-cancelled");
-    expect(taskIndexSource).toContain("task-status-archived");
-    expect(taskIndexSource).toContain('{ label: "未开始", value: "not_started" }');
-    expect(taskIndexSource).toContain('{ label: "已取消", value: "cancelled" }');
-    expect(taskIndexSource).not.toContain('{ label: "已归档", value: "archived" }');
+    expect(taskListSource).toContain(":class=\"taskStatusClass(task)\"");
+    expect(taskListSource).toContain("task-status-in-progress");
+    expect(taskListSource).toContain("task-status-completed");
+    expect(taskListSource).toContain("task-status-cancelled");
+    expect(taskListSource).toContain("task-status-archived");
+    expect(taskListSource).toContain('{ label: "未开始", value: "not_started" }');
+    expect(taskListSource).toContain('{ label: "已取消", value: "cancelled" }');
+    expect(taskListSource).not.toContain('{ label: "已归档", value: "archived" }');
 
     expect(
       getTaskStatusTone({
@@ -364,10 +382,10 @@ describe("summer feeding task pages", () => {
   });
 
   it("does not expose task publishing from the task tab", () => {
-    expect(taskIndexSource).not.toContain('class="publish-toolbar"');
-    expect(taskIndexSource).not.toContain('class="publish-button"');
-    expect(taskIndexSource).not.toContain("function goPublish");
-    expect(taskIndexSource).not.toContain("/pages/admin/tasks/create");
+    expect(taskListSource).not.toContain('class="publish-toolbar"');
+    expect(taskListSource).not.toContain('class="publish-button"');
+    expect(taskListSource).not.toContain("function goPublish");
+    expect(taskListSource).not.toContain("/pages/admin/tasks/create");
   });
 
   it("uses a native mini program map for publish-time task point selection", () => {

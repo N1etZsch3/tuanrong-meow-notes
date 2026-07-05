@@ -29,7 +29,7 @@ export const APP_TAB_ITEMS: readonly AppTabItem[] = [
   },
   {
     key: "tasks",
-    label: "任务",
+    label: "喵记",
     route: "/pages/tasks/index",
     icon: tasksIcon,
   },

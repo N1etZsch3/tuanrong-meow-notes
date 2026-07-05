@@ -13,7 +13,7 @@ describe("app tab bar navigation", () => {
     expect(APP_TAB_ITEMS.map((item) => item.label)).toEqual([
       "地图",
       "猫咪库",
-      "任务",
+      "喵记",
       "我的",
     ]);
     expect(APP_TAB_ITEMS.map((item) => item.route)).toEqual([

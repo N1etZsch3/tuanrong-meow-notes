@@ -3,7 +3,9 @@ import { describe, expect, it } from "vitest";
 import adminSupplyCreateSource from "../../src/pages/admin/supplies/create.vue?raw";
 import adminSupplyLocationSource from "../../src/pages/admin/supplies/location.vue?raw";
 import supplyDetailSource from "../../src/pages/supplies/detail.vue?raw";
+import supplyIndexSource from "../../src/pages/supplies/index.vue?raw";
 import suppliesApiSource from "../../src/api/supplies.ts?raw";
+import pagesJson from "../../src/pages.json?raw";
 
 function extractFunctionSource(source: string, functionName: string): string {
   const normalStart = source.indexOf(`function ${functionName}`);
@@ -30,6 +32,18 @@ function extractFunctionSource(source: string, functionName: string): string {
 }
 
 describe("supply point detail page", () => {
+  it("registers and renders a searchable supply point list page", () => {
+    expect(pagesJson).toContain("pages/supplies/index");
+    expect(supplyIndexSource).toContain("getMapPoints");
+    expect(supplyIndexSource).toContain("filterPointListByKeyword");
+    expect(supplyIndexSource).toContain('point_types: "supply"');
+    expect(supplyIndexSource).toContain('placeholder="搜索物资点 / 附近地标"');
+    expect(supplyIndexSource).toContain('class="point-card"');
+    expect(supplyIndexSource).toContain("nearby_landmark_name");
+    expect(supplyIndexSource).toContain("/pages/supplies/detail?supply_point_id=");
+    expect(supplyIndexSource).not.toContain('class="filter-card"');
+  });
+
   it("searches nearby public POIs independently from the supply point name", () => {
     const nearbySource = extractFunctionSource(adminSupplyLocationSource, "loadNearbyPoiCandidates");
 

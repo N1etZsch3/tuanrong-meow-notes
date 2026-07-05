@@ -20,26 +20,29 @@
         </view>
       </view>
 
-      <view class="meow-shelf">
-        <view class="shelf-panel">
-          <button
-            v-for="book in noteBooks"
-            :key="book.key"
-            class="note-book"
-            :class="`note-book-${book.tone}`"
-            hover-class="book-hover"
-            @tap="openBook(book)"
-          >
-            <view class="book-spine" />
-            <view class="book-ribbon" />
-            <view class="book-label">
-              <text>{{ book.label }}</text>
+      <view class="shelf" aria-label="书架">
+        <view class="shelf__inner">
+          <view v-for="(row, rowIndex) in noteBookRows" :key="rowIndex" class="cell">
+            <view class="cell__books">
+              <view
+                v-for="book in row"
+                :key="book.key"
+                class="book"
+                :class="[
+                  `book--${book.tone}`,
+                  { 'book--ribbon': book.ribbon },
+                ]"
+                hover-class="book--hover"
+                @tap="openBook(book)"
+              >
+                <view class="book__label">
+                  <text>{{ book.label }}</text>
+                </view>
+                <image class="book__icon" :src="book.icon" mode="aspectFit" />
+              </view>
             </view>
-            <image class="book-icon" :src="book.icon" mode="aspectFit" />
-          </button>
-          <view class="shelf-board shelf-board-top" />
-          <view class="shelf-board shelf-board-middle" />
-          <view class="shelf-board shelf-board-bottom" />
+            <view class="board"></view>
+          </view>
         </view>
       </view>
 
@@ -67,7 +70,8 @@ interface NoteBook {
   key: string;
   label: string;
   icon: string;
-  tone: "sage" | "cream" | "yellow";
+  tone: "green" | "cream" | "mint" | "yellow";
+  ribbon: boolean;
   url?: string;
 }
 
@@ -76,7 +80,8 @@ const noteBooks: NoteBook[] = [
     key: "tasks",
     label: "任务",
     icon: taskIcon,
-    tone: "sage",
+    tone: "green",
+    ribbon: false,
     url: "/pages/tasks/list",
   },
   {
@@ -84,13 +89,15 @@ const noteBooks: NoteBook[] = [
     label: "物资",
     icon: supplyIcon,
     tone: "cream",
+    ribbon: true,
     url: "/pages/supplies/index",
   },
   {
     key: "landmarks",
     label: "校园地标",
     icon: landmarkIcon,
-    tone: "sage",
+    tone: "mint",
+    ribbon: true,
     url: "/pages/landmarks/index",
   },
   {
@@ -98,7 +105,14 @@ const noteBooks: NoteBook[] = [
     label: "药品",
     icon: medicineIcon,
     tone: "yellow",
+    ribbon: true,
   },
+];
+
+const noteBookRows: NoteBook[][] = [
+  noteBooks.slice(0, 3),
+  noteBooks.slice(3, 4),
+  [],
 ];
 
 function openBook(book: NoteBook) {
@@ -147,7 +161,7 @@ function showMore() {
   z-index: 1;
   box-sizing: border-box;
   min-height: 100vh;
-  padding: var(--catmap-page-title-top, 92rpx) 32rpx
+  padding: var(--catmap-page-title-top, 92rpx) 28rpx
     calc(env(safe-area-inset-bottom) + 170rpx);
 }
 
@@ -156,7 +170,7 @@ function showMore() {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24rpx;
-  padding: 0 18rpx;
+  padding: 0 22rpx;
 }
 
 .title-row {
@@ -192,8 +206,7 @@ function showMore() {
 }
 
 .round-action,
-.summary-strip,
-.note-book {
+.summary-strip {
   margin: 0;
   padding: 0;
   border: 0;
@@ -202,8 +215,7 @@ function showMore() {
 }
 
 .round-action::after,
-.summary-strip::after,
-.note-book::after {
+.summary-strip::after {
   border: 0;
 }
 
@@ -225,141 +237,246 @@ function showMore() {
   line-height: 1;
 }
 
-.meow-shelf {
+/* 喵记书架组件：迁移自 test/组件/书架书本.html */
+.shelf {
+  --bg-1: #f7f3e4;
+  --bg-2: #eef0dc;
+  --frame-1: #f8ead0;
+  --frame-2: #eedbb2;
+  --panel-1: #dcbd8c;
+  --panel-2: #ecd8ae;
+  --board-face-1: #fcf3de;
+  --board-face-2: #eedcb4;
+  --board-top-1: #c9a674;
+  --board-top-2: #e9d3a6;
+  --shade: 92, 62, 26;
+  --ribbon-1: #7fa05a;
+  --ribbon-2: #90b06b;
+  --book-w: 90px;
+  --book-h: 134px;
   box-sizing: border-box;
-  margin-top: 46rpx;
-  border: 2rpx solid rgba(205, 183, 148, 0.55);
-  border-radius: 36rpx;
-  padding: 22rpx;
-  background: rgba(250, 238, 218, 0.92);
-  box-shadow: 0 18rpx 36rpx rgba(98, 79, 45, 0.11);
+  width: 100%;
+  max-width: 388px;
+  margin: 46rpx auto 0;
+  padding: 18px 18px 30px;
+  border-radius: 30px;
+  background: linear-gradient(180deg, var(--frame-1) 0%, #f3e2be 60%, var(--frame-2) 100%);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -3px 0 rgba(var(--shade), 0.12),
+    0 6px 14px -6px rgba(var(--shade), 0.28),
+    0 26px 48px -20px rgba(var(--shade), 0.38);
 }
 
-.shelf-panel {
+.shelf__inner {
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px rgba(146, 108, 58, 0.2);
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(
+    180deg,
+    var(--panel-1) 0%,
+    #e7d0a4 22%,
+    var(--panel-2) 70%,
+    #e3c99a 100%
+  );
+  box-shadow:
+    inset 0 18px 22px -14px rgba(var(--shade), 0.5),
+    inset 12px 0 16px -12px rgba(var(--shade), 0.3),
+    inset -12px 0 16px -12px rgba(var(--shade), 0.3),
+    inset 0 -10px 12px -10px rgba(var(--shade), 0.28);
+}
+
+.cell__books {
   position: relative;
-  box-sizing: border-box;
-  min-height: 850rpx;
-  border: 2rpx solid rgba(199, 166, 116, 0.42);
-  border-radius: 26rpx;
-  padding: 44rpx 28rpx;
-  background: linear-gradient(90deg, rgba(236, 205, 159, 0.72), rgba(244, 220, 180, 0.8));
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-content: start;
-  column-gap: 26rpx;
-  row-gap: 118rpx;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  height: 154px;
+  padding: 0 15px;
 }
 
-.shelf-board {
+.board {
+  position: relative;
+  z-index: 1;
+  height: 17px;
+  background: linear-gradient(180deg, var(--board-face-1), var(--board-face-2));
+  border-radius: 3px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.6),
+    inset 0 -2px 3px -2px rgba(150, 110, 60, 0.35),
+    0 5px 7px -3px rgba(var(--shade), 0.4),
+    0 11px 16px -8px rgba(var(--shade), 0.28);
+}
+
+.board::before {
+  content: "";
   position: absolute;
   left: 0;
   right: 0;
-  height: 38rpx;
-  border: 2rpx solid rgba(211, 188, 148, 0.78);
-  background: linear-gradient(180deg, #fffbea, #efe5c9);
-  box-shadow: 0 8rpx 12rpx rgba(128, 94, 45, 0.12);
+  top: -7px;
+  height: 7px;
+  background: linear-gradient(180deg, var(--board-top-1), var(--board-top-2));
+  border-radius: 2px 2px 0 0;
+  box-shadow: inset 0 1px 0 rgba(var(--shade), 0.25);
 }
 
-.shelf-board-top {
-  top: 270rpx;
-}
-
-.shelf-board-middle {
-  top: 590rpx;
-}
-
-.shelf-board-bottom {
-  bottom: 22rpx;
-}
-
-.note-book {
+.book {
   position: relative;
   z-index: 1;
+  flex-shrink: 0;
   box-sizing: border-box;
-  width: 100%;
-  height: 248rpx;
-  overflow: hidden;
-  border: 2rpx solid rgba(102, 135, 85, 0.28);
-  border-radius: 14rpx 20rpx 20rpx 14rpx;
-  box-shadow: inset 8rpx 0 0 rgba(102, 157, 91, 0.86), 0 8rpx 16rpx rgba(92, 72, 43, 0.13);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-start;
+  width: var(--book-w);
+  height: var(--book-h);
+  border-radius: 8px 16px 16px 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 26%),
+    linear-gradient(
+      90deg,
+      var(--spine) 0 11px,
+      rgba(87, 72, 35, 0.18) 11px 12px,
+      rgba(255, 255, 255, 0.38) 12px 13.5px,
+      rgba(255, 255, 255, 0) 13.5px
+    ),
+    linear-gradient(180deg, var(--cover-hi), var(--cover) 55%, var(--cover-lo));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset -3px 0 6px -3px rgba(110, 78, 38, 0.18),
+    inset 0 -4px 8px -4px rgba(110, 78, 38, 0.22),
+    0 2px 3px -1px rgba(89, 60, 26, 0.35),
+    5px 10px 18px -8px rgba(89, 60, 26, 0.38);
+  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
-.note-book-sage {
-  background: linear-gradient(180deg, #e7f0d9, #dceacb);
+.book::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: 5px;
+  right: 5px;
+  bottom: -3px;
+  height: 7px;
+  border-radius: 50%;
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    rgba(70, 48, 20, 0.4),
+    rgba(70, 48, 20, 0) 72%
+  );
+  filter: blur(1.5px);
+  transition: transform 0.25s ease, opacity 0.25s ease;
 }
 
-.note-book-cream {
-  background: linear-gradient(180deg, #fffaf0, #f5eddd);
-}
-
-.note-book-yellow {
-  background: linear-gradient(180deg, #fff5ca, #f8e8a8);
-}
-
-.book-hover,
-.button-hover {
-  opacity: 0.9;
-  transform: translateY(2rpx);
-}
-
-.book-spine {
+.book--ribbon::before {
+  content: "";
   position: absolute;
   top: 0;
-  bottom: 0;
-  left: 20rpx;
-  width: 3rpx;
-  background: rgba(84, 122, 72, 0.26);
+  right: 15px;
+  width: 15px;
+  height: 36px;
+  background:
+    linear-gradient(
+      90deg,
+      rgba(58, 80, 30, 0.25),
+      rgba(58, 80, 30, 0) 30% 70%,
+      rgba(58, 80, 30, 0.25)
+    ),
+    linear-gradient(180deg, var(--ribbon-1), var(--ribbon-2));
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 7px), 0 100%);
+  filter: drop-shadow(0 2px 2px rgba(var(--shade), 0.28));
 }
 
-.book-ribbon {
-  position: absolute;
-  top: 0;
-  right: 26rpx;
-  width: 30rpx;
-  height: 52rpx;
-  background: #9fbd80;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%);
+.book:hover,
+.book--hover {
+  transform: translateY(-6px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.45),
+    inset -3px 0 6px -3px rgba(110, 78, 38, 0.18),
+    inset 0 -4px 8px -4px rgba(110, 78, 38, 0.22),
+    0 9px 10px -5px rgba(89, 60, 26, 0.26),
+    10px 22px 30px -12px rgba(89, 60, 26, 0.32);
 }
 
-.book-label {
+.book:hover::after,
+.book--hover::after {
+  transform: translateY(6px) scaleX(1.08);
+  opacity: 0.55;
+}
+
+.book--green {
+  --cover-hi: #d9e6bf;
+  --cover: #cddcac;
+  --cover-lo: #c3d49e;
+  --spine: #b6ca8f;
+}
+
+.book--mint {
+  --cover-hi: #e4edcd;
+  --cover: #d8e5bd;
+  --cover-lo: #cfdfae;
+  --spine: #c3d49c;
+}
+
+.book--cream {
+  --cover-hi: #fbf6e7;
+  --cover: #f7f0da;
+  --cover-lo: #f0e7c9;
+  --spine: #d6e0b4;
+}
+
+.book--yellow {
+  --cover-hi: #f9ecc0;
+  --cover: #f4e3a8;
+  --cover-lo: #edd894;
+  --spine: #e0cb80;
+}
+
+.book__label {
+  position: relative;
+  z-index: 2;
   box-sizing: border-box;
-  max-width: 126rpx;
-  min-height: 60rpx;
-  margin-top: 58rpx;
-  border: 2rpx solid rgba(204, 190, 161, 0.76);
-  border-radius: 9rpx;
-  padding: 0 12rpx;
-  background: rgba(255, 255, 255, 0.86);
+  max-width: 68px;
+  min-height: 31px;
+  margin: 40px auto 0;
+  padding: 0 7px;
+  border: 1px solid rgba(204, 190, 161, 0.76);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.88);
   color: #111827;
-  font-size: 26rpx;
+  font-size: 16px;
   font-weight: 900;
-  line-height: 60rpx;
+  line-height: 31px;
   text-align: center;
+  box-shadow: 0 2px 4px rgba(var(--shade), 0.12);
 }
 
-.book-label text {
+.book__label text {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.book-icon {
-  width: 72rpx;
-  height: 72rpx;
-  margin-top: 36rpx;
-  opacity: 0.78;
+.book__icon {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 42px;
+  height: 42px;
+  margin: 22px auto 0;
+  opacity: 0.72;
 }
 
 .summary-strip {
   box-sizing: border-box;
   width: 100%;
+  max-width: 388px;
   min-height: 76rpx;
-  margin-top: 28rpx;
+  margin: 28rpx auto 0;
   border: 2rpx solid rgba(203, 217, 190, 0.82);
   border-radius: 26rpx;
   padding: 0 22rpx;
@@ -394,5 +511,10 @@ function showMore() {
   font-size: 52rpx;
   font-weight: 700;
   line-height: 1;
+}
+
+.button-hover {
+  opacity: 0.9;
+  transform: translateY(2rpx);
 }
 </style>

@@ -32,8 +32,15 @@ describe("summer feeding task pages", () => {
   it("turns the task tab into a Meow Notes bookshelf entry page", () => {
     expect(meowNotesSource).toContain("喵记");
     expect(meowNotesSource).toContain("noteBooks");
-    expect(meowNotesSource).toContain('class="meow-shelf"');
-    expect(meowNotesSource).toContain('class="note-book"');
+    expect(meowNotesSource).toContain('class="shelf"');
+    expect(meowNotesSource).toContain('class="shelf__inner"');
+    expect(meowNotesSource).toContain('class="cell"');
+    expect(meowNotesSource).toContain('class="cell__books"');
+    expect(meowNotesSource).toContain('class="board"');
+    expect(meowNotesSource).toContain('class="book"');
+    expect(meowNotesSource).toContain("book--ribbon");
+    expect(meowNotesSource).toContain("--book-w");
+    expect(meowNotesSource).toContain("--frame-1");
     expect(meowNotesSource).toContain("任务");
     expect(meowNotesSource).toContain("物资");
     expect(meowNotesSource).toContain("校园地标");

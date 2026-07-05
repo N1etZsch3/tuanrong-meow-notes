@@ -872,12 +872,12 @@ describe("map page shell behavior", () => {
     const subtitleRule = extractCssRule(indexPageSource, ".title-subtitle");
 
     expect(indexPageSource).toContain("top: var(--catmap-page-title-top, 92rpx)");
-    expect(titleRule).toContain("color: #2f6333");
-    expect(titleRule).toContain("font-size: 64rpx");
+    expect(titleRule).toContain("color: #111827");
+    expect(titleRule).toContain("font-size: var(--catmap-page-title-font-size, 52rpx)");
     expect(titleRule).toContain("font-weight: 900");
-    expect(subtitleRule).toContain("color: #6d786f");
-    expect(subtitleRule).toContain("font-size: 25rpx");
-    expect(subtitleRule).toContain("font-weight: 800");
+    expect(subtitleRule).toContain("color: #6b7280");
+    expect(subtitleRule).toContain("font-size: var(--catmap-page-title-subtitle-size, 24rpx)");
+    expect(subtitleRule).toContain("font-weight: 700");
     expect(indexPageSource).toContain("top: 218rpx");
     expect(indexPageSource).toContain("bottom: 664rpx");
     expect(indexPageSource).toContain("top: 380rpx");

@@ -544,23 +544,25 @@ onShow(() => {
 }
 
 .page-title-text {
-  color: #2f6333;
-  font-size: 64rpx;
+  color: #111827;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
   line-height: 1;
 }
 
 .page-title-icon {
-  width: 78rpx;
-  height: 78rpx;
+  width: var(--catmap-page-title-icon-size, 48rpx);
+  height: var(--catmap-page-title-icon-size, 48rpx);
+  transform: scale(1.55);
+  transform-origin: center;
 }
 
 .page-title-subtitle {
   display: block;
   margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
-  color: #6d786f;
-  font-size: 25rpx;
-  font-weight: 800;
+  color: #6b7280;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
+  font-weight: 700;
   line-height: 1.2;
 }
 

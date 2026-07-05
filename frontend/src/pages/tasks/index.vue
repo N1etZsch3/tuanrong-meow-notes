@@ -202,23 +202,23 @@ function openBook(book: NoteBook) {
 }
 
 .title-text {
-  color: #2f6333;
-  font-size: 64rpx;
+  color: #111827;
+  font-size: var(--catmap-page-title-font-size, 52rpx);
   font-weight: 900;
   line-height: 1;
 }
 
 .title-icon {
-  width: 48rpx;
-  height: 48rpx;
+  width: var(--catmap-page-title-icon-size, 48rpx);
+  height: var(--catmap-page-title-icon-size, 48rpx);
 }
 
 .title-subtitle {
   display: block;
-  margin-top: 18rpx;
-  color: #6d786f;
-  font-size: 25rpx;
-  font-weight: 800;
+  margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
+  color: #6b7280;
+  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
+  font-weight: 700;
 }
 
 /* 喵记书架组件：迁移自 test/组件/书架书本.html */
@@ -447,18 +447,22 @@ function openBook(book: NoteBook) {
   max-width: 388px;
   min-height: 82rpx;
   margin: 22rpx auto 0;
-  padding: 10rpx 14rpx;
-  border: 2rpx solid rgba(207, 179, 127, 0.62);
-  border-radius: 999rpx;
-  background:
-    linear-gradient(180deg, rgba(255, 252, 241, 0.94), rgba(239, 218, 177, 0.92)),
-    linear-gradient(90deg, rgba(252, 243, 222, 0.75), rgba(225, 194, 141, 0.42));
-  box-shadow:
-    inset 0 3rpx 0 rgba(255, 255, 255, 0.82),
-    inset 0 -5rpx 8rpx rgba(126, 83, 37, 0.1),
-    0 12rpx 22rpx -12rpx rgba(92, 62, 26, 0.42),
-    0 22rpx 44rpx -28rpx rgba(49, 88, 52, 0.28);
+  padding: 0 14rpx;
 }
+
+/* 恢复分页外框时，把这些声明放回 .shelf-pager：
+   padding: 10rpx 14rpx;
+   border: 2rpx solid rgba(207, 179, 127, 0.62);
+   border-radius: 999rpx;
+   background:
+     linear-gradient(180deg, rgba(255, 252, 241, 0.94), rgba(239, 218, 177, 0.92)),
+     linear-gradient(90deg, rgba(252, 243, 222, 0.75), rgba(225, 194, 141, 0.42));
+   box-shadow:
+     inset 0 3rpx 0 rgba(255, 255, 255, 0.82),
+     inset 0 -5rpx 8rpx rgba(126, 83, 37, 0.1),
+     0 12rpx 22rpx -12rpx rgba(92, 62, 26, 0.42),
+     0 22rpx 44rpx -28rpx rgba(49, 88, 52, 0.28);
+*/
 
 .pager-button {
   box-sizing: border-box;

@@ -4,6 +4,7 @@
     <view class="point-inner">
       <view class="point-fixed">
         <view class="page-title">
+          <button class="back-button" @tap="goBack">‹</button>
           <view class="title-copy">
             <view class="title-row">
               <text class="title-text">校园地标</text>
@@ -148,6 +149,10 @@ function handleSearchConfirm() {
   searchKeyword.value = searchKeyword.value.trim();
 }
 
+function goBack() {
+  uni.navigateBack();
+}
+
 function hasCoverImage(item: MeowPointListItem): boolean {
   return Boolean(item.cover_photo_url && !failedImageIds.value[item.point_id]);
 }
@@ -214,9 +219,22 @@ onShow(() => {
 
 .page-title {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24rpx;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--catmap-page-title-gap, 14rpx);
+}
+
+.back-button {
+  width: 68rpx;
+  height: 68rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  color: #2f8037;
+  font-size: 58rpx;
+  line-height: 58rpx;
+  box-shadow: 0 10rpx 28rpx rgba(42, 63, 43, 0.12);
 }
 
 .title-row {
@@ -293,6 +311,7 @@ onShow(() => {
 }
 
 .search-button::after,
+.back-button::after,
 .retry-button::after,
 .point-card::after {
   border: 0;

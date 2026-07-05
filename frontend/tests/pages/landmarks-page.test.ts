@@ -14,6 +14,10 @@ describe("landmark list page", () => {
     expect(landmarkIndexSource).toContain('class="point-card"');
     expect(landmarkIndexSource).toContain("nearby_landmark_name");
     expect(landmarkIndexSource).toContain("/pages/landmarks/detail?landmark_id=");
+    expect(landmarkIndexSource).toContain('class="back-button"');
+    expect(landmarkIndexSource).toContain("function goBack");
+    expect(landmarkIndexSource).toContain("uni.navigateBack()");
+    expect(landmarkIndexSource).not.toContain("<AppTabBar");
     expect(landmarkIndexSource).not.toContain('class="filter-card"');
   });
 });

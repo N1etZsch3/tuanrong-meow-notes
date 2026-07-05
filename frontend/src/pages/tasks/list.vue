@@ -4,6 +4,7 @@
     <view class="task-inner">
       <view class="task-fixed">
         <view class="page-title">
+          <button class="back-button" @tap="goBack">‹</button>
           <view class="title-copy">
             <view class="title-row">
               <text class="title-text">任务</text>
@@ -180,7 +181,6 @@
       </view>
       </scroll-view>
     </view>
-    <AppTabBar active-key="tasks" />
   </view>
 </template>
 
@@ -189,7 +189,6 @@ import { onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
 import { getTasks, type TaskExecutionDto, type TaskListItemDto, type TaskListQuery } from "@/api/tasks";
-import AppTabBar from "@/components/AppTabBar.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
@@ -359,6 +358,10 @@ function handleSearchConfirm() {
   void loadTasks({ force: true });
 }
 
+function goBack() {
+  uni.navigateBack();
+}
+
 function openPicker(kind: PickerKind) {
   activePicker.value = kind;
 }
@@ -477,7 +480,7 @@ onShow(() => {
   box-sizing: border-box;
   height: 100vh;
   padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx)
-    calc(env(safe-area-inset-bottom) + 164rpx);
+    calc(env(safe-area-inset-bottom) + 36rpx);
   display: flex;
   flex-direction: column;
 }
@@ -492,9 +495,22 @@ onShow(() => {
 
 .page-title {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24rpx;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--catmap-page-title-gap, 14rpx);
+}
+
+.back-button {
+  width: 68rpx;
+  height: 68rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  color: #2f8037;
+  font-size: 58rpx;
+  line-height: 58rpx;
+  box-shadow: 0 10rpx 28rpx rgba(42, 63, 43, 0.12);
 }
 
 .title-row {
@@ -524,6 +540,7 @@ onShow(() => {
 }
 
 .search-button::after,
+.back-button::after,
 .clear-filter-button::after,
 .execution-card::after {
   border: 0;

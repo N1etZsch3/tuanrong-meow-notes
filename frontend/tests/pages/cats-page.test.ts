@@ -58,15 +58,16 @@ describe("cats page behavior", () => {
     expect(catsPageSource).toContain("page-title-row");
     expect(catsPageSource).toContain("page-title-icon");
     expect(catsPageSource).toContain("var(--catmap-page-title-top, 92rpx)");
-    expect(titleRule).toContain("color: #2f6333");
-    expect(titleRule).toContain("font-size: 64rpx");
+    expect(titleRule).toContain("color: #111827");
+    expect(titleRule).toContain("font-size: var(--catmap-page-title-font-size, 52rpx)");
     expect(titleRule).toContain("font-weight: 900");
     expect(titleRule).not.toContain("letter-spacing");
-    expect(iconRule).toContain("width: 78rpx");
-    expect(iconRule).toContain("height: 78rpx");
-    expect(subtitleRule).toContain("color: #6d786f");
-    expect(subtitleRule).toContain("font-size: 25rpx");
-    expect(subtitleRule).toContain("font-weight: 800");
+    expect(iconRule).toContain("width: var(--catmap-page-title-icon-size, 48rpx)");
+    expect(iconRule).toContain("height: var(--catmap-page-title-icon-size, 48rpx)");
+    expect(iconRule).toContain("transform: scale(1.55)");
+    expect(subtitleRule).toContain("color: #6b7280");
+    expect(subtitleRule).toContain("font-size: var(--catmap-page-title-subtitle-size, 24rpx)");
+    expect(subtitleRule).toContain("font-weight: 700");
     expect(catsPageSource).not.toContain("hero-icon-shell");
   });
 

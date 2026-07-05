@@ -41,6 +41,10 @@ describe("supply point detail page", () => {
     expect(supplyIndexSource).toContain('class="point-card"');
     expect(supplyIndexSource).toContain("nearby_landmark_name");
     expect(supplyIndexSource).toContain("/pages/supplies/detail?supply_point_id=");
+    expect(supplyIndexSource).toContain('class="back-button"');
+    expect(supplyIndexSource).toContain("function goBack");
+    expect(supplyIndexSource).toContain("uni.navigateBack()");
+    expect(supplyIndexSource).not.toContain("<AppTabBar");
     expect(supplyIndexSource).not.toContain('class="filter-card"');
   });
 

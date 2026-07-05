@@ -95,6 +95,8 @@ describe("summer feeding task pages", () => {
   });
 
   it("adds shelf pagination for future Meow Notes book pages", () => {
+    const pagerRule = extractCssRule(meowNotesSource, ".shelf-pager");
+
     expect(meowNotesSource).toContain("bookPages");
     expect(meowNotesSource).toContain("currentBookRows");
     expect(meowNotesSource).toContain("currentShelfPageLabel");
@@ -104,6 +106,31 @@ describe("summer feeding task pages", () => {
     expect(meowNotesSource).toContain('class="pager-button"');
     expect(meowNotesSource).toContain('class="pager-count"');
     expect(meowNotesSource).toContain('v-for="(row, rowIndex) in currentBookRows"');
+    expect(meowNotesSource).toContain("恢复分页外框");
+    expect(pagerRule).not.toContain("border:");
+    expect(pagerRule).not.toContain("background:");
+    expect(pagerRule).not.toContain("box-shadow:");
+  });
+
+  it("uses the task-list title treatment on the Meow Notes tab page", () => {
+    const titleRule = extractCssRule(meowNotesSource, ".title-text");
+    const subtitleRule = extractCssRule(meowNotesSource, ".title-subtitle");
+
+    expect(titleRule).toContain("color: #111827");
+    expect(titleRule).toContain("font-size: var(--catmap-page-title-font-size, 52rpx)");
+    expect(titleRule).toContain("font-weight: 900");
+    expect(subtitleRule).toContain("color: #6b7280");
+    expect(subtitleRule).toContain("font-size: var(--catmap-page-title-subtitle-size, 24rpx)");
+    expect(subtitleRule).toContain("font-weight: 700");
+  });
+
+  it("treats the task list as a child page without the bottom tab bar", () => {
+    expect(taskListSource).toContain('class="back-button"');
+    expect(taskListSource).toContain("function goBack");
+    expect(taskListSource).toContain("uni.navigateBack()");
+    expect(taskListSource).not.toContain("<AppTabBar");
+    expect(taskListSource).not.toContain("AppTabBar from");
+    expect(taskListSource).not.toContain('active-key="tasks"');
   });
 
   it("keeps bookshelf cells taller while preserving the original book size", () => {

@@ -297,7 +297,7 @@ function showMore() {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  height: 154px;
+  height: calc(154px + 20rpx);
   padding: 0 15px;
 }
 
@@ -439,25 +439,23 @@ function showMore() {
   position: relative;
   z-index: 2;
   box-sizing: border-box;
-  max-width: 68px;
-  min-height: 31px;
+  max-width: 76px;
+  min-height: 29px;
   margin: 40px auto 0;
-  padding: 0 7px;
+  padding: 0 5px;
   border: 1px solid rgba(204, 190, 161, 0.76);
   border-radius: 5px;
   background: rgba(255, 255, 255, 0.88);
   color: #111827;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 900;
-  line-height: 31px;
+  line-height: 29px;
   text-align: center;
   box-shadow: 0 2px 4px rgba(var(--shade), 0.12);
 }
 
 .book__label text {
   display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

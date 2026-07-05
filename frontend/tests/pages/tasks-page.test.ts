@@ -20,6 +20,28 @@ import {
   validatePublishDraft,
 } from "@/pages/tasks/task-page";
 
+function extractCssRule(source: string, selector: string): string {
+  const start = source.indexOf(`${selector} {`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const bodyStart = source.indexOf("{", start);
+  expect(bodyStart).toBeGreaterThan(start);
+
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return source.slice(start);
+}
+
 describe("summer feeding task pages", () => {
   it("registers task list, task detail, publish and map location pages", () => {
     expect(pagesJson).toContain("pages/tasks/index");
@@ -50,6 +72,18 @@ describe("summer feeding task pages", () => {
     expect(meowNotesSource).toContain('/pages/landmarks/index');
     expect(meowNotesSource).toContain("药品管理暂未开放");
     expect(meowNotesSource).not.toContain("getTasks");
+  });
+
+  it("keeps bookshelf cells taller while preserving the original book size", () => {
+    const cellBooksRule = extractCssRule(meowNotesSource, ".cell__books");
+    const labelRule = extractCssRule(meowNotesSource, ".book__label");
+    const labelTextRule = extractCssRule(meowNotesSource, ".book__label text");
+
+    expect(cellBooksRule).toContain("height: calc(154px + 20rpx)");
+    expect(meowNotesSource).toContain("--book-h: 134px");
+    expect(labelRule).toContain("max-width: 76px");
+    expect(labelRule).toContain("font-size: 14px");
+    expect(labelTextRule).not.toContain("text-overflow: ellipsis");
   });
 
   it("uses real task list and detail pages instead of the development placeholder", () => {

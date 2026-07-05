@@ -18,7 +18,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $backendDir = Join-Path $repoRoot "backend"
 $nginxConfig = Join-Path $repoRoot "deploy\nginx\catmap.conf"
 $systemdService = Join-Path $repoRoot "deploy\systemd\catmap-backend.service"
-$healthUrl = "http://203.0.113.10/api/v1/health"
+$healthUrl = "http://$ServerHost/api/v1/health"
 
 function Invoke-Native {
     param(

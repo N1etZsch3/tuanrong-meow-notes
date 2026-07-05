@@ -92,8 +92,8 @@ Assert-Before `
 
 Assert-Contains `
     -Content $deployScript `
-    -Needle "http://203.0.113.10/api/v1/health" `
-    -Message "deploy-backend.ps1 must verify the temporary HTTP IP health endpoint."
+    -Needle '$healthUrl = "http://$ServerHost/api/v1/health"' `
+    -Message "deploy-backend.ps1 must derive the health endpoint from ServerHost."
 
 Assert-Contains `
     -Content $nginxConfig `
@@ -118,6 +118,6 @@ Assert-Contains `
 Assert-Contains `
     -Content $frontendEnvExample `
     -Needle "VITE_API_BASE_URL=http://203.0.113.10/api/v1" `
-    -Message "Frontend env example must document the temporary HTTP IP endpoint."
+    -Message "Frontend env example must document a placeholder temporary HTTP IP endpoint."
 
 Write-Host "Deployment contract checks passed."

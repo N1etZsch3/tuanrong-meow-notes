@@ -10,7 +10,15 @@ This project is a mobile-first internal collaboration tool for a campus cat asso
 
 The MVP is not a general map product. It is designed to help association members find campus task locations, view cat and supply points, join multi-person tasks, abandon tasks, complete photo check-ins, and keep task/cat records over time.
 
-The first version should stay focused on:
+## Release Status
+
+Version `1.0.0` is the first production release and the baseline for post-launch maintenance.
+
+Treat the current online behavior as the `1.0.0` release baseline. Do not make breaking API, schema, deployment, or user-flow changes on `main` without an explicit release plan and progress entry.
+
+For the `1.0.x` line, prioritize production stability, bug fixes, data safety, deployment rollback ability, and small scoped improvements. Unfinished or postponed MVP ideas should move into `1.1.0+` planning instead of being silently added to patch releases.
+
+The launched `1.0.x` product line should stay focused on:
 
 - Campus map with task, cat, and supply points.
 - Member login using student number, password, letter captcha, and JWT.
@@ -78,10 +86,12 @@ Avoid introducing extra infrastructure until the documented MVP needs it.
 
 Work module by module. Keep changes small, reviewable, and tied to one product area.
 
-Recommended branch model:
+Recommended post-`1.0.0` branch model:
 
-- `main`: stable branch.
-- `dev`: integration branch for completed module work.
+- `main`: production-stable branch. It should match the latest released version or an approved release/hotfix candidate.
+- `dev`: integration branch for accepted `1.x` work before the next release branch.
+- `release/<version>`: stabilization branch for a planned release, such as `release/1.1.0`.
+- `hotfix/<version-or-topic>`: urgent production fix branch created from `main`, such as `hotfix/1.0.1-login-token`.
 - `feature/<module-or-task>`: one focused feature or module slice.
 - `fix/<bug-or-module>`: one focused bug fix.
 - `docs/<topic>`: documentation-only changes.
@@ -110,6 +120,42 @@ For every feature branch:
 
 Do not mix unrelated module changes in one branch.
 
+## Git Version Management
+
+Use semantic versioning after `1.0.0`:
+
+- `MAJOR.MINOR.PATCH`, for example `1.0.1`, `1.1.0`, `2.0.0`.
+- Patch releases such as `1.0.1` are for production bug fixes, security fixes, deployment fixes, and documentation corrections. They should not introduce breaking API or database changes.
+- Minor releases such as `1.1.0` are for backward-compatible feature improvements or deferred MVP modules.
+- Major releases such as `2.0.0` are reserved for breaking API, data model, or product behavior changes.
+
+Every production release should have an annotated Git tag:
+
+```bash
+git switch main
+git pull
+git tag -a v1.0.0 -m "release: v1.0.0"
+git push origin v1.0.0
+```
+
+Create the tag on the exact commit that was deployed. If the tag was missed during deployment, add it later only after confirming the deployed commit hash.
+
+Recommended workflows:
+
+1. Normal feature release: branch from `dev`, merge back to `dev`, stabilize on `release/<version>`, merge into `main`, then tag `v<version>`.
+2. Production hotfix: branch from `main`, merge the fix into `main`, tag the next patch version, then merge or cherry-pick the same fix back to `dev`.
+3. Documentation-only update: use `docs/<topic>` when the change is not tied to code. Release process documentation can go directly through the same review path as code.
+
+For merge strategy, keep release and hotfix history easy to audit. Squash noisy feature branches if needed, but preserve release and hotfix merge commits when they explain what shipped.
+
+Each release progress entry in `docs/开发进度.md` should include:
+
+- Version number and release date.
+- Source branch and Git tag.
+- Important changes or known exclusions.
+- Verification commands and manual checks.
+- Deployment notes, rollback notes, and next planned version.
+
 ## Commit Rules
 
 Use concise conventional commit messages.
@@ -123,6 +169,7 @@ Recommended prefixes:
 - `test:` tests only.
 - `chore:` tooling or maintenance.
 - `db:` database schema or migration work.
+- `release:` release notes, version tagging, or release coordination.
 
 Examples:
 
@@ -131,6 +178,7 @@ feat(auth): add student number login endpoint
 db(tasks): add task participants table
 feat(map): show task and cat markers
 docs(progress): update task module status
+release: publish v1.0.0 baseline
 ```
 
 Before committing:
@@ -536,9 +584,11 @@ Use this format:
 
 ## 当前总览
 
-- 当前阶段：MVP
+- 当前阶段：MVP / 已上线维护（x.y.z）
+- 当前线上版本：
 - 当前重点模块：
 - 当前分支：
+- 推荐 Git 标签：
 - 最近更新时间：
 
 ## 模块状态
@@ -574,6 +624,8 @@ Suggested statuses:
 - `待联调`
 - `待测试`
 - `已完成`
+- `已上线维护`
+- `1.x 规划复核`
 - `阻塞`
 
 Progress updates should include:
@@ -586,6 +638,7 @@ Progress updates should include:
 - Verification commands and results.
 - Known blockers.
 - Next recommended task.
+- Release version and Git tag when the work changes or documents a production release.
 
 ## Handoff Format
 

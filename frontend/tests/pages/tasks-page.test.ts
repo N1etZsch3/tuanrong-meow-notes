@@ -70,7 +70,17 @@ describe("summer feeding task pages", () => {
     expect(meowNotesSource).toContain('/pages/tasks/list');
     expect(meowNotesSource).toContain('/pages/supplies/index');
     expect(meowNotesSource).toContain('/pages/landmarks/index');
+    expect(meowNotesSource).toContain("素材/svg/喵记/任务.svg");
+    expect(meowNotesSource).toContain("素材/svg/喵记/物资仓库.svg");
+    expect(meowNotesSource).toContain("素材/svg/喵记/地标.svg");
+    expect(meowNotesSource).toContain("素材/svg/喵记/药品.svg");
+    expect(meowNotesSource).not.toContain("素材/png/地图点/日常任务.png");
+    expect(meowNotesSource).not.toContain("素材/png/地图点/物资点.png");
+    expect(meowNotesSource).not.toContain("素材/png/地图点/地标.png");
+    expect(meowNotesSource).not.toContain("素材/png/地图点/医疗任务.png");
     expect(meowNotesSource).toContain("药品管理暂未开放");
+    expect(meowNotesSource).not.toContain("summary-strip");
+    expect(meowNotesSource).not.toContain("最近新增");
     expect(meowNotesSource).not.toContain("getTasks");
   });
 
@@ -79,11 +89,20 @@ describe("summer feeding task pages", () => {
     const labelRule = extractCssRule(meowNotesSource, ".book__label");
     const labelTextRule = extractCssRule(meowNotesSource, ".book__label text");
 
-    expect(cellBooksRule).toContain("height: calc(154px + 20rpx)");
-    expect(meowNotesSource).toContain("--book-h: 134px");
+    expect(cellBooksRule).toContain("height: calc(154px + 40rpx)");
+    expect(meowNotesSource).toContain("--book-h: calc(134px + 20rpx)");
     expect(labelRule).toContain("max-width: 76px");
     expect(labelRule).toContain("font-size: 14px");
     expect(labelTextRule).not.toContain("text-overflow: ellipsis");
+  });
+
+  it("styles the custom Meow Notes svg icons consistently on book covers", () => {
+    const iconRule = extractCssRule(meowNotesSource, ".book__icon");
+
+    expect(iconRule).toContain("width: 46px");
+    expect(iconRule).toContain("height: 46px");
+    expect(iconRule).toContain("object-fit: contain");
+    expect(iconRule).toContain("filter:");
   });
 
   it("uses real task list and detail pages instead of the development placeholder", () => {

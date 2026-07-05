@@ -46,11 +46,6 @@
         </view>
       </view>
 
-      <button class="summary-strip" hover-class="button-hover" @tap="goSearch">
-        <image class="summary-leaf" :src="pawIcon" mode="aspectFit" />
-        <text class="summary-copy">最近新增 4 条记录 · 今日待处理 3 项</text>
-        <text class="summary-arrow">›</text>
-      </button>
     </view>
     <AppTabBar active-key="tasks" />
   </view>
@@ -59,10 +54,10 @@
 <script setup lang="ts">
 import AppTabBar from "@/components/AppTabBar.vue";
 
-import taskIcon from "../../../素材/png/地图点/日常任务.png";
-import supplyIcon from "../../../素材/png/地图点/物资点.png";
-import landmarkIcon from "../../../素材/png/地图点/地标.png";
-import medicineIcon from "../../../素材/png/地图点/医疗任务.png";
+import taskIcon from "../../../素材/svg/喵记/任务.svg";
+import supplyIcon from "../../../素材/svg/喵记/物资仓库.svg";
+import landmarkIcon from "../../../素材/svg/喵记/地标.svg";
+import medicineIcon from "../../../素材/svg/喵记/药品.svg";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
@@ -205,8 +200,7 @@ function showMore() {
   padding-top: 18rpx;
 }
 
-.round-action,
-.summary-strip {
+.round-action {
   margin: 0;
   padding: 0;
   border: 0;
@@ -214,8 +208,7 @@ function showMore() {
   text-align: left;
 }
 
-.round-action::after,
-.summary-strip::after {
+.round-action::after {
   border: 0;
 }
 
@@ -253,7 +246,7 @@ function showMore() {
   --ribbon-1: #7fa05a;
   --ribbon-2: #90b06b;
   --book-w: 90px;
-  --book-h: 134px;
+  --book-h: calc(134px + 20rpx);
   box-sizing: border-box;
   width: 100%;
   max-width: 388px;
@@ -297,7 +290,7 @@ function showMore() {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  height: calc(154px + 20rpx);
+  height: calc(154px + 40rpx);
   padding: 0 15px;
 }
 
@@ -463,52 +456,13 @@ function showMore() {
   position: relative;
   z-index: 2;
   display: block;
-  width: 42px;
-  height: 42px;
-  margin: 22px auto 0;
-  opacity: 0.72;
-}
-
-.summary-strip {
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 388px;
-  min-height: 76rpx;
-  margin: 28rpx auto 0;
-  border: 2rpx solid rgba(203, 217, 190, 0.82);
-  border-radius: 26rpx;
-  padding: 0 22rpx;
-  background: rgba(249, 252, 241, 0.9);
-  box-shadow: 0 12rpx 28rpx rgba(39, 76, 42, 0.07);
-  color: #6b7280;
-  display: flex;
-  align-items: center;
-  gap: 18rpx;
-}
-
-.summary-leaf {
-  width: 38rpx;
-  height: 38rpx;
-  flex: 0 0 auto;
-}
-
-.summary-copy {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: #6b7280;
-  font-size: 23rpx;
-  font-weight: 800;
-  line-height: 1.3;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.summary-arrow {
-  color: #8d967f;
-  font-size: 52rpx;
-  font-weight: 700;
-  line-height: 1;
+  width: 46px;
+  height: 46px;
+  margin: 24px auto 0;
+  object-fit: contain;
+  opacity: 0.82;
+  filter: brightness(0) saturate(100%) invert(34%) sepia(18%) saturate(1068%)
+    hue-rotate(51deg) brightness(92%) contrast(86%);
 }
 
 .button-hover {

@@ -2835,8 +2835,8 @@ onBeforeUnmount(() => {
 }
 
 .title-text {
-  color: #111827;
-  font-size: var(--catmap-page-title-font-size, 52rpx);
+  color: #2f6333;
+  font-size: 64rpx;
   font-weight: 900;
   line-height: 1;
 }
@@ -2849,9 +2849,9 @@ onBeforeUnmount(() => {
 .title-subtitle {
   display: block;
   margin-top: var(--catmap-page-title-subtitle-margin, 14rpx);
-  color: #6b7280;
-  font-size: var(--catmap-page-title-subtitle-size, 24rpx);
-  font-weight: 700;
+  color: #6d786f;
+  font-size: 25rpx;
+  font-weight: 800;
   line-height: 1.2;
 }
 

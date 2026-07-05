@@ -9,6 +9,28 @@ import {
   normalizeCatStats,
 } from "@/pages/cats/cats-page";
 
+function extractCssRule(source: string, selector: string): string {
+  const start = source.indexOf(`${selector} {`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const bodyStart = source.indexOf("{", start);
+  expect(bodyStart).toBeGreaterThan(start);
+
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return source.slice(start);
+}
+
 describe("cats page behavior", () => {
   it("loads stats filters and cat list from backend APIs", () => {
     expect(catsPageSource).toContain("getCatStats");
@@ -27,13 +49,24 @@ describe("cats page behavior", () => {
   });
 
   it("uses the shared app background and map-page title treatment", () => {
+    const titleRule = extractCssRule(catsPageSource, ".page-title-text");
+    const iconRule = extractCssRule(catsPageSource, ".page-title-icon");
+    const subtitleRule = extractCssRule(catsPageSource, ".page-title-subtitle");
+
     expect(catsPageSource).toContain("背景.jpg");
     expect(catsPageSource).toContain("萌猫/寿司.svg");
     expect(catsPageSource).toContain("page-title-row");
     expect(catsPageSource).toContain("page-title-icon");
     expect(catsPageSource).toContain("var(--catmap-page-title-top, 92rpx)");
-    expect(catsPageSource).toContain("var(--catmap-page-title-font-size, 52rpx)");
-    expect(catsPageSource).toContain("var(--catmap-page-title-subtitle-size, 24rpx)");
+    expect(titleRule).toContain("color: #2f6333");
+    expect(titleRule).toContain("font-size: 64rpx");
+    expect(titleRule).toContain("font-weight: 900");
+    expect(titleRule).not.toContain("letter-spacing");
+    expect(iconRule).toContain("width: 78rpx");
+    expect(iconRule).toContain("height: 78rpx");
+    expect(subtitleRule).toContain("color: #6d786f");
+    expect(subtitleRule).toContain("font-size: 25rpx");
+    expect(subtitleRule).toContain("font-weight: 800");
     expect(catsPageSource).not.toContain("hero-icon-shell");
   });
 

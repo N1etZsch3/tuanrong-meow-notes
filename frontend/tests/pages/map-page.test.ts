@@ -80,6 +80,28 @@ function extractFunctionSource(functionName: string): string {
   return indexPageSource.slice(start);
 }
 
+function extractCssRule(source: string, selector: string): string {
+  const start = source.indexOf(`${selector} {`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const bodyStart = source.indexOf("{", start);
+  expect(bodyStart).toBeGreaterThan(start);
+
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return source.slice(start);
+}
+
 describe("map page shell behavior", () => {
   it("does not keep static frontend task point fixtures", () => {
     expect(mapPageSource).not.toContain("MAP_SHELL_ITEMS");
@@ -846,9 +868,16 @@ describe("map page shell behavior", () => {
   });
 
   it("lowers and compacts the map title, map viewport, filter, and content drawer", () => {
+    const titleRule = extractCssRule(indexPageSource, ".title-text");
+    const subtitleRule = extractCssRule(indexPageSource, ".title-subtitle");
+
     expect(indexPageSource).toContain("top: var(--catmap-page-title-top, 92rpx)");
-    expect(indexPageSource).toContain("font-size: var(--catmap-page-title-font-size, 52rpx)");
-    expect(indexPageSource).toContain("font-size: var(--catmap-page-title-subtitle-size, 24rpx)");
+    expect(titleRule).toContain("color: #2f6333");
+    expect(titleRule).toContain("font-size: 64rpx");
+    expect(titleRule).toContain("font-weight: 900");
+    expect(subtitleRule).toContain("color: #6d786f");
+    expect(subtitleRule).toContain("font-size: 25rpx");
+    expect(subtitleRule).toContain("font-weight: 800");
     expect(indexPageSource).toContain("top: 218rpx");
     expect(indexPageSource).toContain("bottom: 664rpx");
     expect(indexPageSource).toContain("top: 380rpx");

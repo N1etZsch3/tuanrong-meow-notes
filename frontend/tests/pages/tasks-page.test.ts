@@ -84,6 +84,28 @@ describe("summer feeding task pages", () => {
     expect(meowNotesSource).not.toContain("getTasks");
   });
 
+  it("opens Meow Notes books immediately without unused header buttons", () => {
+    expect(meowNotesSource).not.toContain("head-actions");
+    expect(meowNotesSource).not.toContain("round-action");
+    expect(meowNotesSource).not.toContain("goSearch");
+    expect(meowNotesSource).not.toContain("showMore");
+    expect(meowNotesSource).not.toContain('hover-class="book--hover"');
+    expect(meowNotesSource).not.toContain(".book--hover");
+    expect(meowNotesSource).toContain("uni.navigateTo({ url: book.url })");
+  });
+
+  it("adds shelf pagination for future Meow Notes book pages", () => {
+    expect(meowNotesSource).toContain("bookPages");
+    expect(meowNotesSource).toContain("currentBookRows");
+    expect(meowNotesSource).toContain("currentShelfPageLabel");
+    expect(meowNotesSource).toContain("goPreviousBookPage");
+    expect(meowNotesSource).toContain("goNextBookPage");
+    expect(meowNotesSource).toContain('class="shelf-pager"');
+    expect(meowNotesSource).toContain('class="pager-button"');
+    expect(meowNotesSource).toContain('class="pager-count"');
+    expect(meowNotesSource).toContain('v-for="(row, rowIndex) in currentBookRows"');
+  });
+
   it("keeps bookshelf cells taller while preserving the original book size", () => {
     const cellBooksRule = extractCssRule(meowNotesSource, ".cell__books");
     const labelRule = extractCssRule(meowNotesSource, ".book__label");

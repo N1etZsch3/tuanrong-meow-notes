@@ -10,19 +10,11 @@
           </view>
           <text class="title-subtitle">记录与管理入口</text>
         </view>
-        <view class="head-actions">
-          <button class="round-action" hover-class="button-hover" @tap="goSearch">
-            <text class="round-icon">⌕</text>
-          </button>
-          <button class="round-action" hover-class="button-hover" @tap="showMore">
-            <text class="round-icon">…</text>
-          </button>
-        </view>
       </view>
 
       <view class="shelf" aria-label="书架">
         <view class="shelf__inner">
-          <view v-for="(row, rowIndex) in noteBookRows" :key="rowIndex" class="cell">
+          <view v-for="(row, rowIndex) in currentBookRows" :key="rowIndex" class="cell">
             <view class="cell__books">
               <view
                 v-for="book in row"
@@ -32,7 +24,6 @@
                   `book--${book.tone}`,
                   { 'book--ribbon': book.ribbon },
                 ]"
-                hover-class="book--hover"
                 @tap="openBook(book)"
               >
                 <view class="book__label">
@@ -46,12 +37,34 @@
         </view>
       </view>
 
+      <view class="shelf-pager" aria-label="书架分页">
+        <button
+          class="pager-button"
+          :class="{ 'pager-button--disabled': !canGoPreviousBookPage }"
+          :disabled="!canGoPreviousBookPage"
+          @tap="goPreviousBookPage"
+        >
+          上一页
+        </button>
+        <view class="pager-count">
+          <text>{{ currentShelfPageLabel }}</text>
+        </view>
+        <button
+          class="pager-button"
+          :class="{ 'pager-button--disabled': !canGoNextBookPage }"
+          :disabled="!canGoNextBookPage"
+          @tap="goNextBookPage"
+        >
+          下一页
+        </button>
+      </view>
     </view>
     <AppTabBar active-key="tasks" />
   </view>
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from "vue";
 import AppTabBar from "@/components/AppTabBar.vue";
 
 import taskIcon from "../../../素材/svg/喵记/任务.svg";
@@ -104,11 +117,36 @@ const noteBooks: NoteBook[] = [
   },
 ];
 
-const noteBookRows: NoteBook[][] = [
-  noteBooks.slice(0, 3),
-  noteBooks.slice(3, 4),
-  [],
-];
+const bookPages: NoteBook[][] = [noteBooks];
+const currentBookPage = ref(0);
+
+const totalBookPages = computed(() => bookPages.length);
+const currentBookRows = computed(() => buildBookRows(bookPages[currentBookPage.value] ?? []));
+const currentShelfPageLabel = computed(
+  () => `${currentBookPage.value + 1}/${totalBookPages.value}`,
+);
+const canGoPreviousBookPage = computed(() => currentBookPage.value > 0);
+const canGoNextBookPage = computed(() => currentBookPage.value < totalBookPages.value - 1);
+
+function buildBookRows(books: NoteBook[]): NoteBook[][] {
+  return [books.slice(0, 3), books.slice(3, 4), []];
+}
+
+function goPreviousBookPage() {
+  if (!canGoPreviousBookPage.value) {
+    return;
+  }
+
+  currentBookPage.value -= 1;
+}
+
+function goNextBookPage() {
+  if (!canGoNextBookPage.value) {
+    return;
+  }
+
+  currentBookPage.value += 1;
+}
 
 function openBook(book: NoteBook) {
   if (!book.url) {
@@ -120,17 +158,6 @@ function openBook(book: NoteBook) {
   }
 
   uni.navigateTo({ url: book.url });
-}
-
-function goSearch() {
-  uni.navigateTo({ url: "/pages/tasks/list" });
-}
-
-function showMore() {
-  uni.showToast({
-    title: "更多喵记工具建设中",
-    icon: "none",
-  });
 }
 </script>
 
@@ -163,7 +190,7 @@ function showMore() {
 .page-head {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 24rpx;
   padding: 0 22rpx;
 }
@@ -192,42 +219,6 @@ function showMore() {
   color: #6d786f;
   font-size: 25rpx;
   font-weight: 800;
-}
-
-.head-actions {
-  display: flex;
-  gap: 22rpx;
-  padding-top: 18rpx;
-}
-
-.round-action {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-}
-
-.round-action::after {
-  border: 0;
-}
-
-.round-action {
-  width: 82rpx;
-  height: 82rpx;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 15rpx 30rpx rgba(40, 73, 42, 0.14);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.round-icon {
-  color: #2f6333;
-  font-size: 46rpx;
-  font-weight: 900;
-  line-height: 1;
 }
 
 /* 喵记书架组件：迁移自 test/组件/书架书本.html */
@@ -343,7 +334,6 @@ function showMore() {
     inset 0 -4px 8px -4px rgba(110, 78, 38, 0.22),
     0 2px 3px -1px rgba(89, 60, 26, 0.35),
     5px 10px 18px -8px rgba(89, 60, 26, 0.38);
-  transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
 .book::after {
@@ -361,7 +351,6 @@ function showMore() {
     rgba(70, 48, 20, 0) 72%
   );
   filter: blur(1.5px);
-  transition: transform 0.25s ease, opacity 0.25s ease;
 }
 
 .book--ribbon::before {
@@ -381,23 +370,6 @@ function showMore() {
     linear-gradient(180deg, var(--ribbon-1), var(--ribbon-2));
   clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 7px), 0 100%);
   filter: drop-shadow(0 2px 2px rgba(var(--shade), 0.28));
-}
-
-.book:hover,
-.book--hover {
-  transform: translateY(-6px);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset -3px 0 6px -3px rgba(110, 78, 38, 0.18),
-    inset 0 -4px 8px -4px rgba(110, 78, 38, 0.22),
-    0 9px 10px -5px rgba(89, 60, 26, 0.26),
-    10px 22px 30px -12px rgba(89, 60, 26, 0.32);
-}
-
-.book:hover::after,
-.book--hover::after {
-  transform: translateY(6px) scaleX(1.08);
-  opacity: 0.55;
 }
 
 .book--green {
@@ -465,8 +437,74 @@ function showMore() {
     hue-rotate(51deg) brightness(92%) contrast(86%);
 }
 
-.button-hover {
-  opacity: 0.9;
-  transform: translateY(2rpx);
+.shelf-pager {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 18rpx;
+  width: 100%;
+  max-width: 388px;
+  min-height: 82rpx;
+  margin: 22rpx auto 0;
+  padding: 10rpx 14rpx;
+  border: 2rpx solid rgba(207, 179, 127, 0.62);
+  border-radius: 999rpx;
+  background:
+    linear-gradient(180deg, rgba(255, 252, 241, 0.94), rgba(239, 218, 177, 0.92)),
+    linear-gradient(90deg, rgba(252, 243, 222, 0.75), rgba(225, 194, 141, 0.42));
+  box-shadow:
+    inset 0 3rpx 0 rgba(255, 255, 255, 0.82),
+    inset 0 -5rpx 8rpx rgba(126, 83, 37, 0.1),
+    0 12rpx 22rpx -12rpx rgba(92, 62, 26, 0.42),
+    0 22rpx 44rpx -28rpx rgba(49, 88, 52, 0.28);
+}
+
+.pager-button {
+  box-sizing: border-box;
+  height: 58rpx;
+  margin: 0;
+  padding: 0 20rpx;
+  border: 0;
+  border-radius: 999rpx;
+  background: linear-gradient(180deg, #fbf3de, #e6ca93);
+  color: #5b4124;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 58rpx;
+  text-align: center;
+  box-shadow:
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.74),
+    inset 0 -4rpx 8rpx rgba(112, 77, 35, 0.16),
+    0 7rpx 12rpx -7rpx rgba(88, 58, 25, 0.48);
+}
+
+.pager-button::after {
+  border: 0;
+}
+
+.pager-button--disabled {
+  color: rgba(91, 65, 36, 0.42);
+  background: linear-gradient(180deg, #f6ebd2, #dec596);
+  box-shadow:
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.52),
+    inset 0 -3rpx 6rpx rgba(112, 77, 35, 0.08);
+}
+
+.pager-count {
+  min-width: 96rpx;
+  height: 58rpx;
+  padding: 0 22rpx;
+  border-radius: 999rpx;
+  background: linear-gradient(180deg, #d9c294, #f7e7bd 45%, #caa971);
+  color: #2f6333;
+  font-size: 26rpx;
+  font-weight: 900;
+  line-height: 58rpx;
+  text-align: center;
+  box-shadow:
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.72),
+    inset 0 -4rpx 8rpx rgba(93, 61, 28, 0.14),
+    0 8rpx 14rpx -9rpx rgba(91, 62, 28, 0.5);
 }
 </style>

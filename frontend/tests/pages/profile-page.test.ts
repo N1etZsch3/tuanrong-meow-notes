@@ -13,6 +13,28 @@ import {
   getRolePillClass,
 } from "../../src/pages/profile/profile-page";
 
+function extractCssRule(source: string, selector: string): string {
+  const start = source.lastIndexOf(`${selector} {`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const bodyStart = source.indexOf("{", start);
+  expect(bodyStart).toBeGreaterThan(start);
+
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return source.slice(start);
+}
+
 describe("profile center pages", () => {
   it("registers personal center detail and record routes", () => {
     expect(pagesJson).toContain("pages/profile/detail");
@@ -33,12 +55,21 @@ describe("profile center pages", () => {
   });
 
   it("keeps the profile title aligned with the shared page title treatment", () => {
+    const titleRule = extractCssRule(profileIndexSource, ".hero-title");
+    const subtitleRule = extractCssRule(profileIndexSource, ".hero-subtitle");
+    const iconRule = extractCssRule(profileIndexSource, ".hero-cat");
+
     expect(profileIndexSource).toContain("hero-title-row");
     expect(profileIndexSource).toContain('<image class="hero-cat"');
     expect(profileIndexSource).toContain("var(--catmap-page-title-top, 92rpx)");
-    expect(profileIndexSource).toContain("var(--catmap-page-title-font-size, 52rpx)");
-    expect(profileIndexSource).toContain("var(--catmap-page-title-icon-size, 48rpx)");
-    expect(profileIndexSource).toContain("var(--catmap-page-title-subtitle-size, 24rpx)");
+    expect(titleRule).toContain("color: #2f6333");
+    expect(titleRule).toContain("font-size: 64rpx");
+    expect(titleRule).toContain("font-weight: 900");
+    expect(iconRule).toContain("width: var(--catmap-page-title-icon-size, 48rpx)");
+    expect(iconRule).toContain("height: var(--catmap-page-title-icon-size, 48rpx)");
+    expect(subtitleRule).toContain("color: #6d786f");
+    expect(subtitleRule).toContain("font-size: 25rpx");
+    expect(subtitleRule).toContain("font-weight: 800");
     expect(profileIndexSource).toMatch(/\.hero\s*{[^}]*align-items: flex-start;[^}]*}/s);
     expect(profileIndexSource).not.toMatch(/\.hero\s*{[^}]*justify-content: space-between/s);
   });

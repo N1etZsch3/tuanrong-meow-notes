@@ -18,7 +18,7 @@ logs/
 *.burp
 
 # Local project artifacts
-test/
+/test/
 喵扎特抓包/
 页面原型/
 frontend/页面原型/

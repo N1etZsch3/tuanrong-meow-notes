@@ -107,6 +107,31 @@ Recommended module branch examples:
 - `feature/notifications`
 - `feature/duty-assignment`
 
+### Default AI Git Workflow
+
+Future agents should use this path unless the user explicitly asks for a different branch strategy.
+
+1. Before starting work, run `git status --short --branch`, check the current branch, and notice untracked local files.
+2. For normal feature, fix, or documentation work, start from `dev`:
+
+```bash
+git switch dev
+git pull --ff-only origin dev
+git switch -c feature/<module-or-task>
+```
+
+If local `dev` is checked out in another worktree, fetch first and create the focused branch from `origin/dev`, or work inside the existing `dev` worktree.
+
+Use `fix/<bug-or-module>` for non-urgent bug fixes and `docs/<topic>` for documentation-only changes.
+
+3. Finish the focused branch, run the relevant verification, update `docs/开发进度.md`, then merge the branch back into `dev`.
+4. Do not develop normal feature work directly on `main`. `main` is for released code, release candidates, and urgent production hotfixes.
+5. When a planned version is ready, create `release/<version>` from `dev`. Freeze new features there; only allow release bug fixes, version notes, documentation updates, and deployment hardening. After verification, merge `release/<version>` into `main`, create an annotated tag such as `v1.1.0`, push `main` and the tag, then merge the release branch back into `dev`.
+6. For an urgent production fix, create `hotfix/<version-or-topic>` from `main`, verify the fix, merge it into `main`, tag the patch release such as `v1.0.1`, push `main` and the tag, then merge or cherry-pick the same fix back into `dev`.
+7. Before committing or pushing, stage explicit files only. Do not use `git add .` when untracked local files, private documents, secrets, screenshots, or scratch directories are present.
+8. Before pushing, check for information leaks in the staged diff and relevant files. Look for real server IPs, private domains, map keys, Mini Program AppIDs, COS identifiers, access tokens, private keys, passwords, `.env` values, and deployment credentials.
+9. Push only the intended branch or tag. Never run `git push --all origin`, and do not push old local `feature/`, `fix/`, or `codex/` branches unless the user explicitly asks.
+
 For every feature branch:
 
 1. Read the required docs.
@@ -140,7 +165,7 @@ git push origin v1.0.0
 
 Create the tag on the exact commit that was deployed. If the tag was missed during deployment, add it later only after confirming the deployed commit hash.
 
-Recommended workflows:
+Mandatory workflow summary:
 
 1. Normal feature release: branch from `dev`, merge back to `dev`, stabilize on `release/<version>`, merge into `main`, then tag `v<version>`.
 2. Production hotfix: branch from `main`, merge the fix into `main`, tag the next patch version, then merge or cherry-pick the same fix back to `dev`.

@@ -78,6 +78,34 @@
 			}
 		},
 		{
+			"path": "pages/medicines/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "药品管理"
+			}
+		},
+		{
+			"path": "pages/medicines/create",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "新增药品"
+			}
+		},
+		{
+			"path": "pages/medicines/detail",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "药品详情"
+			}
+		},
+		{
+			"path": "pages/medicines/holding",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "库存详情"
+			}
+		},
+		{
 			"path": "pages/profile/index",
 			"style": {
 				"navigationStyle": "custom",

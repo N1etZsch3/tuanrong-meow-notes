@@ -11,6 +11,8 @@ describe("api routes", () => {
     expect(API_ENDPOINTS.auth.login).toBe("/auth/login");
     expect(API_ENDPOINTS.map.points).toBe("/map/points");
     expect(API_ENDPOINTS.admin.users).toBe("/admin/users");
+    expect(API_ENDPOINTS.medicines.list).toBe("/medicines");
+    expect(API_ENDPOINTS.medicineCategories).toBe("/medicine-categories");
   });
 
   it("builds encoded endpoints for resource ids", () => {
@@ -20,6 +22,18 @@ describe("api routes", () => {
     );
     expect(API_ENDPOINTS.admin.mapPoint("point 1/2")).toBe(
       "/admin/map/points/point%201%2F2",
+    );
+    expect(API_ENDPOINTS.medicines.detail("medicine 1/2")).toBe(
+      "/medicines/medicine%201%2F2",
+    );
+    expect(API_ENDPOINTS.medicineHoldings.purchase("holding 1/2")).toBe(
+      "/medicine-holdings/holding%201%2F2/purchase",
+    );
+    expect(API_ENDPOINTS.medicineApplications.approve("application 1/2")).toBe(
+      "/medicine-applications/application%201%2F2/approve",
+    );
+    expect(API_ENDPOINTS.admin.medicine("medicine 1/2")).toBe(
+      "/admin/medicines/medicine%201%2F2",
     );
   });
 

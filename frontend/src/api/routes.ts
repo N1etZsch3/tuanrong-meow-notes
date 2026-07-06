@@ -53,6 +53,17 @@ export const API_ENDPOINTS = {
     user: (userId: ApiPathParam) => `/admin/users/${encodePathParam(userId)}`,
     userResetPassword: (userId: ApiPathParam) =>
       `/admin/users/${encodePathParam(userId)}/reset-password`,
+    medicineCategories: "/admin/medicine-categories",
+    medicineCategory: (categoryId: ApiPathParam) =>
+      `/admin/medicine-categories/${encodePathParam(categoryId)}`,
+    medicineCategoryStatus: (categoryId: ApiPathParam) =>
+      `/admin/medicine-categories/${encodePathParam(categoryId)}/status`,
+    medicine: (medicineId: ApiPathParam) =>
+      `/admin/medicines/${encodePathParam(medicineId)}`,
+    medicineArchive: (medicineId: ApiPathParam) =>
+      `/admin/medicines/${encodePathParam(medicineId)}/archive`,
+    medicineHolding: (holdingId: ApiPathParam) =>
+      `/admin/medicine-holdings/${encodePathParam(holdingId)}`,
     landmarkPoints: "/admin/landmarks",
     landmarkPoint: (landmarkId: ApiPathParam) =>
       `/admin/landmarks/${encodePathParam(landmarkId)}`,
@@ -102,6 +113,48 @@ export const API_ENDPOINTS = {
     checkins: "/me/checkins",
     observations: "/me/observations",
     favoriteCats: "/me/favorite-cats",
+  },
+  medicineCategories: "/medicine-categories",
+  medicines: {
+    list: "/medicines",
+    search: "/medicines/search",
+    detail: (medicineId: ApiPathParam) =>
+      `/medicines/${encodePathParam(medicineId)}`,
+    holdings: (medicineId: ApiPathParam) =>
+      `/medicines/${encodePathParam(medicineId)}/holdings`,
+    logs: (medicineId: ApiPathParam) =>
+      `/medicines/${encodePathParam(medicineId)}/logs`,
+  },
+  medicineHoldings: {
+    detail: (holdingId: ApiPathParam) =>
+      `/medicine-holdings/${encodePathParam(holdingId)}`,
+    logs: (holdingId: ApiPathParam) =>
+      `/medicine-holdings/${encodePathParam(holdingId)}/logs`,
+    purchase: (holdingId: ApiPathParam) =>
+      `/medicine-holdings/${encodePathParam(holdingId)}/purchase`,
+    use: (holdingId: ApiPathParam) =>
+      `/medicine-holdings/${encodePathParam(holdingId)}/use`,
+    scrap: (holdingId: ApiPathParam) =>
+      `/medicine-holdings/${encodePathParam(holdingId)}/scrap`,
+    distribute: (holdingId: ApiPathParam) =>
+      `/medicine-holdings/${encodePathParam(holdingId)}/distribute`,
+    transfer: (holdingId: ApiPathParam) =>
+      `/medicine-holdings/${encodePathParam(holdingId)}/transfer`,
+    adjust: (holdingId: ApiPathParam) =>
+      `/medicine-holdings/${encodePathParam(holdingId)}/adjust`,
+    applications: (holdingId: ApiPathParam) =>
+      `/medicine-holdings/${encodePathParam(holdingId)}/applications`,
+  },
+  medicineApplications: {
+    list: "/medicine-applications",
+    detail: (applicationId: ApiPathParam) =>
+      `/medicine-applications/${encodePathParam(applicationId)}`,
+    approve: (applicationId: ApiPathParam) =>
+      `/medicine-applications/${encodePathParam(applicationId)}/approve`,
+    reject: (applicationId: ApiPathParam) =>
+      `/medicine-applications/${encodePathParam(applicationId)}/reject`,
+    cancel: (applicationId: ApiPathParam) =>
+      `/medicine-applications/${encodePathParam(applicationId)}/cancel`,
   },
   profile: {
     me: "/profile/me",

@@ -4,16 +4,14 @@
     <view class="medicine-inner">
       <view class="medicine-fixed">
         <view class="page-title">
-          <view>
+          <button class="back-button" hover-class="button-hover" @tap="goBack">‹</button>
+          <view class="title-copy">
             <view class="title-row">
               <text class="title-text">药品管理</text>
-              <image class="title-icon" :src="medicineIcon" mode="aspectFit" />
+              <image class="title-icon" :src="medicineBookIcon" mode="aspectFit" />
             </view>
             <text class="title-subtitle">药品库存与用药协作</text>
           </view>
-          <button class="add-medicine-button" hover-class="button-hover" @tap="goCreateMedicine">
-            新增药品
-          </button>
         </view>
 
         <view class="search-box">
@@ -136,11 +134,14 @@
 
           <view v-else class="state-box">
             <text class="state-title">暂无药品记录</text>
-            <text class="state-copy">从右上角新增药品，建立第一份库存。</text>
+            <text class="state-copy">从右下角新增药品，建立第一份库存。</text>
           </view>
         </view>
       </scroll-view>
     </view>
+    <button class="floating-add" hover-class="button-hover" @tap="goCreateMedicine">
+      新增药品
+    </button>
   </view>
 </template>
 
@@ -165,6 +166,7 @@ import {
 } from "@/pages/medicines/medicine-page";
 
 import medicineIcon from "../../../素材/png/地图点/医疗任务.png";
+import medicineBookIcon from "../../../素材/svg/喵记/药品.svg";
 import filterArrowIcon from "../../../素材/png/地图点/箭头.png";
 import clearFilterIcon from "../../../素材/svg/猫咪库/删除.svg";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
@@ -287,6 +289,10 @@ function clearFilters() {
   void loadMedicines();
 }
 
+function goBack() {
+  uni.navigateBack();
+}
+
 function goCreateMedicine() {
   uni.navigateTo({ url: "/pages/medicines/create" });
 }
@@ -334,9 +340,13 @@ onShow(() => {
 
 .page-title {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 22rpx;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--catmap-page-title-gap, 14rpx);
+}
+
+.title-copy {
+  min-width: 0;
 }
 
 .title-row {
@@ -365,7 +375,8 @@ onShow(() => {
   font-weight: 700;
 }
 
-.add-medicine-button,
+.back-button,
+.floating-add,
 .search-button,
 .clear-filter-button,
 .holder-chip,
@@ -375,7 +386,8 @@ onShow(() => {
   border: 0;
 }
 
-.add-medicine-button::after,
+.back-button::after,
+.floating-add::after,
 .search-button::after,
 .clear-filter-button::after,
 .holder-chip::after,
@@ -383,15 +395,15 @@ onShow(() => {
   border: 0;
 }
 
-.add-medicine-button {
-  width: 156rpx;
-  height: 64rpx;
-  border-radius: 22rpx;
-  background: #287c31;
-  color: #ffffff;
-  font-size: 24rpx;
-  font-weight: 900;
-  line-height: 64rpx;
+.back-button {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  color: #287c31;
+  font-size: 58rpx;
+  line-height: 62rpx;
+  box-shadow: 0 12rpx 28rpx rgba(26, 52, 30, 0.12);
 }
 
 .search-box,
@@ -514,7 +526,7 @@ onShow(() => {
 }
 
 .medicine-list-body {
-  padding-bottom: 24rpx;
+  padding-bottom: 130rpx;
 }
 
 .medicine-list {
@@ -669,6 +681,22 @@ onShow(() => {
   font-size: 25rpx;
   font-weight: 900;
   line-height: 64rpx;
+}
+
+.floating-add {
+  position: fixed;
+  z-index: 5;
+  right: 34rpx;
+  bottom: calc(env(safe-area-inset-bottom) + 34rpx);
+  width: 168rpx;
+  height: 78rpx;
+  border-radius: 999rpx;
+  background: #287c31;
+  color: #ffffff;
+  font-size: 27rpx;
+  font-weight: 900;
+  line-height: 78rpx;
+  box-shadow: 0 14rpx 34rpx rgba(40, 124, 49, 0.24);
 }
 
 .button-hover {

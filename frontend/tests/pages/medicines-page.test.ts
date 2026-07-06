@@ -36,13 +36,16 @@ describe("medicine management pages", () => {
   it("reuses the task list pattern and exposes create entry on medicine list", () => {
     expect(medicineIndexSource).toContain("getMedicines");
     expect(medicineIndexSource).toContain("getMedicineCategories");
+    expect(medicineIndexSource).toContain('class="back-button"');
+    expect(medicineIndexSource).toContain("function goBack");
     expect(medicineIndexSource).toContain('class="search-box"');
     expect(medicineIndexSource).toContain('class="filter-card"');
     expect(medicineIndexSource).toContain("holding_relation");
-    expect(medicineIndexSource).toContain('class="add-medicine-button"');
+    expect(medicineIndexSource).toContain('class="floating-add"');
     expect(medicineIndexSource).toContain("goCreateMedicine");
     expect(medicineIndexSource).toContain("/pages/medicines/create");
     expect(medicineIndexSource).toContain("/pages/medicines/detail?medicine_id=");
+    expect(medicineIndexSource).toContain("素材/svg/喵记/药品.svg");
     expect(medicineIndexSource).not.toContain("AppTabBar");
   });
 

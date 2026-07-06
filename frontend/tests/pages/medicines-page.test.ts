@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import pagesJson from "../../src/pages.json?raw";
+import meowNotesSource from "../../src/pages/tasks/index.vue?raw";
 import profileIndexSource from "../../src/pages/profile/index.vue?raw";
 import medicineCreateSource from "../../src/pages/medicines/create.vue?raw";
 import medicineDetailSource from "../../src/pages/medicines/detail.vue?raw";
@@ -24,10 +25,11 @@ describe("medicine management pages", () => {
     expect(pagesJson).toContain("pages/medicines/holding");
   });
 
-  it("adds a personal center entry without changing bottom tabs", () => {
-    expect(profileIndexSource).toContain("药品管理");
-    expect(profileIndexSource).toContain("/pages/medicines/index");
-    expect(profileIndexSource).toContain("goMedicines");
+  it("adds a Meow Notes bookshelf entry without changing bottom tabs or profile menu", () => {
+    expect(meowNotesSource).toContain("药品");
+    expect(meowNotesSource).toContain('/pages/medicines/index');
+    expect(profileIndexSource).not.toContain("/pages/medicines/index");
+    expect(profileIndexSource).not.toContain("goMedicines");
     expect(pagesJson).not.toMatch(/tabBar[\s\S]*pages\/medicines\/index/);
   });
 

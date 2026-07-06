@@ -58,11 +58,6 @@
         </button>
 
         <view class="menu-card">
-          <button class="menu-row" @tap="goMedicines">
-            <image class="menu-icon-image" :src="profileMenuIconMap.medicines" mode="aspectFit" />
-            <text class="menu-label">药品管理</text>
-            <text class="menu-chevron">›</text>
-          </button>
           <button class="menu-row" @tap="goAccountSettings">
             <image class="menu-icon-image" :src="profileMenuIconMap.settings" mode="aspectFit" />
             <text class="menu-label">账号设置</text>
@@ -122,7 +117,6 @@ import notificationsIcon from "../../../素材/svg/用户页/通知.svg";
 import feedbackIcon from "../../../素材/svg/用户页/帮助和反馈.svg";
 import observationIcon from "../../../素材/登录页素材/密码-显示.svg";
 import adminIcon from "../../../素材/svg/登录页/修改密码.svg";
-import medicineIcon from "../../../素材/png/地图点/医疗任务.png";
 
 const userStore = useUserStore();
 const dashboard = ref<MeDashboardResponse | null>(null);
@@ -137,7 +131,6 @@ const profileStatIconMap: Partial<Record<(typeof PROFILE_STAT_ENTRIES)[number]["
   total_observation_records: observationIcon,
 };
 const profileMenuIconMap = {
-  medicines: medicineIcon,
   settings: settingsIcon,
   notifications: notificationsIcon,
   feedback: feedbackIcon,
@@ -182,10 +175,6 @@ async function loadDashboard() {
 
 function goProfileDetail() {
   uni.navigateTo({ url: "/pages/profile/detail" });
-}
-
-function goMedicines() {
-  uni.navigateTo({ url: "/pages/medicines/index" });
 }
 
 function goAccountSettings() {

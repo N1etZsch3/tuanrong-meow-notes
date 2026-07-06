@@ -114,6 +114,7 @@ const noteBooks: NoteBook[] = [
     icon: medicineIcon,
     tone: "yellow",
     ribbon: true,
+    url: "/pages/medicines/index",
   },
 ];
 
@@ -151,7 +152,7 @@ function goNextBookPage() {
 function openBook(book: NoteBook) {
   if (!book.url) {
     uni.showToast({
-      title: "药品管理暂未开放",
+      title: "该入口暂未开放",
       icon: "none",
     });
     return;

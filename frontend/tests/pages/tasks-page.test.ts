@@ -70,6 +70,7 @@ describe("summer feeding task pages", () => {
     expect(meowNotesSource).toContain('/pages/tasks/list');
     expect(meowNotesSource).toContain('/pages/supplies/index');
     expect(meowNotesSource).toContain('/pages/landmarks/index');
+    expect(meowNotesSource).toContain('/pages/medicines/index');
     expect(meowNotesSource).toContain("素材/svg/喵记/任务.svg");
     expect(meowNotesSource).toContain("素材/svg/喵记/物资仓库.svg");
     expect(meowNotesSource).toContain("素材/svg/喵记/地标.svg");
@@ -78,7 +79,7 @@ describe("summer feeding task pages", () => {
     expect(meowNotesSource).not.toContain("素材/png/地图点/物资点.png");
     expect(meowNotesSource).not.toContain("素材/png/地图点/地标.png");
     expect(meowNotesSource).not.toContain("素材/png/地图点/医疗任务.png");
-    expect(meowNotesSource).toContain("药品管理暂未开放");
+    expect(meowNotesSource).not.toContain("药品管理暂未开放");
     expect(meowNotesSource).not.toContain("summary-strip");
     expect(meowNotesSource).not.toContain("最近新增");
     expect(meowNotesSource).not.toContain("getTasks");

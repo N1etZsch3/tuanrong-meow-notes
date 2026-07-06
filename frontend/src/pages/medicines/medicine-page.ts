@@ -1,7 +1,6 @@
-import type { MedicineCreatePayload } from "@/api/medicines";
+import type { MedicineCatalogPayload, MedicineCreatePayload } from "@/api/medicines";
 
 export type MedicineHoldingRelation = "all" | "mine" | "others";
-export type MedicineCreateMode = "new" | "existing";
 export type MedicineStockTone = "empty" | "low" | "normal";
 
 export interface MedicineOption {
@@ -10,7 +9,6 @@ export interface MedicineOption {
 }
 
 export interface MedicineCreateDraft {
-  mode: MedicineCreateMode;
   selected_medicine_id: string;
   name: string;
   category_id: string;
@@ -18,8 +16,15 @@ export interface MedicineCreateDraft {
   unit: string;
   description: string;
   usage_notes: string;
+  cover_image_url: string;
   initial_quantity: number;
   remark: string;
+}
+
+export interface MedicineCatalogSuggestion extends MedicineCatalogPayload {
+  medicine_id: string;
+  category?: { id: string; name: string } | null;
+  category_name?: string | null;
 }
 
 export interface MedicineValidationResult {
@@ -68,7 +73,6 @@ function nullableTrim(value: string): string | null {
 
 export function createDefaultMedicineDraft(): MedicineCreateDraft {
   return {
-    mode: "new",
     selected_medicine_id: "",
     name: "",
     category_id: "",
@@ -76,23 +80,55 @@ export function createDefaultMedicineDraft(): MedicineCreateDraft {
     unit: "",
     description: "",
     usage_notes: "",
+    cover_image_url: "",
     initial_quantity: 0,
     remark: "",
+  };
+}
+
+export function isMedicineCatalogLinked(draft: MedicineCreateDraft): boolean {
+  return Boolean(draft.selected_medicine_id);
+}
+
+export function applySelectedMedicineToDraft(
+  draft: MedicineCreateDraft,
+  medicine: MedicineCatalogSuggestion,
+): MedicineCreateDraft {
+  return {
+    ...draft,
+    selected_medicine_id: medicine.medicine_id,
+    name: medicine.name,
+    category_id: medicine.category?.id || medicine.category_id || "",
+    specification: medicine.specification || "",
+    unit: medicine.unit,
+    description: medicine.description || "",
+    usage_notes: medicine.usage_notes || "",
+    cover_image_url: medicine.cover_image_url || "",
+  };
+}
+
+export function clearSelectedMedicineDraft(draft: MedicineCreateDraft): MedicineCreateDraft {
+  return {
+    ...draft,
+    selected_medicine_id: "",
+    name: "",
+    category_id: "",
+    specification: "",
+    unit: "",
+    description: "",
+    usage_notes: "",
+    cover_image_url: "",
   };
 }
 
 export function validateMedicineCreateDraft(
   draft: MedicineCreateDraft,
 ): MedicineValidationResult {
-  if (draft.mode === "existing" && !draft.selected_medicine_id) {
-    return { valid: false, message: "请选择已有药品" };
-  }
-
-  if (draft.mode === "new" && !draft.name.trim()) {
+  if (!isMedicineCatalogLinked(draft) && !draft.name.trim()) {
     return { valid: false, message: "请输入药品名称" };
   }
 
-  if (draft.mode === "new" && !draft.unit.trim()) {
+  if (!isMedicineCatalogLinked(draft) && !draft.unit.trim()) {
     return { valid: false, message: "请输入计量单位" };
   }
 
@@ -111,7 +147,7 @@ export function buildMedicineCreatePayload(
     remark: nullableTrim(draft.remark),
   };
 
-  if (draft.mode === "existing") {
+  if (isMedicineCatalogLinked(draft)) {
     return {
       ...basePayload,
       medicine_id: draft.selected_medicine_id,
@@ -127,7 +163,7 @@ export function buildMedicineCreatePayload(
       unit: draft.unit.trim(),
       description: nullableTrim(draft.description),
       usage_notes: nullableTrim(draft.usage_notes),
-      cover_image_url: null,
+      cover_image_url: nullableTrim(draft.cover_image_url),
     },
   };
 }

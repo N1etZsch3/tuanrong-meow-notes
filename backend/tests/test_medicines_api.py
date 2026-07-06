@@ -1,11 +1,12 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
-from app.modules.medicines.models import MedicineUseApplication
+from app.modules.medicines.models import MedicinePhoto, MedicineUseApplication
 
 EXPECTED_MEDICINE_TABLES = {
     "medicine_categories",
@@ -124,6 +125,16 @@ def test_member_can_create_medicine_and_read_catalog_summary(api_client, db_sess
     assert created["created_catalog"] is True
     assert created["created_holding"] is True
     assert created["initial_stock_log_id"]
+    cover_photo = db_session.scalar(
+        select(MedicinePhoto).where(
+            MedicinePhoto.medicine_id == UUID(created["medicine_id"]),
+            MedicinePhoto.photo_type == "cover",
+            MedicinePhoto.deleted_at.is_(None),
+        ),
+    )
+    assert cover_photo is not None
+    assert cover_photo.file_url == "https://img.example.com/amoxicillin.jpg"
+    assert cover_photo.uploaded_by == member.id
 
     list_response = api_client.get("/api/v1/medicines", headers=headers)
     assert list_response.status_code == 200
@@ -133,6 +144,7 @@ def test_member_can_create_medicine_and_read_catalog_summary(api_client, db_sess
     assert item["medicine_id"] == created["medicine_id"]
     assert item["name"] == "阿莫西林"
     assert item["category"]["name"] == "抗生素"
+    assert item["cover_image_url"] == "https://img.example.com/amoxicillin.jpg"
     assert item["total_current_quantity"] == 20
     assert item["total_in_quantity"] == 20
     assert item["stock_status"] == "sufficient"
@@ -148,6 +160,7 @@ def test_member_can_create_medicine_and_read_catalog_summary(api_client, db_sess
     assert detail_response.status_code == 200
     detail = detail_response.json()["data"]
     assert detail["medicine_id"] == created["medicine_id"]
+    assert detail["cover_image_url"] == "https://img.example.com/amoxicillin.jpg"
     assert detail["total_current_quantity"] == 20
     assert detail["permissions"]["can_edit_catalog"] is False
     assert detail["recent_logs"][0]["operation_type"] == "initial_in"
@@ -161,6 +174,7 @@ def test_member_can_create_medicine_and_read_catalog_summary(api_client, db_sess
     holding = holding_response.json()["data"]
     assert holding["holding_id"] == created["holding_id"]
     assert holding["medicine"]["name"] == "阿莫西林"
+    assert holding["medicine"]["cover_image_url"] == "https://img.example.com/amoxicillin.jpg"
     assert holding["holder"]["nickname"] == "持有人A"
     assert holding["current_quantity"] == 20
     assert holding["permissions"] == {
@@ -169,6 +183,16 @@ def test_member_can_create_medicine_and_read_catalog_summary(api_client, db_sess
         "can_apply": False,
         "can_review_application": True,
     }
+
+    search_response = api_client.get(
+        "/api/v1/medicines/search?keyword=阿莫",
+        headers=headers,
+    )
+    assert search_response.status_code == 200
+    search_item = search_response.json()["data"]["items"][0]
+    assert search_item["medicine_id"] == created["medicine_id"]
+    assert search_item["category"]["name"] == "抗生素"
+    assert search_item["cover_image_url"] == "https://img.example.com/amoxicillin.jpg"
 
 
 def test_holder_can_record_purchase_use_and_scrap(api_client, db_session):

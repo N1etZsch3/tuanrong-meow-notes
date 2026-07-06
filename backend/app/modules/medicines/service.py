@@ -13,6 +13,7 @@ from app.modules.medicines.models import (
     MedicineCatalog,
     MedicineCategory,
     MedicineHolding,
+    MedicinePhoto,
     MedicineStockLog,
     MedicineUseApplication,
 )
@@ -96,6 +97,44 @@ def _stock_status(current_quantity: Decimal, total_in_quantity: Decimal) -> tupl
     if ratio < Decimal("0.5"):
         return "low", "库存紧张"
     return "sufficient", "库存充足"
+
+
+def _upsert_cover_photo(
+    db: Session,
+    *,
+    catalog: MedicineCatalog,
+    file_url: str | None,
+    user: User,
+    now: datetime,
+) -> None:
+    if not file_url:
+        return
+
+    cover_photo = db.scalar(
+        select(MedicinePhoto).where(
+            MedicinePhoto.medicine_id == catalog.id,
+            MedicinePhoto.photo_type == "cover",
+            MedicinePhoto.deleted_at.is_(None),
+        ),
+    )
+    if cover_photo:
+        cover_photo.file_url = file_url
+        cover_photo.thumbnail_url = None
+        cover_photo.uploaded_by = user.id
+        return
+
+    db.add(
+        MedicinePhoto(
+            medicine_id=catalog.id,
+            file_url=file_url,
+            thumbnail_url=None,
+            photo_type="cover",
+            caption="药品封面",
+            sort_order=0,
+            uploaded_by=user.id,
+            created_at=now,
+        ),
+    )
 
 
 def _user_payload(user: User | None) -> dict | None:
@@ -502,6 +541,13 @@ def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) 
         )
         db.add(catalog)
         db.flush()
+        _upsert_cover_photo(
+            db,
+            catalog=catalog,
+            file_url=payload.catalog.cover_image_url,
+            user=user,
+            now=now,
+        )
         created_catalog = True
 
     existing = db.scalar(
@@ -641,6 +687,13 @@ def search_medicines(db: Session, *, keyword: str, limit: int = 10) -> dict:
             {
                 "medicine_id": str(catalog.id),
                 "name": catalog.name,
+                "category": {
+                    "id": str(catalog.category.id),
+                    "name": catalog.category.name,
+                }
+                if catalog.category
+                else None,
+                "category_id": str(catalog.category_id) if catalog.category_id else None,
                 "category_name": catalog.category.name if catalog.category else None,
                 "specification": catalog.specification,
                 "unit": catalog.unit,
@@ -1492,6 +1545,13 @@ def update_catalog(
         catalog.usage_notes = payload.usage_notes
     if payload.cover_image_url is not None:
         catalog.cover_image_url = payload.cover_image_url
+        _upsert_cover_photo(
+            db,
+            catalog=catalog,
+            file_url=payload.cover_image_url,
+            user=admin,
+            now=_now(),
+        )
     catalog.updated_by = admin.id
     catalog.updated_at = _now()
     db.commit()

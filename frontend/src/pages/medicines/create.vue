@@ -7,79 +7,78 @@
           <button class="back-button" hover-class="button-hover" @tap="goBack">‹</button>
           <view>
             <text class="nav-title">新增药品</text>
-            <text class="nav-subtitle">创建主档或新增持有库存</text>
+            <text class="nav-subtitle">输入名称后可关联药品库主档</text>
           </view>
         </view>
 
         <view class="section-card">
-          <text class="section-title">建档方式</text>
-          <view class="mode-row">
-            <button
-              v-for="option in modeOptions"
-              :key="option.value"
-              class="mode-button"
-              :class="{ active: draft.mode === option.value }"
-              hover-class="button-hover"
-              @tap="setMode(option.value)"
-            >
-              {{ option.label }}
-            </button>
-          </view>
-        </view>
-
-        <view v-if="draft.mode === 'existing'" class="section-card">
-          <text class="section-title">选择已有药品</text>
-          <view class="search-box">
-            <input
-              v-model.trim="existingKeyword"
-              class="search-input"
-              confirm-type="search"
-              placeholder="输入药品名搜索已有主档"
-              placeholder-class="placeholder"
-              @confirm="loadExistingMedicines"
-            />
-            <button class="search-button" hover-class="button-hover" @tap="loadExistingMedicines">
-              搜索
-            </button>
-          </view>
-          <view v-if="existingMedicines.length" class="existing-list">
-            <button
-              v-for="medicine in existingMedicines"
-              :key="medicine.medicine_id"
-              class="existing-card"
-              :class="{ selected: draft.selected_medicine_id === medicine.medicine_id }"
-              hover-class="button-hover"
-              @tap="selectExistingMedicine(medicine)"
-            >
-              <text class="existing-name">{{ medicine.name }}</text>
-              <text class="existing-meta">
-                {{ medicine.specification || "暂无规格" }} · {{ medicine.unit }}
-              </text>
-            </button>
-          </view>
-          <text v-else class="hint-line">输入药品名后，可以复用已有主档。</text>
-        </view>
-
-        <view v-else class="section-card">
-          <text class="section-title">创建新药品</text>
+          <text class="section-title">药品信息</text>
           <view class="field-group">
             <text class="field-label">药品名称</text>
+            <view v-if="isCatalogLinked" class="selected-medicine-tag">
+              <text class="tag-name">{{ draft.name }}</text>
+              <button class="tag-remove" hover-class="button-hover" @tap="clearSelectedMedicine">
+                ×
+              </button>
+            </view>
             <input
+              v-else
               v-model.trim="draft.name"
               class="form-input"
               placeholder="如：阿莫西林"
               placeholder-class="placeholder"
+              @input="handleMedicineNameInput"
+              @focus="handleMedicineNameInput"
+              @confirm="loadCatalogSuggestions"
             />
+            <scroll-view
+              v-if="showCatalogSuggestions"
+              class="catalog-suggestion-list"
+              scroll-y
+              :show-scrollbar="false"
+            >
+              <button
+                v-for="medicine in catalogSuggestions"
+                :key="medicine.medicine_id"
+                class="catalog-suggestion-card"
+                hover-class="button-hover"
+                @tap="selectExistingMedicine(medicine)"
+              >
+                <image
+                  v-if="medicine.cover_image_url"
+                  class="suggestion-cover"
+                  :src="medicine.cover_image_url"
+                  mode="aspectFill"
+                />
+                <view class="suggestion-copy">
+                  <text class="suggestion-name">{{ medicine.name }}</text>
+                  <text class="suggestion-meta">
+                    {{ medicine.specification || "暂无规格" }} · {{ medicine.unit }}
+                  </text>
+                  <text v-if="medicine.category?.name || medicine.category_name" class="suggestion-category">
+                    {{ medicine.category?.name || medicine.category_name }}
+                  </text>
+                </view>
+              </button>
+              <text v-if="isSearchingCatalog && !catalogSuggestions.length" class="hint-line">
+                正在查询药品库...
+              </text>
+            </scroll-view>
+            <text v-if="manualCatalogHintVisible" class="hint-line">
+              不点选候选项时，将按当前填写内容保存为新的药品主档。
+            </text>
           </view>
+
           <view class="field-group">
             <text class="field-label">药品分类</text>
             <picker
+              :disabled="isCatalogLinked"
               :range="categoryOptions"
               range-key="label"
               :value="selectedCategoryIndex"
               @change="handleCategoryChange"
             >
-              <view class="picker-shell">
+              <view class="picker-shell" :class="{ disabled: isCatalogLinked }">
                 <text>{{ selectedCategoryLabel }}</text>
                 <image class="picker-arrow-icon" :src="filterArrowIcon" mode="aspectFit" />
               </view>
@@ -91,6 +90,7 @@
               <input
                 v-model.trim="draft.specification"
                 class="form-input"
+                :disabled="isCatalogLinked"
                 placeholder="250mg/片"
                 placeholder-class="placeholder"
               />
@@ -100,9 +100,38 @@
               <input
                 v-model.trim="draft.unit"
                 class="form-input"
+                :disabled="isCatalogLinked"
                 placeholder="片 / 支 / 瓶"
                 placeholder-class="placeholder"
               />
+            </view>
+          </view>
+          <view class="field-group">
+            <text class="field-label">药品图片</text>
+            <view class="medicine-photo-row">
+              <view v-if="draft.cover_image_url" class="medicine-photo-card">
+                <image class="medicine-photo" :src="draft.cover_image_url" mode="aspectFill" />
+                <button
+                  v-if="!isCatalogLinked"
+                  class="photo-remove"
+                  hover-class="button-hover"
+                  @tap="removeMedicineImage"
+                >
+                  ×
+                </button>
+              </view>
+              <button
+                v-if="!isCatalogLinked"
+                class="photo-upload"
+                :loading="isUploadingImage"
+                hover-class="button-hover"
+                @tap="chooseMedicineImage"
+              >
+                {{ draft.cover_image_url ? "更换图片" : "+" }}
+              </button>
+              <text v-if="isCatalogLinked" class="hint-line">
+                图片来自已关联的药品主档，取消关联后可重新上传。
+              </text>
             </view>
           </view>
           <view class="field-group">
@@ -110,6 +139,7 @@
             <textarea
               v-model.trim="draft.description"
               class="form-textarea"
+              :disabled="isCatalogLinked"
               maxlength="500"
               placeholder="用途、适用场景，可不填"
               placeholder-class="placeholder"
@@ -120,6 +150,7 @@
             <textarea
               v-model.trim="draft.usage_notes"
               class="form-textarea"
+              :disabled="isCatalogLinked"
               maxlength="500"
               placeholder="剂量、禁忌、需线下确认事项"
               placeholder-class="placeholder"
@@ -172,40 +203,42 @@
 import { onLoad } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
+import { uploadImage } from "@/api/files";
 import {
   createMedicine,
   getMedicineCategories,
   searchMedicines,
-  type MedicineCatalogPayload,
   type MedicineCategoryDto,
+  type MedicineSearchItemDto,
 } from "@/api/medicines";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import {
+  applySelectedMedicineToDraft,
   buildMedicineCreatePayload,
+  clearSelectedMedicineDraft,
   createDefaultMedicineDraft,
+  isMedicineCatalogLinked,
   validateMedicineCreateDraft,
-  type MedicineCreateMode,
 } from "@/pages/medicines/medicine-page";
 
-import medicineIcon from "../../../素材/png/地图点/医疗任务.png";
 import filterArrowIcon from "../../../素材/png/地图点/箭头.png";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
 type PickerChangeEvent = { detail: { value: string | number } };
-type SearchMedicineItem = MedicineCatalogPayload & { medicine_id: string };
 
 const userStore = useUserStore();
 const draft = ref(createDefaultMedicineDraft());
 const categories = ref<MedicineCategoryDto[]>([]);
-const existingKeyword = ref("");
-const existingMedicines = ref<SearchMedicineItem[]>([]);
+const catalogSuggestions = ref<MedicineSearchItemDto[]>([]);
+const hasSearchedCatalog = ref(false);
+const isSearchingCatalog = ref(false);
+const isUploadingImage = ref(false);
 const isSubmitting = ref(false);
-const modeOptions: Array<{ label: string; value: MedicineCreateMode }> = [
-  { label: "创建新药品", value: "new" },
-  { label: "选择已有药品", value: "existing" },
-];
+let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let searchRequestSeq = 0;
 
+const isCatalogLinked = computed(() => isMedicineCatalogLinked(draft.value));
 const categoryOptions = computed(() => [
   { label: "请选择分类", value: "" },
   ...categories.value.map((category) => ({
@@ -221,6 +254,19 @@ const selectedCategoryIndex = computed(() =>
 );
 const selectedCategoryLabel = computed(
   () => categoryOptions.value[selectedCategoryIndex.value]?.label || "请选择分类",
+);
+const showCatalogSuggestions = computed(
+  () =>
+    !isCatalogLinked.value &&
+    draft.value.name.trim().length > 0 &&
+    (catalogSuggestions.value.length > 0 || isSearchingCatalog.value),
+);
+const manualCatalogHintVisible = computed(
+  () =>
+    !isCatalogLinked.value &&
+    hasSearchedCatalog.value &&
+    draft.value.name.trim().length > 0 &&
+    !isSearchingCatalog.value,
 );
 
 async function getAccessToken(): Promise<string | null> {
@@ -246,33 +292,140 @@ function pickerIndex(event: PickerChangeEvent): number {
 }
 
 function handleCategoryChange(event: PickerChangeEvent) {
+  if (isCatalogLinked.value) {
+    return;
+  }
   draft.value.category_id = categoryOptions.value[pickerIndex(event)]?.value || "";
 }
 
-function setMode(mode: MedicineCreateMode) {
-  draft.value.mode = mode;
-  draft.value.selected_medicine_id = "";
+function readInputValue(event: unknown): string | null {
+  const detail = (event as { detail?: unknown } | undefined)?.detail;
+  if (detail && typeof detail === "object" && "value" in detail) {
+    const value = (detail as { value?: unknown }).value;
+    return typeof value === "string" ? value : null;
+  }
+  return typeof detail === "string" ? detail : null;
 }
 
-async function loadExistingMedicines() {
-  const keyword = existingKeyword.value.trim();
+function handleMedicineNameInput(event?: unknown) {
+  if (isCatalogLinked.value) {
+    return;
+  }
+  const inputValue = readInputValue(event);
+  if (inputValue !== null) {
+    draft.value.name = inputValue;
+  }
+  scheduleCatalogSearch();
+}
+
+function scheduleCatalogSearch() {
+  if (searchTimer) {
+    clearTimeout(searchTimer);
+  }
+  const keyword = draft.value.name.trim();
   if (!keyword) {
-    uni.showToast({ title: "请输入药品名", icon: "none" });
+    catalogSuggestions.value = [];
+    hasSearchedCatalog.value = false;
+    isSearchingCatalog.value = false;
+    return;
+  }
+  searchTimer = setTimeout(() => {
+    void loadCatalogSuggestions();
+  }, 260);
+}
+
+async function loadCatalogSuggestions() {
+  const keyword = draft.value.name.trim();
+  if (!keyword || isCatalogLinked.value) {
+    catalogSuggestions.value = [];
+    hasSearchedCatalog.value = false;
     return;
   }
   const token = await getAccessToken();
   if (!token) {
     return;
   }
-  const data = await searchMedicines(token, keyword);
-  existingMedicines.value = data.items;
+  const requestId = ++searchRequestSeq;
+  isSearchingCatalog.value = true;
+  try {
+    const data = await searchMedicines(token, keyword);
+    if (requestId === searchRequestSeq) {
+      catalogSuggestions.value = data.items;
+      hasSearchedCatalog.value = true;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "查询药品库失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    if (requestId === searchRequestSeq) {
+      isSearchingCatalog.value = false;
+    }
+  }
 }
 
-function selectExistingMedicine(medicine: SearchMedicineItem) {
-  draft.value.selected_medicine_id = medicine.medicine_id;
-  draft.value.name = medicine.name;
-  draft.value.specification = medicine.specification || "";
-  draft.value.unit = medicine.unit;
+function selectExistingMedicine(medicine: MedicineSearchItemDto) {
+  if (searchTimer) {
+    clearTimeout(searchTimer);
+  }
+  draft.value = applySelectedMedicineToDraft(draft.value, medicine);
+  catalogSuggestions.value = [];
+  hasSearchedCatalog.value = false;
+  isSearchingCatalog.value = false;
+}
+
+function clearSelectedMedicine() {
+  draft.value = clearSelectedMedicineDraft(draft.value);
+  catalogSuggestions.value = [];
+  hasSearchedCatalog.value = false;
+  isSearchingCatalog.value = false;
+}
+
+function chooseMedicineImage() {
+  if (isCatalogLinked.value) {
+    return;
+  }
+  uni.chooseImage({
+    count: 1,
+    sizeType: ["compressed"],
+    sourceType: ["album", "camera"],
+    success: (result) => {
+      const [path] = Array.isArray(result.tempFilePaths)
+        ? result.tempFilePaths
+        : [result.tempFilePaths].filter(Boolean);
+      if (path) {
+        void uploadMedicineImage(path);
+      }
+    },
+  });
+}
+
+async function uploadMedicineImage(path: string) {
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  isUploadingImage.value = true;
+  try {
+    const asset = await uploadImage(token, path, {
+      usage_type: "medicine_cover",
+      owner_type: "medicine_catalog",
+      visibility: "internal",
+      caption: "药品图片",
+    });
+    draft.value.cover_image_url = asset.default_url;
+    uni.showToast({ title: "图片已上传", icon: "success" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "上传失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    isUploadingImage.value = false;
+  }
+}
+
+function removeMedicineImage() {
+  if (!isCatalogLinked.value) {
+    draft.value.cover_image_url = "";
+  }
 }
 
 async function submitMedicine() {
@@ -345,9 +498,10 @@ onLoad(() => {
 }
 
 .back-button,
-.mode-button,
-.search-button,
-.existing-card,
+.catalog-suggestion-card,
+.tag-remove,
+.photo-remove,
+.photo-upload,
 .ghost-action,
 .primary-action {
   margin: 0;
@@ -356,9 +510,10 @@ onLoad(() => {
 }
 
 .back-button::after,
-.mode-button::after,
-.search-button::after,
-.existing-card::after,
+.catalog-suggestion-card::after,
+.tag-remove::after,
+.photo-remove::after,
+.photo-upload::after,
 .ghost-action::after,
 .primary-action::after {
   border: 0;
@@ -380,8 +535,10 @@ onLoad(() => {
 .section-title,
 .field-label,
 .hint-line,
-.existing-name,
-.existing-meta {
+.suggestion-name,
+.suggestion-meta,
+.suggestion-category,
+.tag-name {
   display: block;
 }
 
@@ -414,28 +571,6 @@ onLoad(() => {
   font-weight: 900;
 }
 
-.mode-row {
-  margin-top: 20rpx;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16rpx;
-}
-
-.mode-button {
-  height: 68rpx;
-  border-radius: 22rpx;
-  background: #eef4ec;
-  color: #526070;
-  font-size: 24rpx;
-  font-weight: 900;
-  line-height: 68rpx;
-}
-
-.mode-button.active {
-  background: #287c31;
-  color: #ffffff;
-}
-
 .field-group {
   margin-top: 22rpx;
 }
@@ -455,8 +590,7 @@ onLoad(() => {
 
 .form-input,
 .picker-shell,
-.form-textarea,
-.search-box {
+.form-textarea {
   box-sizing: border-box;
   width: 100%;
   border: 2rpx solid rgba(40, 124, 49, 0.22);
@@ -471,6 +605,13 @@ onLoad(() => {
 .picker-shell {
   height: 72rpx;
   padding: 0 20rpx;
+}
+
+.form-input[disabled],
+.form-textarea[disabled],
+.picker-shell.disabled {
+  background: rgba(238, 244, 236, 0.72);
+  color: #667085;
 }
 
 .picker-shell {
@@ -495,65 +636,136 @@ onLoad(() => {
   color: #9299a3;
 }
 
-.search-box {
-  height: 72rpx;
-  margin-top: 20rpx;
-  padding: 0 12rpx 0 20rpx;
+.selected-medicine-tag {
+  box-sizing: border-box;
+  min-height: 72rpx;
+  padding: 12rpx 14rpx 12rpx 22rpx;
+  border: 2rpx solid rgba(40, 124, 49, 0.28);
+  border-radius: 22rpx;
+  background: #e4f6dd;
   display: flex;
   align-items: center;
-  gap: 12rpx;
+  justify-content: space-between;
+  gap: 16rpx;
 }
 
-.search-input {
-  flex: 1;
+.tag-name {
   min-width: 0;
-  height: 68rpx;
-  color: #111827;
-  font-size: 25rpx;
-}
-
-.search-button {
-  width: 84rpx;
-  height: 50rpx;
-  border-radius: 16rpx;
-  background: #2f8a38;
-  color: #ffffff;
-  font-size: 22rpx;
+  flex: 1;
+  color: #237a2f;
+  font-size: 26rpx;
   font-weight: 900;
-  line-height: 50rpx;
 }
 
-.existing-list {
-  margin-top: 20rpx;
-  display: flex;
-  flex-direction: column;
-  gap: 14rpx;
+.tag-remove {
+  width: 46rpx;
+  height: 46rpx;
+  border-radius: 50%;
+  background: rgba(35, 122, 47, 0.16);
+  color: #237a2f;
+  font-size: 30rpx;
+  font-weight: 900;
+  line-height: 42rpx;
 }
 
-.existing-card {
-  padding: 20rpx;
+.catalog-suggestion-list {
+  max-height: 360rpx;
+  margin-top: 14rpx;
+  overflow-y: auto;
+  border-radius: 22rpx;
+}
+
+.catalog-suggestion-card {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 112rpx;
+  padding: 16rpx;
   border-radius: 20rpx;
   background: #edf4ff;
   color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
   text-align: left;
 }
 
-.existing-card.selected {
-  background: #e4f6dd;
-  box-shadow: inset 0 0 0 3rpx rgba(40, 124, 49, 0.28);
+.catalog-suggestion-card + .catalog-suggestion-card {
+  margin-top: 12rpx;
 }
 
-.existing-name {
+.suggestion-cover {
+  width: 78rpx;
+  height: 78rpx;
+  flex: 0 0 78rpx;
+  border-radius: 18rpx;
+  background: #f4fbef;
+}
+
+.suggestion-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.suggestion-name {
+  color: #111827;
   font-size: 27rpx;
   font-weight: 900;
 }
 
-.existing-meta,
+.suggestion-meta,
+.suggestion-category,
 .hint-line {
   margin-top: 8rpx;
   color: #667085;
   font-size: 23rpx;
   font-weight: 700;
+}
+
+.medicine-photo-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 18rpx;
+}
+
+.medicine-photo-card,
+.medicine-photo,
+.photo-upload {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 22rpx;
+}
+
+.medicine-photo-card {
+  position: relative;
+}
+
+.medicine-photo {
+  overflow: hidden;
+  background: #f4fbef;
+}
+
+.photo-remove {
+  position: absolute;
+  top: -14rpx;
+  right: -14rpx;
+  width: 46rpx;
+  height: 46rpx;
+  border-radius: 50%;
+  background: rgba(17, 24, 39, 0.72);
+  color: #ffffff;
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 42rpx;
+}
+
+.photo-upload {
+  border: 2rpx dashed rgba(40, 124, 49, 0.5);
+  background: #f4fbef;
+  color: #287c31;
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 142rpx;
 }
 
 .bottom-actions {

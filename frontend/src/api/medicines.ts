@@ -71,6 +71,12 @@ export interface MedicineCatalogPayload {
   cover_image_url?: string | null;
 }
 
+export interface MedicineSearchItemDto extends MedicineCatalogPayload {
+  medicine_id: string;
+  category?: { id: string; name: string } | null;
+  category_name?: string | null;
+}
+
 export interface MedicineCreatePayload {
   medicine_id?: string | null;
   catalog?: MedicineCatalogPayload | null;
@@ -325,7 +331,7 @@ export function getMedicines(
 export function searchMedicines(
   accessToken: string,
   keyword: string,
-): Promise<{ items: Array<MedicineCatalogPayload & { medicine_id: string }> }> {
+): Promise<{ items: MedicineSearchItemDto[] }> {
   return request({
     url: API_ENDPOINTS.medicines.search,
     method: "GET",

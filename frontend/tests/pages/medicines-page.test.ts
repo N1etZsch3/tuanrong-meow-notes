@@ -9,11 +9,14 @@ import medicineHoldingSource from "../../src/pages/medicines/holding.vue?raw";
 import medicineIndexSource from "../../src/pages/medicines/index.vue?raw";
 import {
   MEDICINE_HOLDING_RELATION_OPTIONS,
+  applySelectedMedicineToDraft,
   buildMedicineCreatePayload,
+  clearSelectedMedicineDraft,
   createDefaultMedicineDraft,
   formatMedicineQuantity,
   getMedicineOperationLabel,
   getMedicineStockTone,
+  isMedicineCatalogLinked,
   validateMedicineCreateDraft,
 } from "../../src/pages/medicines/medicine-page";
 
@@ -49,14 +52,23 @@ describe("medicine management pages", () => {
     expect(medicineIndexSource).not.toContain("AppTabBar");
   });
 
-  it("creates medicines from either a new catalog or an existing catalog", () => {
+  it("creates medicines with inline catalog suggestions and image upload", () => {
     expect(medicineCreateSource).toContain("createMedicine");
     expect(medicineCreateSource).toContain("searchMedicines");
-    expect(medicineCreateSource).toContain("modeOptions");
+    expect(medicineCreateSource).not.toContain("modeOptions");
     expect(medicineCreateSource).toContain("validateMedicineCreateDraft");
     expect(medicineCreateSource).toContain("buildMedicineCreatePayload");
-    expect(medicineCreateSource).toContain("创建新药品");
-    expect(medicineCreateSource).toContain("选择已有药品");
+    expect(medicineCreateSource).not.toContain("建档方式");
+    expect(medicineCreateSource).not.toContain("创建新药品");
+    expect(medicineCreateSource).not.toContain("选择已有药品");
+    expect(medicineCreateSource).toContain('@input="handleMedicineNameInput"');
+    expect(medicineCreateSource).toContain('class="catalog-suggestion-list"');
+    expect(medicineCreateSource).toContain('class="selected-medicine-tag"');
+    expect(medicineCreateSource).toContain("clearSelectedMedicine");
+    expect(medicineCreateSource).toContain("chooseMedicineImage");
+    expect(medicineCreateSource).toContain("uploadImage");
+    expect(medicineCreateSource).toContain("cover_image_url");
+    expect(medicineCreateSource).toContain(':disabled="isCatalogLinked"');
     expect(medicineCreateSource).toContain("初始数量");
     expect(medicineCreateSource).toContain("/pages/medicines/detail?medicine_id=");
   });
@@ -84,7 +96,7 @@ describe("medicine management pages", () => {
     expect(medicineHoldingSource).toContain("通过申请");
   });
 
-  it("builds validated create payloads for new and existing medicines", () => {
+  it("builds validated create payloads for manually entered and linked medicines", () => {
     expect(validateMedicineCreateDraft(createDefaultMedicineDraft())).toEqual({
       valid: false,
       message: "请输入药品名称",
@@ -95,6 +107,7 @@ describe("medicine management pages", () => {
     newDraft.category_id = "category-1";
     newDraft.specification = "250mg/片";
     newDraft.unit = "片";
+    newDraft.cover_image_url = "https://img.example.com/amoxicillin.jpg";
     newDraft.initial_quantity = 12;
     newDraft.remark = " 第一次建档 ";
 
@@ -107,21 +120,68 @@ describe("medicine management pages", () => {
         unit: "片",
         description: null,
         usage_notes: null,
-        cover_image_url: null,
+        cover_image_url: "https://img.example.com/amoxicillin.jpg",
       },
       initial_quantity: 12,
       remark: "第一次建档",
     });
 
-    const existingDraft = createDefaultMedicineDraft();
-    existingDraft.mode = "existing";
-    existingDraft.selected_medicine_id = "medicine-1";
-    existingDraft.initial_quantity = 3;
+    const sameNameDraft = createDefaultMedicineDraft();
+    sameNameDraft.name = "阿莫西林";
+    sameNameDraft.unit = "片";
+    sameNameDraft.initial_quantity = 1;
 
-    expect(buildMedicineCreatePayload(existingDraft)).toEqual({
+    expect(buildMedicineCreatePayload(sameNameDraft)).toEqual({
+      catalog: {
+        name: "阿莫西林",
+        category_id: null,
+        specification: null,
+        unit: "片",
+        description: null,
+        usage_notes: null,
+        cover_image_url: null,
+      },
+      initial_quantity: 1,
+      remark: null,
+    });
+
+    const linkedDraft = applySelectedMedicineToDraft(
+      {
+        ...createDefaultMedicineDraft(),
+        initial_quantity: 3,
+      },
+      {
+        medicine_id: "medicine-1",
+        name: "阿莫西林",
+        category: { id: "category-1", name: "抗生素" },
+        specification: "250mg/片",
+        unit: "片",
+        description: "常用抗生素",
+        usage_notes: "遵医嘱使用",
+        cover_image_url: "https://img.example.com/amoxicillin.jpg",
+      },
+    );
+
+    expect(isMedicineCatalogLinked(linkedDraft)).toBe(true);
+    expect(validateMedicineCreateDraft(linkedDraft)).toEqual({ valid: true });
+    expect(buildMedicineCreatePayload(linkedDraft)).toEqual({
       medicine_id: "medicine-1",
       initial_quantity: 3,
       remark: null,
+    });
+
+    const clearedDraft = clearSelectedMedicineDraft(linkedDraft);
+    expect(isMedicineCatalogLinked(clearedDraft)).toBe(false);
+    expect(clearedDraft).toMatchObject({
+      selected_medicine_id: "",
+      name: "",
+      category_id: "",
+      specification: "",
+      unit: "",
+      description: "",
+      usage_notes: "",
+      cover_image_url: "",
+      initial_quantity: 3,
     });
   });
 

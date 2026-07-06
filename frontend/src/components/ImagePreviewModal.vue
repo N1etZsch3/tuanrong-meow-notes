@@ -11,6 +11,7 @@
 
     <movable-area
       class="image-preview-area"
+      :class="previewTransitionClass"
       :style="imageAreaStyle"
       @touchstart="handlePreviewTouchStart"
       @touchend="handlePreviewTouchEnd"
@@ -64,8 +65,11 @@ const viewportSize = {
 };
 const SWIPE_MIN_DISTANCE = 48;
 const SWIPE_AXIS_RATIO = 1.2;
+const PREVIEW_TRANSITION_DURATION = 220;
 const imageNaturalSize = ref<{ width: number; height: number } | null>(null);
 const previewTouchStart = ref<{ x: number; y: number } | null>(null);
+const previewTransitionDirection = ref<PreviewTransitionDirection | null>(null);
+let previewTransitionTimer: ReturnType<typeof setTimeout> | undefined;
 const safeImages = computed(() => props.images.filter((url) => Boolean(url)));
 const activeIndex = computed(() => {
   if (!safeImages.value.length) {
@@ -74,6 +78,12 @@ const activeIndex = computed(() => {
   return Math.min(Math.max(props.currentIndex, 0), safeImages.value.length - 1);
 });
 const activeUrl = computed(() => safeImages.value[activeIndex.value] || "");
+const previewTransitionClass = computed(() => {
+  if (!previewTransitionDirection.value) {
+    return "";
+  }
+  return `image-preview-area--enter-${previewTransitionDirection.value}`;
+});
 const imageAreaStyle = computed(() => {
   const naturalSize = imageNaturalSize.value;
   if (!naturalSize?.width || !naturalSize.height) {
@@ -123,6 +133,8 @@ type PreviewTouchEvent = Event & {
   touches?: TouchPoint[];
   changedTouches?: TouchPoint[];
 };
+
+type PreviewTransitionDirection = "next" | "previous";
 
 function getTouchPoint(event: Event, preferChangedTouches = false) {
   const touchEvent = event as PreviewTouchEvent;
@@ -174,21 +186,34 @@ function handlePreviewTouchEnd(event: Event) {
   showPrevious();
 }
 
+function startPreviewTransition(direction: PreviewTransitionDirection) {
+  if (previewTransitionTimer) {
+    clearTimeout(previewTransitionTimer);
+  }
+  previewTransitionDirection.value = direction;
+  previewTransitionTimer = setTimeout(() => {
+    previewTransitionDirection.value = null;
+    previewTransitionTimer = undefined;
+  }, PREVIEW_TRANSITION_DURATION);
+}
+
 function showPrevious() {
-  if (!safeImages.value.length) {
+  if (safeImages.value.length <= 1) {
     return;
   }
   const nextIndex =
     activeIndex.value === 0 ? safeImages.value.length - 1 : activeIndex.value - 1;
+  startPreviewTransition("previous");
   emit("change", nextIndex);
 }
 
 function showNext() {
-  if (!safeImages.value.length) {
+  if (safeImages.value.length <= 1) {
     return;
   }
   const nextIndex =
     activeIndex.value === safeImages.value.length - 1 ? 0 : activeIndex.value + 1;
+  startPreviewTransition("next");
   emit("change", nextIndex);
 }
 </script>
@@ -235,6 +260,14 @@ function showNext() {
   z-index: 2;
 }
 
+.image-preview-area--enter-next {
+  animation: image-preview-enter-next 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.image-preview-area--enter-previous {
+  animation: image-preview-enter-previous 220ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 .image-preview-movable {
   width: 100%;
   height: 100%;
@@ -246,5 +279,29 @@ function showNext() {
 .image-preview-image {
   width: 100%;
   height: 100%;
+}
+
+@keyframes image-preview-enter-next {
+  from {
+    opacity: 0.58;
+    transform: translateX(38rpx) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes image-preview-enter-previous {
+  from {
+    opacity: 0.58;
+    transform: translateX(-38rpx) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
 }
 </style>

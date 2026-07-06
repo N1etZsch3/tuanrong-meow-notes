@@ -65,6 +65,7 @@ function Assert-Before {
 }
 
 $deployScript = Read-RequiredFile (Join-Path $repoRoot "scripts/deploy-backend.ps1")
+$bootstrapScript = Read-RequiredFile (Join-Path $repoRoot "scripts/bootstrap-server-ssh-key.ps1")
 $nginxConfig = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap.conf")
 $frontendEnv = Read-RequiredFile (Join-Path $repoRoot "frontend/src/config/app-env.ts")
 $frontendEnvExample = Read-RequiredFile (Join-Path $repoRoot "frontend/.env.example")
@@ -73,6 +74,26 @@ Assert-NotContains `
     -Content $deployScript `
     -Needle "server_key.txt" `
     -Message "deploy-backend.ps1 must not reference the server password file."
+
+Assert-Contains `
+    -Content $deployScript `
+    -Needle '[string] $ServerHost = "49.235.238.143"' `
+    -Message "deploy-backend.ps1 must default to the current backend deployment host."
+
+Assert-Contains `
+    -Content $bootstrapScript `
+    -Needle '[string] $ServerHost = "49.235.238.143"' `
+    -Message "bootstrap-server-ssh-key.ps1 must default to the current backend deployment host."
+
+Assert-NotContains `
+    -Content $deployScript `
+    -Needle '[string] $ServerHost = "203.0.113.10"' `
+    -Message "deploy-backend.ps1 must not default to the old documentation placeholder host."
+
+Assert-NotContains `
+    -Content $bootstrapScript `
+    -Needle '[string] $ServerHost = "203.0.113.10"' `
+    -Message "bootstrap-server-ssh-key.ps1 must not default to the old documentation placeholder host."
 
 Assert-Contains `
     -Content $deployScript `
@@ -94,6 +115,11 @@ Assert-Contains `
     -Content $deployScript `
     -Needle '$healthUrl = "http://$ServerHost/api/v1/health"' `
     -Message "deploy-backend.ps1 must derive the health endpoint from ServerHost."
+
+Assert-Contains `
+    -Content $nginxConfig `
+    -Needle "server_name 49.235.238.143" `
+    -Message "Nginx config must include the current backend deployment host."
 
 Assert-Contains `
     -Content $nginxConfig `

@@ -1,8 +1,8 @@
 param(
-    [string] $ServerHost = "203.0.113.10",
+    [string] $ServerHost = "49.235.238.143",
     [string] $ServerUser = "root",
     [int] $SshPort = 22,
-    [string] $Domain = "catmap.example.com",
+    [string] $Domain = "49.235.238.143",
     [string] $DeployDir = "/opt/catmap/backend",
     [string] $ServiceName = "catmap-backend",
     [string] $SshKeyPath = (Join-Path $env:USERPROFILE ".ssh\catmap_deploy_ed25519"),

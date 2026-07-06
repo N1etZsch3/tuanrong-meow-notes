@@ -112,6 +112,11 @@ def test_member_can_create_medicine_and_read_catalog_summary(api_client, db_sess
                 "description": "常用抗生素",
                 "usage_notes": "遵医嘱使用",
                 "cover_image_url": "https://img.example.com/amoxicillin.jpg",
+                "photo_urls": [
+                    "https://img.example.com/amoxicillin.jpg",
+                    "https://img.example.com/amoxicillin-box.jpg",
+                    "https://img.example.com/amoxicillin-label.jpg",
+                ],
             },
             "initial_quantity": 20,
             "remark": "第一次建档",
@@ -135,6 +140,20 @@ def test_member_can_create_medicine_and_read_catalog_summary(api_client, db_sess
     assert cover_photo is not None
     assert cover_photo.file_url == "https://img.example.com/amoxicillin.jpg"
     assert cover_photo.uploaded_by == member.id
+    photos = db_session.scalars(
+        select(MedicinePhoto)
+        .where(
+            MedicinePhoto.medicine_id == UUID(created["medicine_id"]),
+            MedicinePhoto.deleted_at.is_(None),
+        )
+        .order_by(MedicinePhoto.sort_order)
+    ).all()
+    assert [photo.file_url for photo in photos] == [
+        "https://img.example.com/amoxicillin.jpg",
+        "https://img.example.com/amoxicillin-box.jpg",
+        "https://img.example.com/amoxicillin-label.jpg",
+    ]
+    assert [photo.photo_type for photo in photos] == ["cover", "gallery", "gallery"]
 
     list_response = api_client.get("/api/v1/medicines", headers=headers)
     assert list_response.status_code == 200

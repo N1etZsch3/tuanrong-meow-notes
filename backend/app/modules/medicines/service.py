@@ -60,6 +60,7 @@ DEFAULT_CATEGORIES = [
     ("营养补充", "nutrition"),
     ("其他", "other"),
 ]
+MEDICINE_PHOTO_LIMIT = 5
 
 
 def _now() -> datetime:
@@ -135,6 +136,53 @@ def _upsert_cover_photo(
             created_at=now,
         ),
     )
+
+
+def _catalog_photo_urls(
+    *,
+    cover_image_url: str | None,
+    photo_urls: list[str] | None,
+) -> list[str]:
+    urls: list[str] = []
+    if photo_urls:
+        urls.extend(photo_urls)
+    if cover_image_url:
+        urls.insert(0, cover_image_url)
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for url in urls:
+        value = url.strip()
+        if not value or value in seen:
+            continue
+        normalized.append(value)
+        seen.add(value)
+        if len(normalized) >= MEDICINE_PHOTO_LIMIT:
+            break
+    return normalized
+
+
+def _create_catalog_photos(
+    db: Session,
+    *,
+    catalog: MedicineCatalog,
+    photo_urls: list[str],
+    user: User,
+    now: datetime,
+) -> None:
+    for index, file_url in enumerate(photo_urls):
+        db.add(
+            MedicinePhoto(
+                medicine_id=catalog.id,
+                file_url=file_url,
+                thumbnail_url=None,
+                photo_type="cover" if index == 0 else "gallery",
+                caption="药品封面" if index == 0 else "药品照片",
+                sort_order=index,
+                uploaded_by=user.id,
+                created_at=now,
+            ),
+        )
 
 
 def _user_payload(user: User | None) -> dict | None:
@@ -526,6 +574,11 @@ def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) 
     else:
         assert payload.catalog is not None
         _get_category_or_raise(db, payload.catalog.category_id)
+        photo_urls = _catalog_photo_urls(
+            cover_image_url=payload.catalog.cover_image_url,
+            photo_urls=payload.catalog.photo_urls,
+        )
+        cover_image_url = payload.catalog.cover_image_url or (photo_urls[0] if photo_urls else None)
         catalog = MedicineCatalog(
             name=payload.catalog.name,
             category_id=payload.catalog.category_id,
@@ -533,7 +586,7 @@ def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) 
             unit=payload.catalog.unit,
             description=payload.catalog.description,
             usage_notes=payload.catalog.usage_notes,
-            cover_image_url=payload.catalog.cover_image_url,
+            cover_image_url=cover_image_url,
             created_by=user.id,
             updated_by=user.id,
             created_at=now,
@@ -541,10 +594,10 @@ def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) 
         )
         db.add(catalog)
         db.flush()
-        _upsert_cover_photo(
+        _create_catalog_photos(
             db,
             catalog=catalog,
-            file_url=payload.catalog.cover_image_url,
+            photo_urls=photo_urls,
             user=user,
             now=now,
         )

@@ -65,6 +65,12 @@ describe("medicine management pages", () => {
     expect(medicineCreateSource).toContain('class="catalog-suggestion-list"');
     expect(medicineCreateSource).toContain('class="selected-medicine-tag"');
     expect(medicineCreateSource).toContain("clearSelectedMedicine");
+    expect(medicineCreateSource).toContain("MEDICINE_IMAGE_LIMIT");
+    expect(medicineCreateSource).toContain("remainingImageSlots");
+    expect(medicineCreateSource).toContain("count: remainingImageSlots.value");
+    expect(medicineCreateSource).toContain('usage_type: "medicine_photo"');
+    expect(medicineCreateSource).not.toContain('usage_type: "medicine_cover"');
+    expect(medicineCreateSource).toContain('v-for="photo in draft.photo_urls"');
     expect(medicineCreateSource).toContain("chooseMedicineImage");
     expect(medicineCreateSource).toContain("uploadImage");
     expect(medicineCreateSource).toContain("cover_image_url");
@@ -108,6 +114,10 @@ describe("medicine management pages", () => {
     newDraft.specification = "250mg/片";
     newDraft.unit = "片";
     newDraft.cover_image_url = "https://img.example.com/amoxicillin.jpg";
+    newDraft.photo_urls = [
+      "https://img.example.com/amoxicillin.jpg",
+      "https://img.example.com/amoxicillin-box.jpg",
+    ];
     newDraft.initial_quantity = 12;
     newDraft.remark = " 第一次建档 ";
 
@@ -121,6 +131,10 @@ describe("medicine management pages", () => {
         description: null,
         usage_notes: null,
         cover_image_url: "https://img.example.com/amoxicillin.jpg",
+        photo_urls: [
+          "https://img.example.com/amoxicillin.jpg",
+          "https://img.example.com/amoxicillin-box.jpg",
+        ],
       },
       initial_quantity: 12,
       remark: "第一次建档",
@@ -140,6 +154,7 @@ describe("medicine management pages", () => {
         description: null,
         usage_notes: null,
         cover_image_url: null,
+        photo_urls: [],
       },
       initial_quantity: 1,
       remark: null,
@@ -181,6 +196,7 @@ describe("medicine management pages", () => {
       description: "",
       usage_notes: "",
       cover_image_url: "",
+      photo_urls: [],
       initial_quantity: 3,
     });
   });

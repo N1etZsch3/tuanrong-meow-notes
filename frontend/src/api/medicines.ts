@@ -69,6 +69,7 @@ export interface MedicineCatalogPayload {
   description?: string | null;
   usage_notes?: string | null;
   cover_image_url?: string | null;
+  photo_urls?: string[];
 }
 
 export interface MedicineSearchItemDto extends MedicineCatalogPayload {

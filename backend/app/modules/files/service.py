@@ -27,6 +27,7 @@ OWNER_TYPES = {
     "observation",
     "supply_point",
     "supply_point_record",
+    "medicine_catalog",
     "temporary",
 }
 VISIBILITIES = {"private", "internal", "public"}

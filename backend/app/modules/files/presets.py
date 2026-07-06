@@ -149,6 +149,13 @@ USAGE_TYPE_CONFIGS: dict[str, UsageTypeConfig] = {
         DEFAULT_MAX_FILE_SIZE_BYTES,
         DEFAULT_MAX_BATCH_COUNT,
     ),
+    "medicine_photo": UsageTypeConfig(
+        "medicine_photo",
+        "药品照片",
+        "normal_photo_v1",
+        DEFAULT_MAX_FILE_SIZE_BYTES,
+        5,
+    ),
     "observation_photo": UsageTypeConfig(
         "observation_photo",
         "观察记录照片",

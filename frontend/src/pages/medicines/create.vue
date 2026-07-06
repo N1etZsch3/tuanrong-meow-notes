@@ -108,27 +108,35 @@
           </view>
           <view class="field-group">
             <text class="field-label">药品图片</text>
+            <text class="field-hint">最多上传 5 张，第一张将作为封面。</text>
             <view class="medicine-photo-row">
-              <view v-if="draft.cover_image_url" class="medicine-photo-card">
-                <image class="medicine-photo" :src="draft.cover_image_url" mode="aspectFill" />
+              <view
+                v-for="photo in draft.photo_urls"
+                :key="photo"
+                class="medicine-photo-card"
+              >
+                <image class="medicine-photo" :src="photo" mode="aspectFill" />
                 <button
                   v-if="!isCatalogLinked"
                   class="photo-remove"
                   hover-class="button-hover"
-                  @tap="removeMedicineImage"
+                  @tap="removeMedicineImage(photo)"
                 >
                   ×
                 </button>
               </view>
               <button
-                v-if="!isCatalogLinked"
+                v-if="!isCatalogLinked && remainingImageSlots > 0"
                 class="photo-upload"
                 :loading="isUploadingImage"
                 hover-class="button-hover"
                 @tap="chooseMedicineImage"
               >
-                {{ draft.cover_image_url ? "更换图片" : "+" }}
+                +
               </button>
+              <text v-if="!isCatalogLinked" class="hint-line">
+                已上传 {{ draft.photo_urls.length }}/{{ MEDICINE_IMAGE_LIMIT }} 张
+              </text>
               <text v-if="isCatalogLinked" class="hint-line">
                 图片来自已关联的药品主档，取消关联后可重新上传。
               </text>
@@ -228,6 +236,7 @@ import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 type PickerChangeEvent = { detail: { value: string | number } };
 
 const userStore = useUserStore();
+const MEDICINE_IMAGE_LIMIT = 5;
 const draft = ref(createDefaultMedicineDraft());
 const categories = ref<MedicineCategoryDto[]>([]);
 const catalogSuggestions = ref<MedicineSearchItemDto[]>([]);
@@ -239,6 +248,9 @@ let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchRequestSeq = 0;
 
 const isCatalogLinked = computed(() => isMedicineCatalogLinked(draft.value));
+const remainingImageSlots = computed(() =>
+  Math.max(MEDICINE_IMAGE_LIMIT - draft.value.photo_urls.length, 0),
+);
 const categoryOptions = computed(() => [
   { label: "请选择分类", value: "" },
   ...categories.value.map((category) => ({
@@ -384,35 +396,51 @@ function chooseMedicineImage() {
   if (isCatalogLinked.value) {
     return;
   }
+  if (remainingImageSlots.value <= 0) {
+    uni.showToast({ title: "最多上传 5 张图片", icon: "none" });
+    return;
+  }
   uni.chooseImage({
-    count: 1,
+    count: remainingImageSlots.value,
     sizeType: ["compressed"],
     sourceType: ["album", "camera"],
     success: (result) => {
-      const [path] = Array.isArray(result.tempFilePaths)
+      const paths = Array.isArray(result.tempFilePaths)
         ? result.tempFilePaths
         : [result.tempFilePaths].filter(Boolean);
-      if (path) {
-        void uploadMedicineImage(path);
+      if (paths.length) {
+        void uploadMedicineImages(paths.slice(0, remainingImageSlots.value));
       }
     },
   });
 }
 
-async function uploadMedicineImage(path: string) {
+async function uploadMedicineImages(paths: string[]) {
   const token = await getAccessToken();
-  if (!token) {
+  if (!token || !paths.length) {
     return;
   }
   isUploadingImage.value = true;
   try {
-    const asset = await uploadImage(token, path, {
-      usage_type: "medicine_cover",
-      owner_type: "medicine_catalog",
-      visibility: "internal",
-      caption: "药品图片",
-    });
-    draft.value.cover_image_url = asset.default_url;
+    const uploadedUrls: string[] = [];
+    for (const path of paths) {
+      if (draft.value.photo_urls.length + uploadedUrls.length >= MEDICINE_IMAGE_LIMIT) {
+        break;
+      }
+      const asset = await uploadImage(token, path, {
+        usage_type: "medicine_photo",
+        owner_type: "medicine_catalog",
+        visibility: "internal",
+        caption: "药品图片",
+      });
+      uploadedUrls.push(asset.default_url);
+    }
+    const nextPhotos = [...draft.value.photo_urls, ...uploadedUrls].slice(
+      0,
+      MEDICINE_IMAGE_LIMIT,
+    );
+    draft.value.photo_urls = nextPhotos;
+    draft.value.cover_image_url = nextPhotos[0] || "";
     uni.showToast({ title: "图片已上传", icon: "success" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "上传失败";
@@ -422,9 +450,10 @@ async function uploadMedicineImage(path: string) {
   }
 }
 
-function removeMedicineImage() {
+function removeMedicineImage(photo: string) {
   if (!isCatalogLinked.value) {
-    draft.value.cover_image_url = "";
+    draft.value.photo_urls = draft.value.photo_urls.filter((item) => item !== photo);
+    draft.value.cover_image_url = draft.value.photo_urls[0] || "";
   }
 }
 
@@ -534,6 +563,7 @@ onLoad(() => {
 .nav-subtitle,
 .section-title,
 .field-label,
+.field-hint,
 .hint-line,
 .suggestion-name,
 .suggestion-meta,
@@ -586,6 +616,13 @@ onLoad(() => {
   color: #596372;
   font-size: 23rpx;
   font-weight: 800;
+}
+
+.field-hint {
+  margin: -2rpx 0 14rpx;
+  color: #667085;
+  font-size: 22rpx;
+  font-weight: 700;
 }
 
 .form-input,

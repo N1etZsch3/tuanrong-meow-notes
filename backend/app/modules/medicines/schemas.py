@@ -12,6 +12,7 @@ class MedicineCatalogCreateRequest(BaseModel):
     description: str | None = Field(default=None, max_length=1000)
     usage_notes: str | None = Field(default=None, max_length=1000)
     cover_image_url: str | None = Field(default=None, max_length=512)
+    photo_urls: list[str] = Field(default_factory=list, max_length=5)
 
     @field_validator(
         "name",
@@ -24,6 +25,11 @@ class MedicineCatalogCreateRequest(BaseModel):
     @classmethod
     def strip_text(cls, value: str | None) -> str | None:
         return value.strip() if isinstance(value, str) else value
+
+    @field_validator("photo_urls")
+    @classmethod
+    def strip_photo_urls(cls, value: list[str]) -> list[str]:
+        return [item.strip() for item in value if item.strip()]
 
 
 class MedicineCreateRequest(BaseModel):

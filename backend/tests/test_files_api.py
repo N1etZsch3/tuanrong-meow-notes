@@ -142,6 +142,9 @@ def test_get_file_upload_config_returns_image_limits(api_client, db_session):
     assert "user_avatar" in {item["usage_type"] for item in data["usage_types"]}
     assert "task_checkin_photo" in {item["usage_type"] for item in data["usage_types"]}
     assert "supply_record_photo" in {item["usage_type"] for item in data["usage_types"]}
+    usage_configs = {item["usage_type"]: item for item in data["usage_types"]}
+    assert usage_configs["medicine_photo"]["label"] == "药品照片"
+    assert usage_configs["medicine_photo"]["max_batch_count"] == 5
 
 
 def test_upload_user_avatar_allows_incomplete_profile_and_creates_variants(api_client, db_session):
@@ -311,6 +314,30 @@ def test_member_can_upload_supply_record_photo(api_client, db_session):
     data = response.json()["data"]
     assert data["usage_type"] == "supply_record_photo"
     assert data["owner_type"] == "supply_point_record"
+
+
+def test_member_can_upload_medicine_photo(api_client, db_session):
+    install_fake_storage(api_client)
+    member = create_user(
+        db_session,
+        student_no="trmx0015",
+        password="trmx0015",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    token = create_token(member)
+
+    response = api_client.post(
+        "/api/v1/files/images",
+        headers=auth_headers(token),
+        data={"usage_type": "medicine_photo", "owner_type": "medicine_catalog"},
+        files={"file": ("medicine.jpg", image_bytes(), "image/jpeg")},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["usage_type"] == "medicine_photo"
+    assert data["owner_type"] == "medicine_catalog"
 
 
 def test_upload_rejects_corrupt_image(api_client, db_session):

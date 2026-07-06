@@ -17,6 +17,7 @@ export interface MedicineCreateDraft {
   description: string;
   usage_notes: string;
   cover_image_url: string;
+  photo_urls: string[];
   initial_quantity: number;
   remark: string;
 }
@@ -71,6 +72,20 @@ function nullableTrim(value: string): string | null {
   return normalized || null;
 }
 
+function normalizedPhotoUrls(photoUrls: string[]): string[] {
+  const seen = new Set<string>();
+  return photoUrls
+    .map((item) => item.trim())
+    .filter((item) => {
+      if (!item || seen.has(item)) {
+        return false;
+      }
+      seen.add(item);
+      return true;
+    })
+    .slice(0, 5);
+}
+
 export function createDefaultMedicineDraft(): MedicineCreateDraft {
   return {
     selected_medicine_id: "",
@@ -81,6 +96,7 @@ export function createDefaultMedicineDraft(): MedicineCreateDraft {
     description: "",
     usage_notes: "",
     cover_image_url: "",
+    photo_urls: [],
     initial_quantity: 0,
     remark: "",
   };
@@ -104,6 +120,11 @@ export function applySelectedMedicineToDraft(
     description: medicine.description || "",
     usage_notes: medicine.usage_notes || "",
     cover_image_url: medicine.cover_image_url || "",
+    photo_urls: medicine.photo_urls?.length
+      ? normalizedPhotoUrls(medicine.photo_urls)
+      : medicine.cover_image_url
+        ? [medicine.cover_image_url]
+        : [],
   };
 }
 
@@ -118,6 +139,7 @@ export function clearSelectedMedicineDraft(draft: MedicineCreateDraft): Medicine
     description: "",
     usage_notes: "",
     cover_image_url: "",
+    photo_urls: [],
   };
 }
 
@@ -142,6 +164,8 @@ export function validateMedicineCreateDraft(
 export function buildMedicineCreatePayload(
   draft: MedicineCreateDraft,
 ): MedicineCreatePayload {
+  const photoUrls = normalizedPhotoUrls(draft.photo_urls);
+  const coverImageUrl = photoUrls[0] || nullableTrim(draft.cover_image_url);
   const basePayload = {
     initial_quantity: Number(draft.initial_quantity),
     remark: nullableTrim(draft.remark),
@@ -163,7 +187,8 @@ export function buildMedicineCreatePayload(
       unit: draft.unit.trim(),
       description: nullableTrim(draft.description),
       usage_notes: nullableTrim(draft.usage_notes),
-      cover_image_url: nullableTrim(draft.cover_image_url),
+      cover_image_url: coverImageUrl,
+      photo_urls: photoUrls,
     },
   };
 }

@@ -129,17 +129,31 @@ git check-ignore -q .worktrees
 
 If `.worktrees` is not ignored, add it to the appropriate ignore file before creating any worktree.
 
-4. For normal feature, fix, or documentation work, use the latest `dev` baseline. First fetch, then compare the local `.worktrees/dev` branch with `origin/dev`:
+4. For normal feature, fix, or documentation work, the development baseline is always the local `dev` branch checked out at:
 
-```bash
-git fetch origin
-git -C .worktrees/dev status --short --branch
-git rev-list --left-right --count origin/dev...dev
+```text
+D:\Study\Project\CatMap\.worktrees\dev
 ```
 
-If `.worktrees/dev` is ahead of `origin/dev`, create the focused branch from local `dev` because it contains the latest accepted local development code. If `origin/dev` is newer, update the dev worktree first with `git -C .worktrees/dev pull --ff-only origin dev`, then branch from `dev`. Do not touch unrelated uncommitted files in `.worktrees/dev`; branch from its committed `HEAD` unless the user explicitly asks to include local uncommitted changes.
+In this project, "branch from `dev`" means branch from the committed `HEAD` of that local `.worktrees/dev` worktree. Do not create feature, fix, or documentation branches directly from `origin/dev`. `origin/dev` is only a remote reference used to update or compare the local dev worktree.
 
-5. Create the focused branch as a new worktree:
+5. Before creating or rebasing a focused worktree, fetch from the repository root and compare the local dev worktree with the remote:
+
+```bash
+git -C D:\Study\Project\CatMap fetch origin
+git -C D:\Study\Project\CatMap\.worktrees\dev status --short --branch
+git -C D:\Study\Project\CatMap\.worktrees\dev rev-list --left-right --count origin/dev...dev
+```
+
+If `.worktrees/dev` is ahead of `origin/dev`, keep that local `dev` as the source of truth because it contains accepted local development work. If `origin/dev` is newer, update the dev worktree first:
+
+```bash
+git -C D:\Study\Project\CatMap\.worktrees\dev pull --ff-only origin dev
+```
+
+After that update, still create or rebase the focused branch from the local `.worktrees/dev` `HEAD`, not from `origin/dev`. Do not touch unrelated uncommitted files in `.worktrees/dev`; branch from its committed `HEAD` unless the user explicitly asks to include local uncommitted changes.
+
+6. Create the focused branch as a new project-local worktree from the local `dev` branch. Run this from `D:\Study\Project\CatMap`:
 
 ```bash
 git worktree add .worktrees/fix-<bug-or-module> -b fix/<bug-or-module> dev
@@ -147,17 +161,17 @@ git worktree add .worktrees/fix-<bug-or-module> -b fix/<bug-or-module> dev
 
 Use `feature/<module-or-task>` for feature work, `fix/<bug-or-module>` for non-urgent bug fixes, and `docs/<topic>` for documentation-only changes. The worktree directory name should be path-safe, for example `.worktrees/fix-map-point-detail-bugs` for branch `fix/map-point-detail-bugs`.
 
-6. Local env files are required for this project to run tests and builds. After creating a worktree, copy the valid ignored env files from `.worktrees/dev` into the new worktree using the same relative paths, such as `frontend/.env.production`, `frontend/.env`, `backend/.env`, or root `.env` when those files exist. Do not print env file contents, do not commit env files, and verify they remain ignored with `git status --short --ignored -- <env-file>`. If the required env file is missing from `.worktrees/dev`, stop and ask the user rather than inventing placeholder credentials.
+7. Local env files are required for this project to run tests and builds. After creating a worktree, copy the valid ignored env files from `.worktrees/dev` into the new worktree using the same relative paths, such as `frontend/.env.production`, `frontend/.env`, `backend/.env`, or root `.env` when those files exist. Do not print env file contents, do not commit env files, and verify they remain ignored with `git status --short --ignored -- <env-file>`. If the required env file is missing from `.worktrees/dev`, stop and ask the user rather than inventing placeholder credentials.
 
-7. Mini Program AppIDs are required to be correct for local development, local verification, and release builds. Keep `frontend/project.config.json` and `frontend/src/manifest.json` aligned with the authorized AppID in local `dev`, feature/fix worktrees, and release worktrees. Treat the AppID as push-sensitive rather than local-development-sensitive: do not print it unnecessarily, and before pushing to a remote, inspect the staged diff and the commit range being pushed. Unless the user explicitly approves pushing the real AppID to that remote, create a push-safe state or branch that does not expose the real AppID.
+8. Mini Program AppIDs are required to be correct for local development, local verification, and release builds. Keep `frontend/project.config.json` and `frontend/src/manifest.json` aligned with the authorized AppID in local `dev`, feature/fix worktrees, and release worktrees. Treat the AppID as push-sensitive rather than local-development-sensitive: do not print it unnecessarily, and before pushing to a remote, inspect the staged diff and the commit range being pushed. Unless the user explicitly approves pushing the real AppID to that remote, create a push-safe state or branch that does not expose the real AppID.
 
-8. Finish the focused branch inside its worktree, run the relevant verification, update `docs/开发进度.md`, then merge the branch back into `dev`.
-9. Do not develop normal feature work directly on `main`. `main` is for released code, release candidates, and urgent production hotfixes. Even urgent hotfix coding should be done in a `hotfix/<version-or-topic>` worktree created from `main`; return to the repository root only for the final verified merge into `main` and release tag.
-10. When a planned version is ready, create `release/<version>` from `dev` in `.worktrees/release-<version>`. Freeze new features there; only allow release bug fixes, version notes, documentation updates, and deployment hardening. After verification, return to the repository root, merge `release/<version>` into `main`, create an annotated tag such as `v1.1.0`, push `main` and the tag, then merge the release branch back into `dev`.
-11. For an urgent production fix, create `hotfix/<version-or-topic>` from `main` in `.worktrees/hotfix-<version-or-topic>`, verify the fix there, then return to the repository root to merge it into `main`, tag the patch release such as `v1.0.1`, push `main` and the tag, then merge or cherry-pick the same fix back into `dev`.
-12. Before committing or pushing, stage explicit files only. Do not use `git add .` when untracked local files, private documents, secrets, screenshots, or scratch directories are present.
-13. Before pushing to a remote, check for information leaks in the staged diff and the commit range being pushed. Look for real server IPs, private domains, map keys, Mini Program AppIDs, COS identifiers, access tokens, private keys, passwords, `.env` values, and deployment credentials.
-14. Push only the intended branch or tag. Never run `git push --all origin`, and do not push old local `feature/`, `fix/`, or `codex/` branches unless the user explicitly asks.
+9. Finish the focused branch inside its worktree, run the relevant verification, update `docs/开发进度.md`, then merge the branch back into `dev`.
+10. Do not develop normal feature work directly on `main`. `main` is for released code, release candidates, and urgent production hotfixes. Even urgent hotfix coding should be done in a `hotfix/<version-or-topic>` worktree created from `main`; return to the repository root only for the final verified merge into `main` and release tag.
+11. When a planned version is ready, create `release/<version>` from `dev` in `.worktrees/release-<version>`. Freeze new features there; only allow release bug fixes, version notes, documentation updates, and deployment hardening. After verification, return to the repository root, merge `release/<version>` into `main`, create an annotated tag such as `v1.1.0`, push `main` and the tag, then merge the release branch back into `dev`.
+12. For an urgent production fix, create `hotfix/<version-or-topic>` from `main` in `.worktrees/hotfix-<version-or-topic>`, verify the fix there, then return to the repository root to merge it into `main`, tag the patch release such as `v1.0.1`, push `main` and the tag, then merge or cherry-pick the same fix back into `dev`.
+13. Before committing or pushing, stage explicit files only. Do not use `git add .` when untracked local files, private documents, secrets, screenshots, or scratch directories are present.
+14. Before pushing to a remote, check for information leaks in the staged diff and the commit range being pushed. Look for real server IPs, private domains, map keys, Mini Program AppIDs, COS identifiers, access tokens, private keys, passwords, `.env` values, and deployment credentials.
+15. Push only the intended branch or tag. Never run `git push --all origin`, and do not push old local `feature/`, `fix/`, or `codex/` branches unless the user explicitly asks.
 
 ### Required Test Deployment Rules
 

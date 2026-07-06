@@ -1,6 +1,6 @@
 {
     "name" : "猫协地图",
-    "appid" : "wx0000000000000000",
+    "appid" : "wx9db9a2416527af4b",
     "description" : "校园猫协地图任务系统微信小程序",
     "versionName" : "1.0.0",
     "versionCode" : "100",
@@ -50,7 +50,7 @@
     "quickapp" : {},
     /* 小程序特有相关 */
     "mp-weixin" : {
-        "appid" : "wx0000000000000000",
+        "appid" : "wx9db9a2416527af4b",
         "setting" : {
             "urlCheck" : false,
             "ignoreDevUnusedFiles" : false,

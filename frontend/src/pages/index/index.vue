@@ -175,9 +175,15 @@
               结束
             </button>
           </view>
-          <text class="navigation-route-step">
-            {{ navigationRouteFirstStep }}
-          </text>
+          <view class="navigation-route-steps">
+            <text
+              v-for="(step, index) in navigationRouteSteps"
+              :key="index"
+              class="navigation-route-step"
+            >
+              {{ navigationRouteStepText(step, index) }}
+            </text>
+          </view>
         </view>
 
         <view v-else-if="selectedSummary" class="summary-card">
@@ -234,9 +240,6 @@
               {{ summaryPoiDescriptionText }}
             </text>
           </view>
-          <text v-if="selectedSummary.route_instruction" class="summary-route">
-            {{ selectedSummary.route_instruction }}
-          </text>
           <view class="summary-actions">
             <button
               v-for="action in summaryActions"
@@ -580,7 +583,34 @@ const summaryPreviewUrls = computed(() => {
     .filter((url) => url);
   return urls.length || !summaryAvatarUrl.value ? urls : [summaryAvatarUrl.value];
 });
-const summaryTypeTag = computed(() => selectedSummary.value?.tags[0] || "");
+function getSummaryPointTypeLabel(
+  pointType: string,
+  businessType: string | null | undefined,
+): string {
+  if (pointType === "task") {
+    if (businessType === "emergency") {
+      return "紧急任务";
+    }
+    if (businessType === "feeding") {
+      return "投喂任务";
+    }
+    return "日常任务";
+  }
+
+  const labels: Record<string, string> = {
+    cat: "猫咪点",
+    supply: "物资点",
+    landmark: "地标",
+  };
+
+  return labels[pointType] || getMapFilterLabel(resolveMapShellItemType(pointType, businessType));
+}
+
+const summaryPointTypeLabel = computed(() => {
+  const summary = selectedSummary.value;
+  return summary ? getSummaryPointTypeLabel(summary.point_type, summary.business_type) : "";
+});
+const summaryTypeTag = computed(() => summaryPointTypeLabel.value);
 const summaryActions = computed<CardActionDto[]>(() => {
   if (!selectedSummary.value) {
     return [];
@@ -769,10 +799,26 @@ const navigationRouteDuration = computed(() => {
   }
   return `约 ${Math.max(1, Math.round(seconds / 60))} 分钟`;
 });
-const navigationRouteFirstStep = computed(() => {
-  const step = navigationRoute.value?.steps[0];
-  return step?.instruction || "路线已规划，可在地图上查看绿色路线。";
+const navigationRouteSteps = computed<NavigationRouteState["steps"]>(() => {
+  const steps = navigationRoute.value?.steps || [];
+  const visibleSteps = steps.filter((step) => step.instruction.trim());
+  return visibleSteps.length
+    ? visibleSteps
+    : [
+        {
+          instruction: "路线已规划，可在地图上查看绿色路线。",
+          distance_meters: 0,
+          duration_seconds: 0,
+          points: [],
+        },
+      ];
 });
+function navigationRouteStepText(
+  step: NavigationRouteState["steps"][number],
+  index: number,
+): string {
+  return `${index + 1}、${step.instruction.trim() || "继续前行"}`;
+}
 const editedPointLocationText = computed(() => {
   const point = editedPointLocation.value || selectedSummary.value;
   if (!point) {
@@ -3356,8 +3402,14 @@ onBeforeUnmount(() => {
   margin-top: 8rpx;
 }
 
+.navigation-route-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
 .navigation-route-step {
-  padding: 16rpx 18rpx;
+  padding: 14rpx 18rpx;
   border-radius: 18rpx;
   background: rgba(255, 255, 255, 0.76);
 }
@@ -3461,7 +3513,7 @@ onBeforeUnmount(() => {
 }
 
 .summary-photo-cell {
-  height: 118rpx;
+  height: 156rpx;
   margin: 0;
   padding: 0;
   border: 0;
@@ -3482,18 +3534,11 @@ onBeforeUnmount(() => {
   transform: translateY(2rpx);
 }
 
-.summary-desc,
-.summary-route {
+.summary-desc {
   color: #4b5563;
   font-size: 24rpx;
   font-weight: 700;
   line-height: 1.55;
-}
-
-.summary-route {
-  padding: 14rpx 16rpx;
-  border-radius: 18rpx;
-  background: #f5faef;
 }
 
 .summary-poi {

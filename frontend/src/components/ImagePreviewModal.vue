@@ -9,7 +9,12 @@
       <text class="image-preview-count">{{ activeIndex + 1 }} / {{ safeImages.length }}</text>
     </view>
 
-    <movable-area class="image-preview-area" :style="imageAreaStyle">
+    <movable-area
+      class="image-preview-area"
+      :style="imageAreaStyle"
+      @touchstart="handlePreviewTouchStart"
+      @touchend="handlePreviewTouchEnd"
+    >
       <movable-view
         :key="activeUrl"
         class="image-preview-movable"
@@ -30,23 +35,6 @@
         />
       </movable-view>
     </movable-area>
-
-    <button
-      v-if="safeImages.length > 1"
-      class="image-preview-nav image-preview-prev"
-      hover-class="image-preview-button-hover"
-      @tap.stop="showPrevious"
-    >
-      ‹
-    </button>
-    <button
-      v-if="safeImages.length > 1"
-      class="image-preview-nav image-preview-next"
-      hover-class="image-preview-button-hover"
-      @tap.stop="showNext"
-    >
-      ›
-    </button>
   </view>
 </template>
 
@@ -74,7 +62,10 @@ const viewportSize = {
   width: systemInfo.windowWidth || 375,
   height: systemInfo.windowHeight || 667,
 };
+const SWIPE_MIN_DISTANCE = 48;
+const SWIPE_AXIS_RATIO = 1.2;
 const imageNaturalSize = ref<{ width: number; height: number } | null>(null);
+const previewTouchStart = ref<{ x: number; y: number } | null>(null);
 const safeImages = computed(() => props.images.filter((url) => Boolean(url)));
 const activeIndex = computed(() => {
   if (!safeImages.value.length) {
@@ -117,6 +108,70 @@ function handleImageLoad(event: Event) {
 
 function close() {
   emit("close");
+}
+
+type TouchPoint = {
+  clientX?: number;
+  clientY?: number;
+  pageX?: number;
+  pageY?: number;
+  x?: number;
+  y?: number;
+};
+
+type PreviewTouchEvent = Event & {
+  touches?: TouchPoint[];
+  changedTouches?: TouchPoint[];
+};
+
+function getTouchPoint(event: Event, preferChangedTouches = false) {
+  const touchEvent = event as PreviewTouchEvent;
+  const touch = preferChangedTouches
+    ? touchEvent.changedTouches?.[0] || touchEvent.touches?.[0]
+    : touchEvent.touches?.[0] || touchEvent.changedTouches?.[0];
+  const x = touch?.clientX ?? touch?.pageX ?? touch?.x;
+  const y = touch?.clientY ?? touch?.pageY ?? touch?.y;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  return { x: Number(x), y: Number(y) };
+}
+
+function handlePreviewTouchStart(event: Event) {
+  const touchEvent = event as PreviewTouchEvent;
+  if (touchEvent.touches && touchEvent.touches.length !== 1) {
+    previewTouchStart.value = null;
+    return;
+  }
+  previewTouchStart.value = getTouchPoint(event);
+}
+
+function handlePreviewTouchEnd(event: Event) {
+  if (safeImages.value.length <= 1 || !previewTouchStart.value) {
+    previewTouchStart.value = null;
+    return;
+  }
+
+  const start = previewTouchStart.value;
+  const end = getTouchPoint(event, true);
+  previewTouchStart.value = null;
+  if (!end) {
+    return;
+  }
+
+  const deltaX = end.x - start.x;
+  const deltaY = end.y - start.y;
+  const absX = Math.abs(deltaX);
+  const absY = Math.abs(deltaY);
+  if (absX < SWIPE_MIN_DISTANCE || absX < absY * SWIPE_AXIS_RATIO) {
+    return;
+  }
+
+  if (deltaX < 0) {
+    showNext();
+    return;
+  }
+  showPrevious();
 }
 
 function showPrevious() {
@@ -175,10 +230,6 @@ function showNext() {
   line-height: 1;
 }
 
-.image-preview-nav::after {
-  border: 0;
-}
-
 .image-preview-area {
   position: absolute;
   z-index: 2;
@@ -195,35 +246,5 @@ function showNext() {
 .image-preview-image {
   width: 100%;
   height: 100%;
-}
-
-.image-preview-nav {
-  position: absolute;
-  z-index: 3;
-  top: 50%;
-  width: 72rpx;
-  height: 72rpx;
-  margin: -36rpx 0 0;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
-  font-size: 58rpx;
-  font-weight: 900;
-  line-height: 66rpx;
-}
-
-.image-preview-prev {
-  left: 24rpx;
-}
-
-.image-preview-next {
-  right: 24rpx;
-}
-
-.image-preview-button-hover {
-  opacity: 0.84;
-  transform: translateY(2rpx);
 }
 </style>

@@ -19,6 +19,7 @@ logs/
 
 # Local project artifacts
 /test/
+.worktrees/
 喵扎特抓包/
 页面原型/
 frontend/页面原型/

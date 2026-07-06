@@ -21,12 +21,21 @@ describe("image preview modal", () => {
     expect(imagePreviewModalSource).toContain("emit(\"close\")");
   });
 
-  it("supports switching between multiple preview images inside the app", () => {
+  it("supports swiping between multiple preview images inside the app", () => {
+    expect(imagePreviewModalSource).toContain('@touchstart="handlePreviewTouchStart"');
+    expect(imagePreviewModalSource).toContain('@touchend="handlePreviewTouchEnd"');
     expect(imagePreviewModalSource).toContain("showPrevious");
     expect(imagePreviewModalSource).toContain("showNext");
     expect(imagePreviewModalSource).toContain("activeIndex");
     expect(imagePreviewModalSource).toContain("emit(\"change\"");
     expect(imagePreviewModalSource).not.toContain("uni.previewImage");
+  });
+
+  it("does not render side pagination buttons in the large image viewer", () => {
+    expect(imagePreviewModalSource).not.toContain("image-preview-nav");
+    expect(imagePreviewModalSource).not.toContain("image-preview-prev");
+    expect(imagePreviewModalSource).not.toContain("image-preview-next");
+    expect(imagePreviewModalSource).not.toContain("image-preview-button-hover");
   });
 
   it("keeps the counter below the phone status area", () => {

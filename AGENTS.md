@@ -111,26 +111,51 @@ Recommended module branch examples:
 
 Future agents should use this path unless the user explicitly asks for a different branch strategy.
 
-1. Before starting work, run `git status --short --branch`, check the current branch, and notice untracked local files.
-2. For normal feature, fix, or documentation work, start from `dev`:
+Default worktree location for this repository:
 
-```bash
-git switch dev
-git pull --ff-only origin dev
-git switch -c feature/<module-or-task>
+```text
+D:\Study\Project\CatMap\.worktrees
 ```
 
-If local `dev` is checked out in another worktree, fetch first and create the focused branch from `origin/dev`, or work inside the existing `dev` worktree.
+Use project-local worktrees under `.worktrees/` for ongoing AI development. The previous CatMap worktree under `C:\Users\N1etZsch3\.config\superpowers\worktrees` came from the superpowers global worktree fallback, not from this project's long-term convention. Do not create new CatMap worktrees there unless the user explicitly asks for a global worktree location. Keep the main workspace at `D:\Study\Project\CatMap` on `main` as the production-stable baseline, and use `.worktrees/dev` or focused `.worktrees/<branch-name>` directories for `dev`, `feature/*`, `fix/*`, `release/*`, and `hotfix/*` work.
 
-Use `fix/<bug-or-module>` for non-urgent bug fixes and `docs/<topic>` for documentation-only changes.
+1. Before starting work, run `git status --short --branch`, check the current branch, and notice untracked local files.
+2. Normal feature, fix, and documentation work must happen inside `.worktrees/<branch-slug>`, not in the repository root. The repository root should stay on `main` and should only be used for release integration, merging release or hotfix branches into `main`, creating annotated version tags, and other explicit release operations.
+3. Prefer the existing project-local `.worktrees` directory. Before creating a project-local worktree, verify it is ignored:
 
-3. Finish the focused branch, run the relevant verification, update `docs/开发进度.md`, then merge the branch back into `dev`.
-4. Do not develop normal feature work directly on `main`. `main` is for released code, release candidates, and urgent production hotfixes.
-5. When a planned version is ready, create `release/<version>` from `dev`. Freeze new features there; only allow release bug fixes, version notes, documentation updates, and deployment hardening. After verification, merge `release/<version>` into `main`, create an annotated tag such as `v1.1.0`, push `main` and the tag, then merge the release branch back into `dev`.
-6. For an urgent production fix, create `hotfix/<version-or-topic>` from `main`, verify the fix, merge it into `main`, tag the patch release such as `v1.0.1`, push `main` and the tag, then merge or cherry-pick the same fix back into `dev`.
-7. Before committing or pushing, stage explicit files only. Do not use `git add .` when untracked local files, private documents, secrets, screenshots, or scratch directories are present.
-8. Before pushing, check for information leaks in the staged diff and relevant files. Look for real server IPs, private domains, map keys, Mini Program AppIDs, COS identifiers, access tokens, private keys, passwords, `.env` values, and deployment credentials.
-9. Push only the intended branch or tag. Never run `git push --all origin`, and do not push old local `feature/`, `fix/`, or `codex/` branches unless the user explicitly asks.
+```bash
+git check-ignore -q .worktrees
+```
+
+If `.worktrees` is not ignored, add it to the appropriate ignore file before creating any worktree.
+
+4. For normal feature, fix, or documentation work, use the latest `dev` baseline. First fetch, then compare the local `.worktrees/dev` branch with `origin/dev`:
+
+```bash
+git fetch origin
+git -C .worktrees/dev status --short --branch
+git rev-list --left-right --count origin/dev...dev
+```
+
+If `.worktrees/dev` is ahead of `origin/dev`, create the focused branch from local `dev` because it contains the latest accepted local development code. If `origin/dev` is newer, update the dev worktree first with `git -C .worktrees/dev pull --ff-only origin dev`, then branch from `dev`. Do not touch unrelated uncommitted files in `.worktrees/dev`; branch from its committed `HEAD` unless the user explicitly asks to include local uncommitted changes.
+
+5. Create the focused branch as a new worktree:
+
+```bash
+git worktree add .worktrees/fix-<bug-or-module> -b fix/<bug-or-module> dev
+```
+
+Use `feature/<module-or-task>` for feature work, `fix/<bug-or-module>` for non-urgent bug fixes, and `docs/<topic>` for documentation-only changes. The worktree directory name should be path-safe, for example `.worktrees/fix-map-point-detail-bugs` for branch `fix/map-point-detail-bugs`.
+
+6. Local env files are required for this project to run tests and builds. After creating a worktree, copy the valid ignored env files from `.worktrees/dev` into the new worktree using the same relative paths, such as `frontend/.env.production`, `frontend/.env`, `backend/.env`, or root `.env` when those files exist. Do not print env file contents, do not commit env files, and verify they remain ignored with `git status --short --ignored -- <env-file>`. If the required env file is missing from `.worktrees/dev`, stop and ask the user rather than inventing placeholder credentials.
+
+7. Finish the focused branch inside its worktree, run the relevant verification, update `docs/开发进度.md`, then merge the branch back into `dev`.
+8. Do not develop normal feature work directly on `main`. `main` is for released code, release candidates, and urgent production hotfixes. Even urgent hotfix coding should be done in a `hotfix/<version-or-topic>` worktree created from `main`; return to the repository root only for the final verified merge into `main` and release tag.
+9. When a planned version is ready, create `release/<version>` from `dev` in `.worktrees/release-<version>`. Freeze new features there; only allow release bug fixes, version notes, documentation updates, and deployment hardening. After verification, return to the repository root, merge `release/<version>` into `main`, create an annotated tag such as `v1.1.0`, push `main` and the tag, then merge the release branch back into `dev`.
+10. For an urgent production fix, create `hotfix/<version-or-topic>` from `main` in `.worktrees/hotfix-<version-or-topic>`, verify the fix there, then return to the repository root to merge it into `main`, tag the patch release such as `v1.0.1`, push `main` and the tag, then merge or cherry-pick the same fix back into `dev`.
+11. Before committing or pushing, stage explicit files only. Do not use `git add .` when untracked local files, private documents, secrets, screenshots, or scratch directories are present.
+12. Before pushing, check for information leaks in the staged diff and relevant files. Look for real server IPs, private domains, map keys, Mini Program AppIDs, COS identifiers, access tokens, private keys, passwords, `.env` values, and deployment credentials.
+13. Push only the intended branch or tag. Never run `git push --all origin`, and do not push old local `feature/`, `fix/`, or `codex/` branches unless the user explicitly asks.
 
 For every feature branch:
 
@@ -614,7 +639,7 @@ Use this format:
 - 当前重点模块：
 - 当前分支：
 - 推荐 Git 标签：
-- 最近更新时间：
+- 最近更新时间：YYYY-MM-DD HH:mm:ss +08:00
 
 ## 模块状态
 
@@ -631,7 +656,7 @@ Use this format:
 
 ## 最近进展
 
-### YYYY-MM-DD
+### YYYY-MM-DD HH:mm:ss +08:00
 
 - 分支：
 - 完成：
@@ -664,6 +689,7 @@ Progress updates should include:
 - Known blockers.
 - Next recommended task.
 - Release version and Git tag when the work changes or documents a production release.
+- Current local timestamp with timezone. New progress entries, implementation plans, design notes, and other development documents should record the current time in `YYYY-MM-DD HH:mm:ss +08:00` format, not just the date.
 
 ## Handoff Format
 

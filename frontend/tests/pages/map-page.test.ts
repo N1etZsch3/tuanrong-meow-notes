@@ -434,7 +434,9 @@ describe("map page shell behavior", () => {
 
   it("shows only the title-side summary type badge in selected point detail cards", () => {
     expect(indexPageSource).toContain("summaryTypeTag");
+    expect(indexPageSource).toContain("summaryPointTypeLabel");
     expect(indexPageSource).toContain('class="summary-type-badge"');
+    expect(indexPageSource).not.toContain('selectedSummary.value?.tags[0] || ""');
     expect(indexPageSource).not.toContain('class="summary-tags"');
   });
 
@@ -524,6 +526,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("summaryLocationText");
     expect(indexPageSource).toContain("summaryPoiTitleText");
     expect(indexPageSource).not.toContain('v-if="selectedSummary.description" class="summary-desc"');
+    expect(indexPageSource).not.toContain('class="summary-route"');
     expect(indexPageSource).not.toContain("公共地点：{{ associatedPoi.name }}");
   });
 
@@ -539,6 +542,19 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("openImagePreview");
     expect(indexPageSource).toContain(".slice(1, 4)");
     expect(indexPageSource).not.toContain("uni.previewImage");
+  });
+
+  it("uses a taller selected point preview photo strip", () => {
+    const match = indexPageSource.match(/\.summary-photo-cell\s*\{[^}]*height:\s*(\d+)rpx;/);
+    expect(match).not.toBeNull();
+    expect(Number(match?.[1])).toBeGreaterThanOrEqual(156);
+  });
+
+  it("renders every navigation route step as a numbered line", () => {
+    expect(indexPageSource).toContain("navigationRouteSteps");
+    expect(indexPageSource).toContain("navigationRouteStepText");
+    expect(indexPageSource).toContain('v-for="(step, index) in navigationRouteSteps"');
+    expect(indexPageSource).not.toContain("navigationRouteFirstStep");
   });
 
   it("keeps navigation in the mini program map APIs", () => {

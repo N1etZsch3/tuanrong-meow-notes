@@ -883,7 +883,7 @@ onLoad((query) => {
 .hero-image,
 .hero-placeholder {
   width: 100%;
-  height: 388rpx;
+  height: 418rpx;
   border-radius: 28rpx;
   overflow: hidden;
 }

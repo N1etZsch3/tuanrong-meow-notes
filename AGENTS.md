@@ -159,6 +159,14 @@ Use `feature/<module-or-task>` for feature work, `fix/<bug-or-module>` for non-u
 13. Before pushing to a remote, check for information leaks in the staged diff and the commit range being pushed. Look for real server IPs, private domains, map keys, Mini Program AppIDs, COS identifiers, access tokens, private keys, passwords, `.env` values, and deployment credentials.
 14. Push only the intended branch or tag. Never run `git push --all origin`, and do not push old local `feature/`, `fix/`, or `codex/` branches unless the user explicitly asks.
 
+### Required Test Deployment Rules
+
+These rules apply to future backend-related development tasks unless the user explicitly changes them.
+
+1. The backend request host for integration and deployment verification is `http://49.235.238.143`.
+2. Environment files used for local production builds or deployment verification should be copied from the `dev` worktree/branch environment files before testing. Do not invent replacement `.env` values; if the required `dev` env file is missing, report the missing file before deployment.
+3. After backend code is ready, running the deployment script under `scripts/` is part of the required test pass. Use `scripts/deploy-backend.ps1` with the configured backend host and env file, then verify the deployed `/api/v1/health` result before handing off.
+
 For every feature branch:
 
 1. Read the required docs.

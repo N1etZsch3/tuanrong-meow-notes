@@ -179,12 +179,17 @@ function openBook(book: NoteBook) {
 }
 
 .page-inner {
+  --shelf-w: 680rpx;
+  --book-w: 150rpx;
+  --book-h: 242rpx;
   position: relative;
   z-index: 1;
   box-sizing: border-box;
-  min-height: 100vh;
+  height: 100vh;
   padding: var(--catmap-page-title-top, 92rpx) 28rpx
     calc(env(safe-area-inset-bottom) + 170rpx);
+  display: flex;
+  flex-direction: column;
 }
 
 .page-head {
@@ -236,29 +241,38 @@ function openBook(book: NoteBook) {
   --shade: 92, 62, 26;
   --ribbon-1: #7fa05a;
   --ribbon-2: #90b06b;
-  --book-w: 90px;
-  --book-h: calc(134px + 20rpx);
+  --shelf-w: 680rpx;
+  --book-w: 150rpx;
+  --book-h: 242rpx;
   box-sizing: border-box;
-  width: 100%;
-  max-width: 388px;
-  margin: 46rpx auto 0;
-  padding: 18px 18px 30px;
-  border-radius: 30px;
+  flex: 0 1 auto;
+  width: var(--shelf-w);
+  max-width: calc(100vw - 56rpx);
+  height: calc(100vh - 500rpx);
+  max-height: 1064rpx;
+  margin: 40rpx auto 0;
+  padding: 28rpx 28rpx 46rpx;
+  border-radius: 52rpx;
   background: linear-gradient(180deg, var(--frame-1) 0%, #f3e2be 60%, var(--frame-2) 100%);
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -3px 0 rgba(var(--shade), 0.12),
-    0 6px 14px -6px rgba(var(--shade), 0.28),
-    0 26px 48px -20px rgba(var(--shade), 0.38);
+    inset 0 4rpx 0 rgba(255, 255, 255, 0.55),
+    inset 0 -6rpx 0 rgba(var(--shade), 0.12),
+    0 12rpx 28rpx -12rpx rgba(var(--shade), 0.28),
+    0 44rpx 84rpx -36rpx rgba(var(--shade), 0.38);
 }
 
 .shelf__inner {
-  border-radius: 14px;
+  height: 100%;
+  border-radius: 24rpx;
   overflow: hidden;
-  box-shadow: 0 0 0 1px rgba(146, 108, 58, 0.2);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 0 0 2rpx rgba(146, 108, 58, 0.2);
 }
 
 .cell {
+  flex: 1 1 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   background: linear-gradient(
@@ -269,33 +283,36 @@ function openBook(book: NoteBook) {
     #e3c99a 100%
   );
   box-shadow:
-    inset 0 18px 22px -14px rgba(var(--shade), 0.5),
-    inset 12px 0 16px -12px rgba(var(--shade), 0.3),
-    inset -12px 0 16px -12px rgba(var(--shade), 0.3),
-    inset 0 -10px 12px -10px rgba(var(--shade), 0.28);
+    inset 0 34rpx 42rpx -28rpx rgba(var(--shade), 0.5),
+    inset 22rpx 0 30rpx -22rpx rgba(var(--shade), 0.3),
+    inset -22rpx 0 30rpx -22rpx rgba(var(--shade), 0.3),
+    inset 0 -20rpx 24rpx -20rpx rgba(var(--shade), 0.28);
 }
 
 .cell__books {
   position: relative;
   z-index: 2;
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  height: calc(154px + 40rpx);
-  padding: 0 15px;
+  height: auto;
+  padding: 0 28rpx;
 }
 
 .board {
   position: relative;
   z-index: 1;
-  height: 17px;
+  flex: 0 0 auto;
+  height: 30rpx;
   background: linear-gradient(180deg, var(--board-face-1), var(--board-face-2));
-  border-radius: 3px;
+  border-radius: 6rpx;
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.6),
-    inset 0 -2px 3px -2px rgba(150, 110, 60, 0.35),
-    0 5px 7px -3px rgba(var(--shade), 0.4),
-    0 11px 16px -8px rgba(var(--shade), 0.28);
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.6),
+    inset 0 -4rpx 6rpx -4rpx rgba(150, 110, 60, 0.35),
+    0 10rpx 14rpx -6rpx rgba(var(--shade), 0.4),
+    0 20rpx 30rpx -16rpx rgba(var(--shade), 0.28);
 }
 
 .board::before {
@@ -303,11 +320,11 @@ function openBook(book: NoteBook) {
   position: absolute;
   left: 0;
   right: 0;
-  top: -7px;
-  height: 7px;
+  top: -12rpx;
+  height: 12rpx;
   background: linear-gradient(180deg, var(--board-top-1), var(--board-top-2));
-  border-radius: 2px 2px 0 0;
-  box-shadow: inset 0 1px 0 rgba(var(--shade), 0.25);
+  border-radius: 4rpx 4rpx 0 0;
+  box-shadow: inset 0 2rpx 0 rgba(var(--shade), 0.25);
 }
 
 .book {
@@ -317,49 +334,50 @@ function openBook(book: NoteBook) {
   box-sizing: border-box;
   width: var(--book-w);
   height: var(--book-h);
-  border-radius: 8px 16px 16px 8px;
+  max-height: calc(100% - 20rpx);
+  border-radius: 14rpx 28rpx 28rpx 14rpx;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 26%),
     linear-gradient(
       90deg,
-      var(--spine) 0 11px,
-      rgba(87, 72, 35, 0.18) 11px 12px,
-      rgba(255, 255, 255, 0.38) 12px 13.5px,
-      rgba(255, 255, 255, 0) 13.5px
+      var(--spine) 0 18rpx,
+      rgba(87, 72, 35, 0.18) 18rpx 20rpx,
+      rgba(255, 255, 255, 0.38) 20rpx 23rpx,
+      rgba(255, 255, 255, 0) 23rpx
     ),
     linear-gradient(180deg, var(--cover-hi), var(--cover) 55%, var(--cover-lo));
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.45),
-    inset -3px 0 6px -3px rgba(110, 78, 38, 0.18),
-    inset 0 -4px 8px -4px rgba(110, 78, 38, 0.22),
-    0 2px 3px -1px rgba(89, 60, 26, 0.35),
-    5px 10px 18px -8px rgba(89, 60, 26, 0.38);
+    inset 0 2rpx 0 rgba(255, 255, 255, 0.45),
+    inset -6rpx 0 12rpx -6rpx rgba(110, 78, 38, 0.18),
+    inset 0 -8rpx 16rpx -8rpx rgba(110, 78, 38, 0.22),
+    0 4rpx 6rpx -2rpx rgba(89, 60, 26, 0.35),
+    9rpx 18rpx 32rpx -14rpx rgba(89, 60, 26, 0.38);
 }
 
 .book::after {
   content: "";
   position: absolute;
   z-index: -1;
-  left: 5px;
-  right: 5px;
-  bottom: -3px;
-  height: 7px;
+  left: 9rpx;
+  right: 9rpx;
+  bottom: -6rpx;
+  height: 12rpx;
   border-radius: 50%;
   background: radial-gradient(
     50% 50% at 50% 50%,
     rgba(70, 48, 20, 0.4),
     rgba(70, 48, 20, 0) 72%
   );
-  filter: blur(1.5px);
+  filter: blur(3rpx);
 }
 
 .book--ribbon::before {
   content: "";
   position: absolute;
   top: 0;
-  right: 15px;
-  width: 15px;
-  height: 36px;
+  right: 24rpx;
+  width: 24rpx;
+  height: 62rpx;
   background:
     linear-gradient(
       90deg,
@@ -369,7 +387,7 @@ function openBook(book: NoteBook) {
     ),
     linear-gradient(180deg, var(--ribbon-1), var(--ribbon-2));
   clip-path: polygon(0 0, 100% 0, 100% 100%, 50% calc(100% - 7px), 0 100%);
-  filter: drop-shadow(0 2px 2px rgba(var(--shade), 0.28));
+  filter: drop-shadow(0 4rpx 4rpx rgba(var(--shade), 0.28));
 }
 
 .book--green {
@@ -404,19 +422,19 @@ function openBook(book: NoteBook) {
   position: relative;
   z-index: 2;
   box-sizing: border-box;
-  max-width: 76px;
-  min-height: 29px;
-  margin: 40px auto 0;
-  padding: 0 5px;
-  border: 1px solid rgba(204, 190, 161, 0.76);
-  border-radius: 5px;
+  max-width: 128rpx;
+  min-height: 52rpx;
+  margin: 62rpx auto 0;
+  padding: 0 10rpx;
+  border: 2rpx solid rgba(204, 190, 161, 0.76);
+  border-radius: 10rpx;
   background: rgba(255, 255, 255, 0.88);
   color: #111827;
-  font-size: 14px;
+  font-size: 25rpx;
   font-weight: 900;
-  line-height: 29px;
+  line-height: 52rpx;
   text-align: center;
-  box-shadow: 0 2px 4px rgba(var(--shade), 0.12);
+  box-shadow: 0 4rpx 8rpx rgba(var(--shade), 0.12);
 }
 
 .book__label text {
@@ -428,9 +446,9 @@ function openBook(book: NoteBook) {
   position: relative;
   z-index: 2;
   display: block;
-  width: 46px;
-  height: 46px;
-  margin: 24px auto 0;
+  width: 78rpx;
+  height: 78rpx;
+  margin: 34rpx auto 0;
   object-fit: contain;
   opacity: 0.82;
   filter: brightness(0) saturate(100%) invert(34%) sepia(18%) saturate(1068%)
@@ -442,12 +460,12 @@ function openBook(book: NoteBook) {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  gap: 18rpx;
-  width: 100%;
-  max-width: 388px;
+  gap: 32rpx;
+  width: var(--shelf-w);
+  max-width: calc(100vw - 56rpx);
   min-height: 82rpx;
-  margin: 22rpx auto 0;
-  padding: 0 14rpx;
+  margin: 24rpx auto 0;
+  padding: 0 18rpx;
 }
 
 /* 恢复分页外框时，把这些声明放回 .shelf-pager：

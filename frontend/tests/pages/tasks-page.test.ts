@@ -133,23 +133,44 @@ describe("summer feeding task pages", () => {
     expect(taskListSource).not.toContain('active-key="tasks"');
   });
 
-  it("keeps bookshelf cells taller while preserving the original book size", () => {
+  it("keeps the Meow Notes shelf and pager responsive across phone sizes", () => {
+    const shelfRule = extractCssRule(meowNotesSource, ".shelf");
+    const innerRule = extractCssRule(meowNotesSource, ".shelf__inner");
+    const cellRule = extractCssRule(meowNotesSource, ".cell");
     const cellBooksRule = extractCssRule(meowNotesSource, ".cell__books");
+    const bookRule = extractCssRule(meowNotesSource, ".book");
     const labelRule = extractCssRule(meowNotesSource, ".book__label");
     const labelTextRule = extractCssRule(meowNotesSource, ".book__label text");
+    const pagerRule = extractCssRule(meowNotesSource, ".shelf-pager");
 
-    expect(cellBooksRule).toContain("height: calc(154px + 40rpx)");
-    expect(meowNotesSource).toContain("--book-h: calc(134px + 20rpx)");
-    expect(labelRule).toContain("max-width: 76px");
-    expect(labelRule).toContain("font-size: 14px");
+    expect(shelfRule).toContain("--shelf-w: 680rpx");
+    expect(shelfRule).toContain("--book-w: 150rpx");
+    expect(shelfRule).toContain("--book-h: 242rpx");
+    expect(shelfRule).toContain("width: var(--shelf-w)");
+    expect(shelfRule).toContain("max-width: calc(100vw - 56rpx)");
+    expect(shelfRule).toContain("height: calc(100vh - 500rpx)");
+    expect(shelfRule).toContain("max-height: 1064rpx");
+    expect(shelfRule).not.toContain("max-width: 388px");
+    expect(shelfRule).not.toContain("--book-w: 90px");
+    expect(innerRule).toContain("height: 100%");
+    expect(innerRule).toContain("display: flex");
+    expect(cellRule).toContain("flex: 1 1 0");
+    expect(cellRule).toContain("min-height: 0");
+    expect(cellBooksRule).toContain("flex: 1 1 auto");
+    expect(cellBooksRule).toContain("height: auto");
+    expect(bookRule).toContain("max-height: calc(100% - 20rpx)");
+    expect(labelRule).toContain("max-width: 128rpx");
+    expect(labelRule).toContain("font-size: 25rpx");
     expect(labelTextRule).not.toContain("text-overflow: ellipsis");
+    expect(pagerRule).toContain("width: var(--shelf-w)");
+    expect(pagerRule).toContain("max-width: calc(100vw - 56rpx)");
   });
 
   it("styles the custom Meow Notes svg icons consistently on book covers", () => {
     const iconRule = extractCssRule(meowNotesSource, ".book__icon");
 
-    expect(iconRule).toContain("width: 46px");
-    expect(iconRule).toContain("height: 46px");
+    expect(iconRule).toContain("width: 78rpx");
+    expect(iconRule).toContain("height: 78rpx");
     expect(iconRule).toContain("object-fit: contain");
     expect(iconRule).toContain("filter:");
   });

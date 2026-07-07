@@ -80,6 +80,14 @@
         </view>
       </scroll-view>
     </view>
+    <button
+      v-if="userStore.isAdmin"
+      class="floating-add admin-floating-add"
+      hover-class="button-hover"
+      @tap="goCreateLandmark"
+    >
+      新增地标
+    </button>
   </view>
 </template>
 
@@ -168,6 +176,10 @@ function goDetail(item: MeowPointListItem) {
   uni.navigateTo({
     url: `/pages/landmarks/detail?landmark_id=${item.detail_id}`,
   });
+}
+
+function goCreateLandmark() {
+  uni.navigateTo({ url: "/pages/admin/landmarks/create" });
 }
 
 onShow(() => {
@@ -302,6 +314,7 @@ onShow(() => {
 }
 
 .search-button,
+.floating-add,
 .retry-button,
 .point-card {
   margin: 0;
@@ -313,6 +326,7 @@ onShow(() => {
 .search-button::after,
 .back-button::after,
 .retry-button::after,
+.floating-add::after,
 .point-card::after {
   border: 0;
 }
@@ -327,6 +341,23 @@ onShow(() => {
   font-weight: 900;
   line-height: 50rpx;
   text-align: center;
+}
+
+.floating-add {
+  position: fixed;
+  z-index: 5;
+  right: 34rpx;
+  bottom: calc(env(safe-area-inset-bottom) + 34rpx);
+  width: 168rpx;
+  height: 74rpx;
+  border-radius: 26rpx;
+  background: #287c31;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 74rpx;
+  text-align: center;
+  box-shadow: 0 14rpx 34rpx rgba(40, 124, 49, 0.24);
 }
 
 .point-list {

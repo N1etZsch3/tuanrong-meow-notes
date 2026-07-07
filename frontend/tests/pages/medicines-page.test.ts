@@ -56,6 +56,9 @@ describe("medicine management pages", () => {
     expect(medicineIndexSource).toContain("素材/svg/喵记/药品.svg");
     expect(medicineIndexSource).toContain("getMedicineCategoryClass");
     expect(medicineIndexSource).toContain('class="category-tag"');
+    expect(medicineIndexSource).toContain('class="medicine-title-line"');
+    expect(medicineIndexSource).toContain('class="medicine-card-desc"');
+    expect(medicineIndexSource).toContain("medicine.description");
     expect(medicineIndexSource).toContain('class="holder-inventory-card"');
     expect(medicineIndexSource).not.toContain('class="medicine-stats"');
     expect(medicineIndexSource).not.toContain("holder_count }} 位持有人");
@@ -82,7 +85,12 @@ describe("medicine management pages", () => {
     expect(medicineCreateSource).toContain("remainingImageSlots");
     expect(medicineCreateSource).toContain("category_name");
     expect(medicineCreateSource).toContain("其他（默认）");
-    expect(medicineCreateSource).toContain("自定义分类");
+    expect(medicineCreateSource).toContain("CUSTOM_CATEGORY_VALUE");
+    expect(medicineCreateSource).toContain("自定义");
+    expect(medicineCreateSource).toContain("isCustomCategory");
+    expect(medicineCreateSource).toContain('v-if="isCustomCategory"');
+    expect(medicineCreateSource).toContain("help-button");
+    expect(medicineCreateSource).toContain("help-bubble");
     expect(medicineCreateSource).toContain("count: remainingImageSlots.value");
     expect(medicineCreateSource).toContain('usage_type: "medicine_photo"');
     expect(medicineCreateSource).not.toContain('usage_type: "medicine_cover"');
@@ -92,7 +100,7 @@ describe("medicine management pages", () => {
     expect(medicineCreateSource).toContain('class="holder-suggestion-list"');
     expect(medicineCreateSource).toContain("selectHolder");
     expect(medicineCreateSource).toContain("clearSelectedHolder");
-    expect(medicineCreateSource).toContain("请从列表中选择持有人");
+    expect(medicineCreateSource).toContain("toggleHelp");
     expect(medicineCreateSource).toContain("chooseMedicineImage");
     expect(medicineCreateSource).toContain("uploadImage");
     expect(medicineCreateSource).toContain("cover_image_url");
@@ -111,7 +119,12 @@ describe("medicine management pages", () => {
     expect(medicineDetailSource).toContain("openEditCatalogModal");
     expect(medicineDetailSource).toContain('class="holder-inventory-card"');
     expect(medicineDetailSource).toContain('class="medicine-info-panel"');
-    expect(medicineDetailSource).toContain("药品说明");
+    expect(medicineDetailSource).toContain("功能主治");
+    expect(medicineDetailSource).toContain("注意事项");
+    expect(medicineDetailSource).toContain('class="info-label">类型');
+    expect(medicineDetailSource).toContain('class="info-label">库存');
+    expect(medicineDetailSource).not.toContain('class="info-label">单位');
+    expect(medicineDetailSource).not.toContain('class="info-label">总库存');
     expect(medicineDetailSource).toContain("logFilterOptions");
     expect(medicineDetailSource).toContain("filteredRecentLogs");
     expect(medicineDetailSource).toContain("openLogModal");
@@ -127,6 +140,11 @@ describe("medicine management pages", () => {
     expect(medicineHoldingSource).toContain("recordMedicineScrap");
     expect(medicineHoldingSource).toContain("createMedicineApplication");
     expect(medicineHoldingSource).toContain("approveMedicineApplication");
+    expect(medicineHoldingSource).toContain("getHoldingStatusLabel");
+    expect(medicineHoldingSource).toContain("getMedicineLogToneClass");
+    expect(medicineHoldingSource).toContain("holding.medicine.cover_image_url");
+    expect(medicineHoldingSource).toContain('class="hero-image"');
+    expect(medicineHoldingSource).toContain(':class="getMedicineLogToneClass(log.operation_type)"');
     expect(medicineHoldingSource).toContain("记录购入");
     expect(medicineHoldingSource).toContain("记录使用");
     expect(medicineHoldingSource).toContain("记录报废");
@@ -139,6 +157,7 @@ describe("medicine management pages", () => {
       valid: false,
       message: "请输入药品名称",
     });
+    expect(createDefaultMedicineDraft().initial_quantity).toBe("");
 
     const newDraft = createDefaultMedicineDraft();
     newDraft.name = " 阿莫西林 ";
@@ -175,7 +194,6 @@ describe("medicine management pages", () => {
     const sameNameDraft = createDefaultMedicineDraft();
     sameNameDraft.name = "阿莫西林";
     sameNameDraft.unit = "片";
-    sameNameDraft.initial_quantity = 1;
 
     expect(buildMedicineCreatePayload(sameNameDraft)).toEqual({
       catalog: {
@@ -188,7 +206,7 @@ describe("medicine management pages", () => {
         cover_image_url: null,
         photo_urls: [],
       },
-      initial_quantity: 1,
+      initial_quantity: 0,
       remark: null,
     });
 

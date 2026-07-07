@@ -181,6 +181,14 @@
       </view>
       </scroll-view>
     </view>
+    <button
+      v-if="userStore.isAdmin"
+      class="floating-add admin-floating-add"
+      hover-class="button-hover"
+      @tap="goCreateTask"
+    >
+      新增任务
+    </button>
   </view>
 </template>
 
@@ -446,6 +454,10 @@ function goExecutionDetail(taskId: string, executionDateId: string) {
   });
 }
 
+function goCreateTask() {
+  uni.navigateTo({ url: "/pages/admin/tasks/create" });
+}
+
 onShow(() => {
   void loadTasks();
 });
@@ -542,7 +554,8 @@ onShow(() => {
 .search-button::after,
 .back-button::after,
 .clear-filter-button::after,
-.execution-card::after {
+.execution-card::after,
+.floating-add::after {
   border: 0;
 }
 
@@ -586,6 +599,7 @@ onShow(() => {
 }
 
 .search-button,
+.floating-add,
 .clear-filter-button {
   margin: 0;
   padding: 0;
@@ -602,6 +616,23 @@ onShow(() => {
   font-size: 22rpx;
   font-weight: 900;
   line-height: 50rpx;
+}
+
+.floating-add {
+  position: fixed;
+  z-index: 5;
+  right: 34rpx;
+  bottom: calc(env(safe-area-inset-bottom) + 34rpx);
+  width: 168rpx;
+  height: 74rpx;
+  border-radius: 26rpx;
+  background: #287c31;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 74rpx;
+  text-align: center;
+  box-shadow: 0 14rpx 34rpx rgba(40, 124, 49, 0.24);
 }
 
 .filter-card {

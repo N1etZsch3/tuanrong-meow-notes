@@ -251,6 +251,43 @@ def test_admin_create_medicine_without_holder_defaults_to_self(api_client, db_se
     assert holding.admin_creator_id is None
 
 
+def test_create_medicine_allows_zero_initial_quantity_and_returns_usage_summary(
+    api_client,
+    db_session,
+):
+    member = create_user(db_session, nickname="Zero Holder")
+    headers = auth_headers(member)
+
+    response = api_client.post(
+        "/api/v1/medicines",
+        headers=headers,
+        json={
+            "catalog": {
+                "name": "Zero Stock Medicine",
+                "unit": "bottle",
+                "description": "Used for hydration support.",
+                "usage_notes": "Keep sealed.",
+            },
+            "initial_quantity": 0,
+        },
+    )
+
+    assert response.status_code == 200
+    created = response.json()["data"]
+    holding = db_session.get(MedicineHolding, UUID(created["holding_id"]))
+    assert holding is not None
+    assert holding.status == "empty"
+    assert holding.current_quantity == 0
+
+    list_response = api_client.get("/api/v1/medicines", headers=headers)
+    assert list_response.status_code == 200
+    item = list_response.json()["data"]["items"][0]
+    assert item["medicine_id"] == created["medicine_id"]
+    assert item["description"] == "Used for hydration support."
+    assert item["total_current_quantity"] == 0
+    assert item["stock_status"] == "empty"
+
+
 def test_create_medicine_defaults_to_other_and_allows_custom_category(
     api_client,
     db_session,

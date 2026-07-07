@@ -44,6 +44,11 @@ describe("supply point detail page", () => {
     expect(supplyIndexSource).toContain('class="back-button"');
     expect(supplyIndexSource).toContain("function goBack");
     expect(supplyIndexSource).toContain("uni.navigateBack()");
+    expect(supplyIndexSource).toContain('v-if="userStore.isAdmin"');
+    expect(supplyIndexSource).toContain('class="floating-add admin-floating-add"');
+    expect(supplyIndexSource).toContain("新增物资点");
+    expect(supplyIndexSource).toContain("goCreateSupplyPoint");
+    expect(supplyIndexSource).toContain("/pages/admin/supplies/create");
     expect(supplyIndexSource).not.toContain("<AppTabBar");
     expect(supplyIndexSource).not.toContain('class="filter-card"');
   });

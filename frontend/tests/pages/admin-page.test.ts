@@ -42,15 +42,15 @@ describe("admin entry pages", () => {
     expect(pagesJson).toContain("pages/landmarks/detail");
   });
 
-  it("shows personnel management, summer feeding, supply, and landmark actions", () => {
+  it("keeps only personnel management in the admin entry page", () => {
     expect(adminIndexSource).toContain("人员管理");
     expect(adminIndexSource).toContain("/pages/admin/users/index");
-    expect(adminIndexSource).toContain("发布喂食任务");
-    expect(adminIndexSource).toContain("/pages/admin/tasks/create");
-    expect(adminIndexSource).toContain("新建物资点");
-    expect(adminIndexSource).toContain("/pages/admin/supplies/create");
-    expect(adminIndexSource).toContain("新建地标点");
-    expect(adminIndexSource).toContain("/pages/admin/landmarks/create");
+    expect(adminIndexSource).not.toContain("发布喂食任务");
+    expect(adminIndexSource).not.toContain("/pages/admin/tasks/create");
+    expect(adminIndexSource).not.toContain("新建物资点");
+    expect(adminIndexSource).not.toContain("/pages/admin/supplies/create");
+    expect(adminIndexSource).not.toContain("新建地标点");
+    expect(adminIndexSource).not.toContain("/pages/admin/landmarks/create");
   });
 
   it("creates member accounts through the admin users api", () => {

@@ -21,7 +21,7 @@ export interface MedicineCreateDraft {
   usage_notes: string;
   cover_image_url: string;
   photo_urls: string[];
-  initial_quantity: number;
+  initial_quantity: number | "";
   remark: string;
 }
 
@@ -82,6 +82,13 @@ const MEDICINE_OPERATION_LABELS: Record<string, string> = {
   delete_holding: "删除库存",
 };
 
+const MEDICINE_HOLDING_STATUS_LABELS: Record<string, string> = {
+  active: "正常",
+  empty: "暂无库存",
+  transferred: "已转交",
+  deleted: "已删除",
+};
+
 function nullableTrim(value: string): string | null {
   const normalized = value.trim();
   return normalized || null;
@@ -101,6 +108,13 @@ function normalizedPhotoUrls(photoUrls: string[]): string[] {
     .slice(0, 5);
 }
 
+function normalizeInitialQuantity(value: number | ""): number {
+  if (value === "") {
+    return 0;
+  }
+  return Number(value);
+}
+
 export function createDefaultMedicineDraft(): MedicineCreateDraft {
   return {
     holder_id: "",
@@ -114,7 +128,7 @@ export function createDefaultMedicineDraft(): MedicineCreateDraft {
     usage_notes: "",
     cover_image_url: "",
     photo_urls: [],
-    initial_quantity: 0,
+    initial_quantity: "",
     remark: "",
   };
 }
@@ -173,7 +187,8 @@ export function validateMedicineCreateDraft(
     return { valid: false, message: "请输入计量单位" };
   }
 
-  if (!Number.isFinite(draft.initial_quantity) || draft.initial_quantity <= 0) {
+  const initialQuantity = normalizeInitialQuantity(draft.initial_quantity);
+  if (!Number.isFinite(initialQuantity) || initialQuantity < 0) {
     return { valid: false, message: "请输入初始数量" };
   }
 
@@ -191,7 +206,7 @@ export function buildMedicineCreatePayload(
     : { category_name: categoryName || MEDICINE_DEFAULT_CATEGORY_NAME };
   const basePayload = {
     ...(nullableTrim(draft.holder_id) ? { holder_id: draft.holder_id.trim() } : {}),
-    initial_quantity: Number(draft.initial_quantity),
+    initial_quantity: normalizeInitialQuantity(draft.initial_quantity),
     remark: nullableTrim(draft.remark),
   };
 
@@ -239,6 +254,10 @@ export function getMedicineStockClass(status: string | null | undefined): string
 
 export function getMedicineOperationLabel(operationType: string): string {
   return MEDICINE_OPERATION_LABELS[operationType] || operationType;
+}
+
+export function getMedicineHoldingStatusLabel(status: string): string {
+  return MEDICINE_HOLDING_STATUS_LABELS[status] || status;
 }
 
 export function getMedicineCategoryClass(categoryName: string | null | undefined): string {

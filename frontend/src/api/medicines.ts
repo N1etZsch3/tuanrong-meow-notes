@@ -31,6 +31,7 @@ export interface MedicineListItemDto {
   category: { id: string; name: string } | null;
   specification: string | null;
   unit: string;
+  description: string | null;
   cover_image_url: string | null;
   status: string;
   total_current_quantity: number;

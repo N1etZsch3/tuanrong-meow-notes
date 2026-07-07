@@ -512,11 +512,15 @@ describe("summer feeding task pages", () => {
     expect(adminCreateTaskSource).toContain("calendarDraftDates");
   });
 
-  it("does not expose task publishing from the task tab", () => {
+  it("exposes task publishing as an admin-only side button on the task list", () => {
     expect(taskListSource).not.toContain('class="publish-toolbar"');
     expect(taskListSource).not.toContain('class="publish-button"');
     expect(taskListSource).not.toContain("function goPublish");
-    expect(taskListSource).not.toContain("/pages/admin/tasks/create");
+    expect(taskListSource).toContain('v-if="userStore.isAdmin"');
+    expect(taskListSource).toContain('class="floating-add admin-floating-add"');
+    expect(taskListSource).toContain("新增任务");
+    expect(taskListSource).toContain("goCreateTask");
+    expect(taskListSource).toContain("/pages/admin/tasks/create");
   });
 
   it("uses a native mini program map for publish-time task point selection", () => {

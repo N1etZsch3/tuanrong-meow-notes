@@ -98,23 +98,19 @@
               <text class="section-title">药品信息</text>
               <view class="info-grid">
                 <view class="info-item">
+                  <text class="info-label">类型</text>
+                  <text class="info-value">
+                    {{ medicine.category?.name || MEDICINE_DEFAULT_CATEGORY_NAME }}
+                  </text>
+                </view>
+                <view class="info-item">
                   <text class="info-label">规格</text>
                   <text class="info-value">{{ medicine.specification || "暂无规格" }}</text>
                 </view>
                 <view class="info-item">
-                  <text class="info-label">总库存</text>
+                  <text class="info-label">库存</text>
                   <text class="info-value">
                     {{ formatMedicineQuantity(medicine.total_current_quantity, medicine.unit) }}
-                  </text>
-                </view>
-                <view class="info-item">
-                  <text class="info-label">单位</text>
-                  <text class="info-value">{{ medicine.unit }}</text>
-                </view>
-                <view class="info-item">
-                  <text class="info-label">分类</text>
-                  <text class="info-value">
-                    {{ medicine.category?.name || MEDICINE_DEFAULT_CATEGORY_NAME }}
                   </text>
                 </view>
               </view>
@@ -126,12 +122,12 @@
               <text class="section-title">药品说明</text>
             </view>
             <view class="section-line">
-              <text class="section-line-label">说明</text>
+              <text class="section-line-label">功能主治</text>
               <text class="section-line-value">{{ medicine.description || "暂无药品说明" }}</text>
             </view>
             <view class="section-line">
-              <text class="section-line-label">用药注意</text>
-              <text class="section-line-value">{{ medicine.usage_notes || "暂无用药注意" }}</text>
+              <text class="section-line-label">注意事项</text>
+              <text class="section-line-value">{{ medicine.usage_notes || "暂无注意事项" }}</text>
             </view>
           </view>
 
@@ -251,7 +247,7 @@
             />
           </view>
           <view class="field-group">
-            <text class="field-label">药品分类</text>
+            <text class="field-label">药品类型</text>
             <picker
               :range="editCategoryOptions"
               range-key="label"
@@ -263,9 +259,10 @@
               </view>
             </picker>
             <input
+              v-if="isEditCustomCategory"
               v-model.trim="editDraft.category_name"
               class="form-input category-custom-input"
-              placeholder="自定义分类，可不填，默认其他"
+              placeholder="请输入自定义类型"
               placeholder-class="placeholder"
             />
           </view>
@@ -290,7 +287,7 @@
             </view>
           </view>
           <view class="field-group">
-            <text class="field-label">药品说明</text>
+            <text class="field-label">功能主治</text>
             <textarea
               v-model.trim="editDraft.description"
               class="form-textarea"
@@ -300,7 +297,7 @@
             />
           </view>
           <view class="field-group">
-            <text class="field-label">用药注意</text>
+            <text class="field-label">注意事项</text>
             <textarea
               v-model.trim="editDraft.usage_notes"
               class="form-textarea"
@@ -356,6 +353,7 @@ import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
 type PickerChangeEvent = { detail: { value: string | number } };
+const EDIT_CUSTOM_CATEGORY_VALUE = "__custom__";
 type EditDraft = {
   name: string;
   category_id: string;
@@ -377,6 +375,7 @@ const logFilter = ref<MedicineLogFilterValue>("all");
 const viewingLog = ref<MedicineStockLogDto | null>(null);
 const editCatalogVisible = ref(false);
 const isSubmittingEdit = ref(false);
+const isEditCustomCategory = ref(false);
 const editDraft = ref<EditDraft>({
   name: "",
   category_id: "",
@@ -400,11 +399,16 @@ const editCategoryOptions = computed(() => [
     label: category.name,
     value: category.id,
   })),
+  { label: "自定义", value: EDIT_CUSTOM_CATEGORY_VALUE },
 ]);
 const selectedEditCategoryIndex = computed(() =>
   Math.max(
     editCategoryOptions.value.findIndex(
-      (option) => option.value === editDraft.value.category_id,
+      (option) =>
+        option.value ===
+        (isEditCustomCategory.value
+          ? EDIT_CUSTOM_CATEGORY_VALUE
+          : editDraft.value.category_id),
     ),
     0,
   ),
@@ -516,6 +520,7 @@ async function openEditCatalogModal() {
     usage_notes: medicine.value.usage_notes || "",
     cover_image_url: medicine.value.cover_image_url || "",
   };
+  isEditCustomCategory.value = false;
   editCatalogVisible.value = true;
 }
 
@@ -526,9 +531,10 @@ function closeEditCatalogModal() {
 }
 
 function handleEditCategoryChange(event: PickerChangeEvent) {
-  editDraft.value.category_id =
-    editCategoryOptions.value[pickerIndex(event)]?.value || "";
-  if (editDraft.value.category_id) {
+  const selectedValue = editCategoryOptions.value[pickerIndex(event)]?.value || "";
+  isEditCustomCategory.value = selectedValue === EDIT_CUSTOM_CATEGORY_VALUE;
+  editDraft.value.category_id = isEditCustomCategory.value ? "" : selectedValue;
+  if (!isEditCustomCategory.value) {
     editDraft.value.category_name = "";
   }
 }
@@ -543,7 +549,9 @@ function buildEditPayload(): MedicineCatalogUpdatePayload {
     usage_notes: editDraft.value.usage_notes.trim() || null,
     cover_image_url: editDraft.value.cover_image_url.trim() || null,
   };
-  if (customCategory) {
+  if (isEditCustomCategory.value) {
+    payload.category_name = customCategory || MEDICINE_DEFAULT_CATEGORY_NAME;
+  } else if (customCategory) {
     payload.category_name = customCategory;
   } else if (editDraft.value.category_id) {
     payload.category_id = editDraft.value.category_id;
@@ -563,6 +571,10 @@ async function submitCatalogEdit() {
   }
   if (!editDraft.value.unit.trim()) {
     uni.showToast({ title: "请输入计量单位", icon: "none" });
+    return;
+  }
+  if (isEditCustomCategory.value && !editDraft.value.category_name.trim()) {
+    uni.showToast({ title: "请输入自定义类型", icon: "none" });
     return;
   }
   const token = await getAccessToken();
@@ -946,7 +958,7 @@ onLoad((query) => {
 .info-grid {
   margin-top: 20rpx;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 18rpx;
 }
 

@@ -17,6 +17,11 @@ describe("landmark list page", () => {
     expect(landmarkIndexSource).toContain('class="back-button"');
     expect(landmarkIndexSource).toContain("function goBack");
     expect(landmarkIndexSource).toContain("uni.navigateBack()");
+    expect(landmarkIndexSource).toContain('v-if="userStore.isAdmin"');
+    expect(landmarkIndexSource).toContain('class="floating-add admin-floating-add"');
+    expect(landmarkIndexSource).toContain("新增地标");
+    expect(landmarkIndexSource).toContain("goCreateLandmark");
+    expect(landmarkIndexSource).toContain("/pages/admin/landmarks/create");
     expect(landmarkIndexSource).not.toContain("<AppTabBar");
     expect(landmarkIndexSource).not.toContain('class="filter-card"');
   });

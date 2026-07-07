@@ -25,11 +25,17 @@
 
         <view v-else-if="holding" class="detail-content">
           <view class="hero-card">
-            <view class="hero-icon-shell">
+            <image
+              v-if="holding.medicine.cover_image_url"
+              class="hero-image"
+              :src="holding.medicine.cover_image_url"
+              mode="aspectFill"
+            />
+            <view v-else class="hero-icon-shell">
               <image class="hero-icon" :src="medicineIcon" mode="aspectFit" />
             </view>
             <view class="hero-copy">
-              <text class="eyebrow">{{ holding.medicine.category_name || "未分类药品" }}</text>
+              <text class="eyebrow">{{ holding.medicine.category_name || "其他" }}</text>
               <text class="page-title-text">{{ holding.medicine.name }}</text>
               <text class="desc-text">
                 {{ holding.medicine.specification || "暂无规格" }} ·
@@ -45,17 +51,15 @@
                 {{ formatMedicineQuantity(holding.current_quantity, holding.unit) }}
               </text>
             </view>
-            <view class="info-divider" />
             <view class="info-section">
               <text class="info-label">累计入库</text>
               <text class="info-value">
                 {{ formatMedicineQuantity(holding.total_in_quantity, holding.unit) }}
               </text>
             </view>
-            <view class="info-divider" />
             <view class="info-section">
               <text class="info-label">状态</text>
-              <text class="info-value">{{ holding.status }}</text>
+              <text class="info-value">{{ getHoldingStatusLabel(holding.status) }}</text>
             </view>
           </view>
 
@@ -94,7 +98,12 @@
               <text class="section-meta">最近记录</text>
             </view>
             <view v-if="holding.recent_logs.length" class="dynamic-list">
-              <view v-for="log in holding.recent_logs" :key="log.id" class="dynamic-card">
+              <view
+                v-for="log in holding.recent_logs"
+                :key="log.id"
+                class="dynamic-card"
+                :class="getMedicineLogToneClass(log.operation_type)"
+              >
                 <view class="dynamic-head">
                   <text class="dynamic-title">{{ getMedicineOperationLabel(log.operation_type) }}</text>
                   <text class="dynamic-quantity">
@@ -216,6 +225,8 @@ import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
 import {
+  getMedicineHoldingStatusLabel as getHoldingStatusLabel,
+  getMedicineLogToneClass,
   formatMedicineQuantity,
   getMedicineOperationLabel,
 } from "@/pages/medicines/medicine-page";
@@ -529,10 +540,15 @@ onLoad((query) => {
   gap: 24rpx;
 }
 
-.hero-icon-shell {
+.hero-icon-shell,
+.hero-image {
   width: 128rpx;
   height: 128rpx;
   border-radius: 28rpx;
+  overflow: hidden;
+}
+
+.hero-icon-shell {
   background: #edf8e8;
   display: flex;
   align-items: center;
@@ -568,19 +584,18 @@ onLoad((query) => {
 
 .info-panel {
   margin-top: 26rpx;
+  padding: 18rpx;
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14rpx;
   overflow: hidden;
 }
 
 .info-section {
-  padding: 26rpx 18rpx;
-}
-
-.info-divider {
-  width: 1rpx;
-  margin: 26rpx 0;
-  background: rgba(189, 214, 185, 0.72);
+  min-height: 96rpx;
+  padding: 18rpx 16rpx;
+  border-radius: 20rpx;
+  background: #f4fbef;
 }
 
 .info-label,
@@ -634,7 +649,19 @@ onLoad((query) => {
 .dynamic-card {
   padding: 22rpx;
   border-radius: 22rpx;
+}
+
+.application-card,
+.log-purchase {
   background: #f4fbef;
+}
+
+.log-use {
+  background: #fff4cc;
+}
+
+.log-other {
+  background: #edf4ff;
 }
 
 .application-title,

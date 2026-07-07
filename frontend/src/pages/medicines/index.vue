@@ -20,7 +20,7 @@
             v-model="searchKeyword"
             class="search-input"
             confirm-type="search"
-            placeholder="搜索药品 / 分类 / 持有人"
+            placeholder="搜索药品 / 类型 / 持有人"
             placeholder-class="search-placeholder"
             @confirm="handleSearchConfirm"
           />
@@ -36,7 +36,7 @@
             @change="handleCategoryChange"
           >
             <view class="filter-control">
-              <text class="picker-caption">药品分类</text>
+              <text class="picker-caption">药品类型</text>
               <view class="picker-shell">
                 <text class="picker-value">{{ selectedCategoryLabel }}</text>
                 <image class="picker-arrow-icon" :src="filterArrowIcon" mode="aspectFit" />
@@ -101,19 +101,23 @@
               </view>
               <view class="medicine-main">
                 <view class="medicine-head">
-                  <text class="medicine-title">{{ medicine.name }}</text>
+                  <view class="medicine-title-line">
+                    <text class="medicine-title">{{ medicine.name }}</text>
+                    <text class="medicine-dot">·</text>
+                    <text
+                      class="category-tag"
+                      :class="getMedicineCategoryClass(medicine.category?.name)"
+                    >
+                      {{ medicine.category?.name || "其他" }}
+                    </text>
+                  </view>
                   <text class="stock-pill" :class="getMedicineStockClass(medicine.stock_status)">
                     {{ medicine.stock_status_label }}
                   </text>
                 </view>
-                <view class="medicine-tag-row">
-                  <text
-                    class="category-tag"
-                    :class="getMedicineCategoryClass(medicine.category?.name)"
-                  >
-                    {{ medicine.category?.name || "其他" }}
-                  </text>
-                </view>
+                <text class="medicine-card-desc">
+                  {{ medicine.description || "暂无功能主治" }}
+                </text>
                 <scroll-view class="holder-strip" scroll-x :show-scrollbar="false" @tap.stop>
                   <view class="holder-row">
                     <button
@@ -584,13 +588,40 @@ onShow(() => {
   gap: 14rpx;
 }
 
-.medicine-title {
+.medicine-title-line {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.medicine-title {
+  min-width: 0;
+  overflow: hidden;
   color: #111827;
   font-size: 30rpx;
   font-weight: 900;
   line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.medicine-dot {
+  color: #9aa3ad;
+  font-size: 28rpx;
+  font-weight: 900;
+}
+
+.medicine-card-desc {
+  display: -webkit-box;
+  overflow: hidden;
+  color: #596372;
+  font-size: 23rpx;
+  font-weight: 800;
+  line-height: 1.36;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
 }
 
 .stock-pill {
@@ -616,19 +647,17 @@ onShow(() => {
   color: #d73546;
 }
 
-.medicine-tag-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10rpx;
-}
-
 .category-tag {
-  max-width: 100%;
+  flex: 0 0 auto;
+  max-width: 160rpx;
+  overflow: hidden;
   padding: 8rpx 14rpx;
   border-radius: 14rpx;
   font-size: 21rpx;
   font-weight: 900;
   line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .category-antibiotic {

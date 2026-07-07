@@ -14,7 +14,15 @@
         <view class="section-card">
           <text class="section-title">药品信息</text>
           <view class="field-group">
-            <text class="field-label">药品名称</text>
+            <view class="field-label-row">
+              <text class="field-label">药品名称</text>
+              <button class="help-button" hover-class="button-hover" @tap="toggleHelp('name')">
+                ?
+              </button>
+            </view>
+            <text v-if="activeHelp === 'name'" class="help-bubble">
+              输入名称后会自动查询药品库；不点选候选项时，会按当前填写内容新建药品主档。
+            </text>
             <view v-if="isCatalogLinked" class="selected-medicine-tag">
               <text class="tag-name">{{ draft.name }}</text>
               <button class="tag-remove" hover-class="button-hover" @tap="clearSelectedMedicine">
@@ -64,13 +72,18 @@
                 正在查询药品库...
               </text>
             </scroll-view>
-            <text v-if="manualCatalogHintVisible" class="hint-line">
-              不点选候选项时，将按当前填写内容保存为新的药品主档。
-            </text>
           </view>
 
           <view class="field-group">
-            <text class="field-label">药品分类</text>
+            <view class="field-label-row">
+              <text class="field-label">药品类型</text>
+              <button class="help-button" hover-class="button-hover" @tap="toggleHelp('type')">
+                ?
+              </button>
+            </view>
+            <text v-if="activeHelp === 'type'" class="help-bubble">
+              不选择类型时默认保存为其他；选择自定义后可填写新的药品类型。
+            </text>
             <picker
               :disabled="isCatalogLinked"
               :range="categoryOptions"
@@ -84,15 +97,12 @@
               </view>
             </picker>
             <input
-              v-if="!isCatalogLinked"
+              v-if="isCustomCategory"
               v-model.trim="draft.category_name"
               class="form-input category-custom-input"
-              placeholder="自定义分类，可不填，默认其他"
+              placeholder="请输入自定义类型"
               placeholder-class="placeholder"
             />
-            <text v-if="!isCatalogLinked" class="hint-line">
-              不选择分类时默认保存为其他（默认）；填写自定义分类会优先使用自定义分类。
-            </text>
           </view>
           <view class="field-grid">
             <view class="field-group">
@@ -117,8 +127,15 @@
             </view>
           </view>
           <view class="field-group">
-            <text class="field-label">药品图片</text>
-            <text class="field-hint">最多上传 5 张，第一张将作为封面。</text>
+            <view class="field-label-row">
+              <text class="field-label">药品图片</text>
+              <button class="help-button" hover-class="button-hover" @tap="toggleHelp('photo')">
+                ?
+              </button>
+            </view>
+            <text v-if="activeHelp === 'photo'" class="help-bubble">
+              最多上传 5 张，第一张将作为药品封面。
+            </text>
             <view class="medicine-photo-row">
               <view
                 v-for="photo in draft.photo_urls"
@@ -153,7 +170,7 @@
             </view>
           </view>
           <view class="field-group">
-            <text class="field-label">药品说明</text>
+            <text class="field-label">功能主治</text>
             <textarea
               v-model.trim="draft.description"
               class="form-textarea"
@@ -164,7 +181,7 @@
             />
           </view>
           <view class="field-group">
-            <text class="field-label">用药注意</text>
+            <text class="field-label">注意事项</text>
             <textarea
               v-model.trim="draft.usage_notes"
               class="form-textarea"
@@ -179,10 +196,17 @@
         <view class="section-card">
           <text class="section-title">持有库存</text>
           <view class="field-group">
-            <text class="field-label">持有人</text>
+            <view class="field-label-row">
+              <text class="field-label">持有人</text>
+              <button class="help-button" hover-class="button-hover" @tap="toggleHelp('holder')">
+                ?
+              </button>
+            </view>
+            <text v-if="activeHelp === 'holder'" class="help-bubble">
+              成员只能由本人持有；管理员可搜索成员，留空时默认由本人持有。
+            </text>
             <view v-if="!canAssignHolder" class="readonly-holder">
               <text>{{ currentUserLabel }}</text>
-              <text class="holder-hint">成员新增药品时默认由本人持有。</text>
             </view>
             <view v-else>
               <view v-if="selectedHolder" class="selected-medicine-tag">
@@ -225,16 +249,21 @@
                   正在查询成员...
                 </text>
               </scroll-view>
-              <text v-if="!selectedHolder" class="hint-line">
-                留空时默认由本人持有；输入后请从列表中选择持有人。
-              </text>
             </view>
           </view>
           <view class="field-grid">
             <view class="field-group">
-              <text class="field-label">初始数量</text>
+              <view class="field-label-row">
+                <text class="field-label">初始数量</text>
+                <button class="help-button" hover-class="button-hover" @tap="toggleHelp('quantity')">
+                  ?
+                </button>
+              </view>
+              <text v-if="activeHelp === 'quantity'" class="help-bubble">
+                可留空，提交时会按 0 记录。
+              </text>
               <input
-                v-model.number="draft.initial_quantity"
+                v-model="draft.initial_quantity"
                 class="form-input"
                 type="digit"
                 placeholder="0"
@@ -297,20 +326,23 @@ import filterArrowIcon from "../../../素材/png/地图点/箭头.png";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
 type PickerChangeEvent = { detail: { value: string | number } };
+type HelpKey = "name" | "type" | "photo" | "holder" | "quantity";
 
 const userStore = useUserStore();
 const MEDICINE_IMAGE_LIMIT = 5;
+const CUSTOM_CATEGORY_VALUE = "__custom__";
 const draft = ref(createDefaultMedicineDraft());
 const categories = ref<MedicineCategoryDto[]>([]);
 const catalogSuggestions = ref<MedicineSearchItemDto[]>([]);
 const holderKeyword = ref("");
 const holderSuggestions = ref<AdminUserDto[]>([]);
 const selectedHolder = ref<AdminUserDto | null>(null);
-const hasSearchedCatalog = ref(false);
 const isSearchingCatalog = ref(false);
 const isSearchingHolder = ref(false);
 const isUploadingImage = ref(false);
 const isSubmitting = ref(false);
+const isCustomCategory = ref(false);
+const activeHelp = ref<HelpKey | "">("");
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let holderSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchRequestSeq = 0;
@@ -341,10 +373,15 @@ const categoryOptions = computed(() => [
     label: category.name,
     value: category.id,
   })),
+  { label: "自定义", value: CUSTOM_CATEGORY_VALUE },
 ]);
 const selectedCategoryIndex = computed(() =>
   Math.max(
-    categoryOptions.value.findIndex((option) => option.value === draft.value.category_id),
+    categoryOptions.value.findIndex(
+      (option) =>
+        option.value ===
+        (isCustomCategory.value ? CUSTOM_CATEGORY_VALUE : draft.value.category_id),
+    ),
     0,
   ),
 );
@@ -356,13 +393,6 @@ const showCatalogSuggestions = computed(
     !isCatalogLinked.value &&
     draft.value.name.trim().length > 0 &&
     (catalogSuggestions.value.length > 0 || isSearchingCatalog.value),
-);
-const manualCatalogHintVisible = computed(
-  () =>
-    !isCatalogLinked.value &&
-    hasSearchedCatalog.value &&
-    draft.value.name.trim().length > 0 &&
-    !isSearchingCatalog.value,
 );
 const showHolderSuggestions = computed(
   () =>
@@ -398,10 +428,16 @@ function handleCategoryChange(event: PickerChangeEvent) {
   if (isCatalogLinked.value) {
     return;
   }
-  draft.value.category_id = categoryOptions.value[pickerIndex(event)]?.value || "";
-  if (draft.value.category_id) {
+  const selectedValue = categoryOptions.value[pickerIndex(event)]?.value || "";
+  isCustomCategory.value = selectedValue === CUSTOM_CATEGORY_VALUE;
+  draft.value.category_id = isCustomCategory.value ? "" : selectedValue;
+  if (!isCustomCategory.value) {
     draft.value.category_name = "";
   }
+}
+
+function toggleHelp(key: HelpKey) {
+  activeHelp.value = activeHelp.value === key ? "" : key;
 }
 
 function readInputValue(event: unknown): string | null {
@@ -431,7 +467,6 @@ function scheduleCatalogSearch() {
   const keyword = draft.value.name.trim();
   if (!keyword) {
     catalogSuggestions.value = [];
-    hasSearchedCatalog.value = false;
     isSearchingCatalog.value = false;
     return;
   }
@@ -444,7 +479,6 @@ async function loadCatalogSuggestions() {
   const keyword = draft.value.name.trim();
   if (!keyword || isCatalogLinked.value) {
     catalogSuggestions.value = [];
-    hasSearchedCatalog.value = false;
     return;
   }
   const token = await getAccessToken();
@@ -457,7 +491,6 @@ async function loadCatalogSuggestions() {
     const data = await searchMedicines(token, keyword);
     if (requestId === searchRequestSeq) {
       catalogSuggestions.value = data.items;
-      hasSearchedCatalog.value = true;
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "查询药品库失败";
@@ -475,15 +508,16 @@ function selectExistingMedicine(medicine: MedicineSearchItemDto) {
   }
   draft.value = applySelectedMedicineToDraft(draft.value, medicine);
   catalogSuggestions.value = [];
-  hasSearchedCatalog.value = false;
   isSearchingCatalog.value = false;
+  isCustomCategory.value = false;
+  activeHelp.value = "";
 }
 
 function clearSelectedMedicine() {
   draft.value = clearSelectedMedicineDraft(draft.value);
   catalogSuggestions.value = [];
-  hasSearchedCatalog.value = false;
   isSearchingCatalog.value = false;
+  isCustomCategory.value = false;
 }
 
 function handleHolderKeywordInput(event?: unknown) {
@@ -636,6 +670,10 @@ async function submitMedicine() {
     uni.showToast({ title: "请从列表中选择持有人", icon: "none" });
     return;
   }
+  if (isCustomCategory.value && !draft.value.category_name.trim()) {
+    uni.showToast({ title: "请输入自定义类型", icon: "none" });
+    return;
+  }
   const validation = validateMedicineCreateDraft(draft.value);
   if (!validation.valid) {
     uni.showToast({ title: validation.message || "请完善药品信息", icon: "none" });
@@ -707,6 +745,7 @@ onLoad(() => {
 .back-button,
 .catalog-suggestion-card,
 .holder-suggestion-card,
+.help-button,
 .tag-remove,
 .photo-remove,
 .photo-upload,
@@ -720,6 +759,7 @@ onLoad(() => {
 .back-button::after,
 .catalog-suggestion-card::after,
 .holder-suggestion-card::after,
+.help-button::after,
 .tag-remove::after,
 .photo-remove::after,
 .photo-upload::after,
@@ -743,9 +783,7 @@ onLoad(() => {
 .nav-subtitle,
 .section-title,
 .field-label,
-.field-hint,
 .hint-line,
-.holder-hint,
 .suggestion-name,
 .suggestion-meta,
 .suggestion-category,
@@ -793,17 +831,40 @@ onLoad(() => {
 }
 
 .field-label {
-  margin-bottom: 10rpx;
   color: #596372;
   font-size: 23rpx;
   font-weight: 800;
 }
 
-.field-hint {
-  margin: -2rpx 0 14rpx;
-  color: #667085;
+.field-label-row {
+  margin-bottom: 10rpx;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.help-button {
+  width: 34rpx;
+  height: 34rpx;
+  border-radius: 50%;
+  background: #e8f5e6;
+  color: #287c31;
   font-size: 22rpx;
-  font-weight: 700;
+  font-weight: 900;
+  line-height: 34rpx;
+}
+
+.help-bubble {
+  display: block;
+  box-sizing: border-box;
+  margin: -2rpx 0 14rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 18rpx;
+  background: rgba(232, 245, 230, 0.96);
+  color: #596372;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 1.45;
 }
 
 .form-input,
@@ -935,13 +996,6 @@ onLoad(() => {
   color: #111827;
   font-size: 25rpx;
   font-weight: 900;
-}
-
-.holder-hint {
-  margin-top: 8rpx;
-  color: #667085;
-  font-size: 22rpx;
-  font-weight: 700;
 }
 
 .suggestion-cover {

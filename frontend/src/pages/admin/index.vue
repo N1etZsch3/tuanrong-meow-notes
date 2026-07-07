@@ -5,7 +5,7 @@
         <button class="back-button" @tap="goBack">‹</button>
         <view>
           <text class="nav-title">管理员入口</text>
-          <text class="nav-subtitle">人员、喂食任务、物资点与地标点</text>
+          <text class="nav-subtitle">人员资料与协作成员账号</text>
         </view>
       </view>
 
@@ -24,32 +24,6 @@
           <text class="action-chevron">›</text>
         </button>
 
-        <button class="admin-action" @tap="goPublishTask">
-          <view class="action-icon action-icon-task">食</view>
-          <view class="action-copy">
-            <text class="action-title">发布喂食任务</text>
-            <text class="action-subtitle">创建暑假投喂点、日期、物资和图片</text>
-          </view>
-          <text class="action-chevron">›</text>
-        </button>
-
-        <button class="admin-action" @tap="goCreateSupplyPoint">
-          <view class="action-icon action-icon-supply">物</view>
-          <view class="action-copy">
-            <text class="action-title">新建物资点</text>
-            <text class="action-subtitle">创建地图物资点、配置初始物资和路线照片</text>
-          </view>
-          <text class="action-chevron">›</text>
-        </button>
-
-        <button class="admin-action" @tap="goCreateLandmark">
-          <view class="action-icon action-icon-landmark">地</view>
-          <view class="action-copy">
-            <text class="action-title">新建地标点</text>
-            <text class="action-subtitle">插入长期地图地标、照片和路线说明</text>
-          </view>
-          <text class="action-chevron">›</text>
-        </button>
       </view>
     </view>
   </view>
@@ -62,18 +36,6 @@ const userStore = useUserStore();
 
 function goUserManagement() {
   uni.navigateTo({ url: "/pages/admin/users/index" });
-}
-
-function goPublishTask() {
-  uni.navigateTo({ url: "/pages/admin/tasks/create" });
-}
-
-function goCreateSupplyPoint() {
-  uni.navigateTo({ url: "/pages/admin/supplies/create" });
-}
-
-function goCreateLandmark() {
-  uni.navigateTo({ url: "/pages/admin/landmarks/create" });
 }
 
 function goBack() {
@@ -173,22 +135,6 @@ function goBack() {
   font-size: 48rpx;
   line-height: 66rpx;
   text-align: center;
-}
-
-.action-icon-task {
-  background: #ff8b22;
-}
-
-.action-icon-supply {
-  background: #287c31;
-  font-size: 34rpx;
-  line-height: 72rpx;
-}
-
-.action-icon-landmark {
-  background: #2d72d9;
-  font-size: 34rpx;
-  line-height: 72rpx;
 }
 
 .action-copy {

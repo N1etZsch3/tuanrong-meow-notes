@@ -585,6 +585,7 @@ def _catalog_summary_payload(
         else None,
         "specification": catalog.specification,
         "unit": catalog.unit,
+        "description": catalog.description,
         "cover_image_url": catalog.cover_image_url,
         "status": catalog.status,
         "total_current_quantity": _quantity(total_current),
@@ -671,6 +672,7 @@ def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) 
             status_code=409,
         )
 
+    holding_status = "active" if payload.initial_quantity > 0 else "empty"
     holding = MedicineHolding(
         medicine_id=catalog.id,
         holder_id=holder_id,
@@ -681,7 +683,7 @@ def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) 
         total_in_quantity=payload.initial_quantity,
         current_quantity=payload.initial_quantity,
         unit_snapshot=catalog.unit,
-        status="active",
+        status=holding_status,
         last_operation_at=now,
         remark=payload.remark,
         created_at=now,

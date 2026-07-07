@@ -38,7 +38,7 @@ class MedicineCreateRequest(BaseModel):
     medicine_id: UUID | None = None
     catalog: MedicineCatalogCreateRequest | None = None
     holder_id: UUID | None = None
-    initial_quantity: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    initial_quantity: Decimal = Field(ge=0, max_digits=12, decimal_places=2)
     remark: str | None = Field(default=None, max_length=500)
 
     @field_validator("remark")

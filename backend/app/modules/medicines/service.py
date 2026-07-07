@@ -566,7 +566,10 @@ def _catalog_summary_payload(
 def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) -> dict:
     now = _now()
     created_catalog = False
-    holder_id = payload.holder_id if user.role in {"admin", "super_admin"} else user.id
+    if user.role in {"admin", "super_admin"}:
+        holder_id = payload.holder_id or user.id
+    else:
+        holder_id = user.id
     if payload.medicine_id:
         catalog = _get_catalog_or_raise(db, payload.medicine_id)
         if catalog.status != "active":

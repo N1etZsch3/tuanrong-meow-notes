@@ -9,6 +9,7 @@ export interface MedicineOption {
 }
 
 export interface MedicineCreateDraft {
+  holder_id: string;
   selected_medicine_id: string;
   name: string;
   category_id: string;
@@ -88,6 +89,7 @@ function normalizedPhotoUrls(photoUrls: string[]): string[] {
 
 export function createDefaultMedicineDraft(): MedicineCreateDraft {
   return {
+    holder_id: "",
     selected_medicine_id: "",
     name: "",
     category_id: "",
@@ -167,6 +169,7 @@ export function buildMedicineCreatePayload(
   const photoUrls = normalizedPhotoUrls(draft.photo_urls);
   const coverImageUrl = photoUrls[0] || nullableTrim(draft.cover_image_url);
   const basePayload = {
+    ...(nullableTrim(draft.holder_id) ? { holder_id: draft.holder_id.trim() } : {}),
     initial_quantity: Number(draft.initial_quantity),
     remark: nullableTrim(draft.remark),
   };

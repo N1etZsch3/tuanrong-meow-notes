@@ -54,6 +54,7 @@ describe("medicine management pages", () => {
 
   it("creates medicines with inline catalog suggestions and image upload", () => {
     expect(medicineCreateSource).toContain("createMedicine");
+    expect(medicineCreateSource).toContain("listAdminUsers");
     expect(medicineCreateSource).toContain("searchMedicines");
     expect(medicineCreateSource).not.toContain("modeOptions");
     expect(medicineCreateSource).toContain("validateMedicineCreateDraft");
@@ -71,6 +72,12 @@ describe("medicine management pages", () => {
     expect(medicineCreateSource).toContain('usage_type: "medicine_photo"');
     expect(medicineCreateSource).not.toContain('usage_type: "medicine_cover"');
     expect(medicineCreateSource).toContain('v-for="photo in draft.photo_urls"');
+    expect(medicineCreateSource).toContain("canAssignHolder");
+    expect(medicineCreateSource).toContain("holderKeyword");
+    expect(medicineCreateSource).toContain('class="holder-suggestion-list"');
+    expect(medicineCreateSource).toContain("selectHolder");
+    expect(medicineCreateSource).toContain("clearSelectedHolder");
+    expect(medicineCreateSource).toContain("请从列表中选择持有人");
     expect(medicineCreateSource).toContain("chooseMedicineImage");
     expect(medicineCreateSource).toContain("uploadImage");
     expect(medicineCreateSource).toContain("cover_image_url");
@@ -157,6 +164,28 @@ describe("medicine management pages", () => {
         photo_urls: [],
       },
       initial_quantity: 1,
+      remark: null,
+    });
+
+    const assignedDraft = createDefaultMedicineDraft();
+    assignedDraft.holder_id = "holder-1";
+    assignedDraft.name = "生理盐水";
+    assignedDraft.unit = "瓶";
+    assignedDraft.initial_quantity = 2;
+
+    expect(buildMedicineCreatePayload(assignedDraft)).toEqual({
+      holder_id: "holder-1",
+      catalog: {
+        name: "生理盐水",
+        category_id: null,
+        specification: null,
+        unit: "瓶",
+        description: null,
+        usage_notes: null,
+        cover_image_url: null,
+        photo_urls: [],
+      },
+      initial_quantity: 2,
       remark: null,
     });
 

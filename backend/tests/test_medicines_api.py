@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
-from app.modules.medicines.models import MedicinePhoto, MedicineUseApplication
+from app.modules.medicines.models import MedicineHolding, MedicinePhoto, MedicineUseApplication
 
 EXPECTED_MEDICINE_TABLES = {
     "medicine_categories",
@@ -212,6 +212,43 @@ def test_member_can_create_medicine_and_read_catalog_summary(api_client, db_sess
     assert search_item["medicine_id"] == created["medicine_id"]
     assert search_item["category"]["name"] == "抗生素"
     assert search_item["cover_image_url"] == "https://img.example.com/amoxicillin.jpg"
+
+
+def test_admin_create_medicine_without_holder_defaults_to_self(api_client, db_session):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    headers = auth_headers(admin)
+    categories_response = api_client.get("/api/v1/medicine-categories", headers=headers)
+    assert categories_response.status_code == 200
+    category_id = categories_response.json()["data"]["items"][0]["id"]
+
+    response = api_client.post(
+        "/api/v1/medicines",
+        headers=headers,
+        json={
+            "catalog": {
+                "name": "生理盐水",
+                "category_id": category_id,
+                "specification": "330ml/瓶",
+                "unit": "瓶",
+                "description": "清洁冲洗",
+                "usage_notes": "外用",
+                "photo_urls": [
+                    "https://img.example.com/saline-1.jpg",
+                    "https://img.example.com/saline-2.jpg",
+                ],
+            },
+            "initial_quantity": 2,
+            "remark": None,
+        },
+    )
+
+    assert response.status_code == 200
+    created = response.json()["data"]
+    holding = db_session.get(MedicineHolding, UUID(created["holding_id"]))
+    assert holding is not None
+    assert holding.holder_id == admin.id
+    assert holding.source_type == "self_created"
+    assert holding.admin_creator_id is None
 
 
 def test_holder_can_record_purchase_use_and_scrap(api_client, db_session):

@@ -168,6 +168,58 @@
 
         <view class="section-card">
           <text class="section-title">持有库存</text>
+          <view class="field-group">
+            <text class="field-label">持有人</text>
+            <view v-if="!canAssignHolder" class="readonly-holder">
+              <text>{{ currentUserLabel }}</text>
+              <text class="holder-hint">成员新增药品时默认由本人持有。</text>
+            </view>
+            <view v-else>
+              <view v-if="selectedHolder" class="selected-medicine-tag">
+                <text class="tag-name">{{ selectedHolderLabel }}</text>
+                <button class="tag-remove" hover-class="button-hover" @tap="clearSelectedHolder">
+                  ×
+                </button>
+              </view>
+              <input
+                v-else
+                v-model.trim="holderKeyword"
+                class="form-input"
+                placeholder="搜索昵称 / 喵喵号 / 姓名"
+                placeholder-class="placeholder"
+                @input="handleHolderKeywordInput"
+                @focus="handleHolderKeywordInput"
+                @confirm="loadHolderSuggestions"
+              />
+              <scroll-view
+                v-if="showHolderSuggestions"
+                class="holder-suggestion-list"
+                scroll-y
+                :show-scrollbar="false"
+              >
+                <button
+                  v-for="holder in holderSuggestions"
+                  :key="holder.id"
+                  class="holder-suggestion-card"
+                  hover-class="button-hover"
+                  @tap="selectHolder(holder)"
+                >
+                  <text class="suggestion-name">
+                    {{ holder.profile.nickname || "未命名成员" }}
+                  </text>
+                  <text class="suggestion-meta">
+                    {{ holder.meow_no || holder.student_no }} · {{ holder.role }}
+                  </text>
+                </button>
+                <text v-if="isSearchingHolder && !holderSuggestions.length" class="hint-line">
+                  正在查询成员...
+                </text>
+              </scroll-view>
+              <text v-if="!selectedHolder" class="hint-line">
+                留空时默认由本人持有；输入后请从列表中选择持有人。
+              </text>
+            </view>
+          </view>
           <view class="field-grid">
             <view class="field-group">
               <text class="field-label">初始数量</text>
@@ -211,6 +263,7 @@
 import { onLoad } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
+import { listAdminUsers, type AdminUserDto } from "@/api/admin-users";
 import { uploadImage } from "@/api/files";
 import {
   createMedicine,
@@ -240,17 +293,38 @@ const MEDICINE_IMAGE_LIMIT = 5;
 const draft = ref(createDefaultMedicineDraft());
 const categories = ref<MedicineCategoryDto[]>([]);
 const catalogSuggestions = ref<MedicineSearchItemDto[]>([]);
+const holderKeyword = ref("");
+const holderSuggestions = ref<AdminUserDto[]>([]);
+const selectedHolder = ref<AdminUserDto | null>(null);
 const hasSearchedCatalog = ref(false);
 const isSearchingCatalog = ref(false);
+const isSearchingHolder = ref(false);
 const isUploadingImage = ref(false);
 const isSubmitting = ref(false);
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
+let holderSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchRequestSeq = 0;
+let holderSearchRequestSeq = 0;
 
 const isCatalogLinked = computed(() => isMedicineCatalogLinked(draft.value));
+const canAssignHolder = computed(() => userStore.isAdmin);
 const remainingImageSlots = computed(() =>
   Math.max(MEDICINE_IMAGE_LIMIT - draft.value.photo_urls.length, 0),
 );
+const currentUserLabel = computed(() => {
+  const user = userStore.currentUser;
+  if (!user) {
+    return "我自己";
+  }
+  return `${user.nickname || "我自己"}（${user.meow_no || user.student_no}）`;
+});
+const selectedHolderLabel = computed(() => {
+  const holder = selectedHolder.value;
+  if (!holder) {
+    return "";
+  }
+  return `${holder.profile.nickname || "未命名成员"}（${holder.meow_no || holder.student_no}）`;
+});
 const categoryOptions = computed(() => [
   { label: "请选择分类", value: "" },
   ...categories.value.map((category) => ({
@@ -279,6 +353,13 @@ const manualCatalogHintVisible = computed(
     hasSearchedCatalog.value &&
     draft.value.name.trim().length > 0 &&
     !isSearchingCatalog.value,
+);
+const showHolderSuggestions = computed(
+  () =>
+    canAssignHolder.value &&
+    !selectedHolder.value &&
+    holderKeyword.value.trim().length > 0 &&
+    (holderSuggestions.value.length > 0 || isSearchingHolder.value),
 );
 
 async function getAccessToken(): Promise<string | null> {
@@ -392,6 +473,86 @@ function clearSelectedMedicine() {
   isSearchingCatalog.value = false;
 }
 
+function handleHolderKeywordInput(event?: unknown) {
+  if (!canAssignHolder.value || selectedHolder.value) {
+    return;
+  }
+  const inputValue = readInputValue(event);
+  if (inputValue !== null) {
+    holderKeyword.value = inputValue;
+  }
+  scheduleHolderSearch();
+}
+
+function scheduleHolderSearch() {
+  if (holderSearchTimer) {
+    clearTimeout(holderSearchTimer);
+  }
+  const keyword = holderKeyword.value.trim();
+  draft.value.holder_id = "";
+  if (!keyword) {
+    holderSuggestions.value = [];
+    isSearchingHolder.value = false;
+    return;
+  }
+  holderSearchTimer = setTimeout(() => {
+    void loadHolderSuggestions();
+  }, 260);
+}
+
+async function loadHolderSuggestions() {
+  const keyword = holderKeyword.value.trim();
+  if (!keyword || !canAssignHolder.value || selectedHolder.value) {
+    holderSuggestions.value = [];
+    return;
+  }
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  const requestId = ++holderSearchRequestSeq;
+  isSearchingHolder.value = true;
+  try {
+    const data = await listAdminUsers(token, {
+      page: 1,
+      page_size: 8,
+      keyword,
+      status: "active",
+      sort_by: "meow_no",
+      sort_order: "asc",
+    });
+    if (requestId === holderSearchRequestSeq) {
+      holderSuggestions.value = data.items;
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "查询成员失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    if (requestId === holderSearchRequestSeq) {
+      isSearchingHolder.value = false;
+    }
+  }
+}
+
+function selectHolder(holder: AdminUserDto) {
+  if (holderSearchTimer) {
+    clearTimeout(holderSearchTimer);
+  }
+  selectedHolder.value = holder;
+  draft.value.holder_id = holder.id;
+  holderKeyword.value = selectedHolderLabel.value;
+  holderSuggestions.value = [];
+  isSearchingHolder.value = false;
+}
+
+function clearSelectedHolder() {
+  selectedHolder.value = null;
+  draft.value.holder_id = "";
+  holderKeyword.value = "";
+  holderSuggestions.value = [];
+  isSearchingHolder.value = false;
+}
+
 function chooseMedicineImage() {
   if (isCatalogLinked.value) {
     return;
@@ -458,6 +619,10 @@ function removeMedicineImage(photo: string) {
 }
 
 async function submitMedicine() {
+  if (canAssignHolder.value && holderKeyword.value.trim() && !selectedHolder.value) {
+    uni.showToast({ title: "请从列表中选择持有人", icon: "none" });
+    return;
+  }
   const validation = validateMedicineCreateDraft(draft.value);
   if (!validation.valid) {
     uni.showToast({ title: validation.message || "请完善药品信息", icon: "none" });
@@ -528,6 +693,7 @@ onLoad(() => {
 
 .back-button,
 .catalog-suggestion-card,
+.holder-suggestion-card,
 .tag-remove,
 .photo-remove,
 .photo-upload,
@@ -540,6 +706,7 @@ onLoad(() => {
 
 .back-button::after,
 .catalog-suggestion-card::after,
+.holder-suggestion-card::after,
 .tag-remove::after,
 .photo-remove::after,
 .photo-upload::after,
@@ -565,6 +732,7 @@ onLoad(() => {
 .field-label,
 .field-hint,
 .hint-line,
+.holder-hint,
 .suggestion-name,
 .suggestion-meta,
 .suggestion-category,
@@ -712,7 +880,8 @@ onLoad(() => {
   border-radius: 22rpx;
 }
 
-.catalog-suggestion-card {
+.catalog-suggestion-card,
+.holder-suggestion-card {
   box-sizing: border-box;
   width: 100%;
   min-height: 112rpx;
@@ -726,8 +895,36 @@ onLoad(() => {
   text-align: left;
 }
 
-.catalog-suggestion-card + .catalog-suggestion-card {
+.catalog-suggestion-card + .catalog-suggestion-card,
+.holder-suggestion-card + .holder-suggestion-card {
   margin-top: 12rpx;
+}
+
+.holder-suggestion-list {
+  max-height: 340rpx;
+  margin-top: 14rpx;
+  overflow-y: auto;
+  border-radius: 22rpx;
+}
+
+.readonly-holder {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72rpx;
+  padding: 16rpx 20rpx;
+  border: 2rpx solid rgba(40, 124, 49, 0.16);
+  border-radius: 20rpx;
+  background: rgba(238, 244, 236, 0.72);
+  color: #111827;
+  font-size: 25rpx;
+  font-weight: 900;
+}
+
+.holder-hint {
+  margin-top: 8rpx;
+  color: #667085;
+  font-size: 22rpx;
+  font-weight: 700;
 }
 
 .suggestion-cover {

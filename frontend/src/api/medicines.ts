@@ -64,6 +64,7 @@ export interface MedicineListQuery {
 export interface MedicineCatalogPayload {
   name: string;
   category_id?: string | null;
+  category_name?: string | null;
   specification?: string | null;
   unit: string;
   description?: string | null;
@@ -92,6 +93,22 @@ export interface MedicineCreateResponse {
   created_catalog: boolean;
   created_holding: boolean;
   initial_stock_log_id: string;
+}
+
+export interface MedicineCatalogUpdatePayload {
+  name?: string | null;
+  category_id?: string | null;
+  category_name?: string | null;
+  specification?: string | null;
+  unit?: string | null;
+  description?: string | null;
+  usage_notes?: string | null;
+  cover_image_url?: string | null;
+}
+
+export interface MedicineCatalogUpdateResponse {
+  medicine_id: string;
+  updated_at: string;
 }
 
 export interface MedicineStockLogDto {
@@ -348,6 +365,22 @@ export function createMedicine(
   return request<MedicineCreateResponse, MedicineCreatePayload & Record<string, unknown>>({
     url: API_ENDPOINTS.medicines.list,
     method: "POST",
+    data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function updateMedicineCatalog(
+  accessToken: string,
+  medicineId: string,
+  payload: MedicineCatalogUpdatePayload,
+): Promise<MedicineCatalogUpdateResponse> {
+  return request<
+    MedicineCatalogUpdateResponse,
+    MedicineCatalogUpdatePayload & Record<string, unknown>
+  >({
+    url: API_ENDPOINTS.admin.medicine(medicineId),
+    method: "PATCH",
     data: { ...payload },
     token: accessToken,
   });

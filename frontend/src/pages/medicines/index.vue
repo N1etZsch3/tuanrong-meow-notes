@@ -7,7 +7,7 @@
           <button class="back-button" hover-class="button-hover" @tap="goBack">‹</button>
           <view class="title-copy">
             <view class="title-row">
-              <text class="title-text">药品管理</text>
+              <text class="title-text">药品</text>
               <image class="title-icon" :src="medicineBookIcon" mode="aspectFit" />
             </view>
             <text class="title-subtitle">药品库存与用药协作</text>
@@ -20,7 +20,7 @@
             v-model="searchKeyword"
             class="search-input"
             confirm-type="search"
-            placeholder="搜索药品 / 规格 / 持有人"
+            placeholder="搜索药品 / 分类 / 持有人"
             placeholder-class="search-placeholder"
             @confirm="handleSearchConfirm"
           />
@@ -106,25 +106,28 @@
                     {{ medicine.stock_status_label }}
                   </text>
                 </view>
-                <text class="medicine-meta">
-                  {{ medicine.category?.name || "未分类" }} · {{ medicine.specification || "暂无规格" }}
-                </text>
-                <view class="medicine-stats">
-                  <text>{{ formatMedicineQuantity(medicine.total_current_quantity, medicine.unit) }}</text>
-                  <text>{{ medicine.holder_count }} 位持有人</text>
+                <view class="medicine-tag-row">
+                  <text
+                    class="category-tag"
+                    :class="getMedicineCategoryClass(medicine.category?.name)"
+                  >
+                    {{ medicine.category?.name || "其他" }}
+                  </text>
                 </view>
                 <scroll-view class="holder-strip" scroll-x :show-scrollbar="false" @tap.stop>
                   <view class="holder-row">
                     <button
                       v-for="holder in medicine.holders"
                       :key="holder.holding_id"
-                      class="holder-chip"
+                      class="holder-inventory-card"
                       :class="{ mine: holder.is_current_user_holder }"
                       hover-class="button-hover"
                       @tap.stop="goHoldingDetail(holder.holding_id)"
                     >
-                      {{ holder.holder_nickname }} ·
-                      {{ formatMedicineQuantity(holder.current_quantity, holder.unit) }}
+                      <text class="holder-card-name">{{ holder.holder_nickname }}</text>
+                      <text class="holder-card-quantity">
+                        {{ formatMedicineQuantity(holder.current_quantity, holder.unit) }}
+                      </text>
                     </button>
                   </view>
                 </scroll-view>
@@ -162,6 +165,7 @@ import { useUserStore } from "@/stores/user";
 import {
   MEDICINE_HOLDING_RELATION_OPTIONS,
   formatMedicineQuantity,
+  getMedicineCategoryClass,
   getMedicineStockClass,
 } from "@/pages/medicines/medicine-page";
 
@@ -379,7 +383,7 @@ onShow(() => {
 .floating-add,
 .search-button,
 .clear-filter-button,
-.holder-chip,
+.holder-inventory-card,
 .retry-button {
   margin: 0;
   padding: 0;
@@ -390,7 +394,7 @@ onShow(() => {
 .floating-add::after,
 .search-button::after,
 .clear-filter-button::after,
-.holder-chip::after,
+.holder-inventory-card::after,
 .retry-button::after {
   border: 0;
 }
@@ -573,8 +577,7 @@ onShow(() => {
   gap: 12rpx;
 }
 
-.medicine-head,
-.medicine-stats {
+.medicine-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -613,12 +616,54 @@ onShow(() => {
   color: #d73546;
 }
 
-.medicine-meta,
-.medicine-stats {
-  color: #4b5563;
-  font-size: 23rpx;
-  font-weight: 800;
-  line-height: 1.35;
+.medicine-tag-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.category-tag {
+  max-width: 100%;
+  padding: 8rpx 14rpx;
+  border-radius: 14rpx;
+  font-size: 21rpx;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.category-antibiotic {
+  background: #dff1ff;
+  color: #1d6fb8;
+}
+
+.category-painkiller {
+  background: #fff0d9;
+  color: #a45b00;
+}
+
+.category-deworming {
+  background: #e4f6dd;
+  color: #237a2f;
+}
+
+.category-disinfection {
+  background: #def7f0;
+  color: #167766;
+}
+
+.category-eye-ear {
+  background: #ffe6e6;
+  color: #c43b3b;
+}
+
+.category-nutrition {
+  background: #f3e8ff;
+  color: #7a3eb1;
+}
+
+.category-other {
+  background: #edf0f3;
+  color: #526070;
 }
 
 .holder-strip {
@@ -632,20 +677,43 @@ onShow(() => {
   gap: 10rpx;
 }
 
-.holder-chip {
+.holder-inventory-card {
+  box-sizing: border-box;
   min-width: 132rpx;
-  height: 54rpx;
-  border-radius: 16rpx;
+  height: 62rpx;
+  padding: 7rpx 14rpx;
+  border-radius: 12rpx;
   background: #edf4ff;
   color: #2276ff;
-  font-size: 20rpx;
-  font-weight: 900;
-  line-height: 54rpx;
+  text-align: left;
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4rpx;
+  flex-shrink: 0;
 }
 
-.holder-chip.mine {
+.holder-inventory-card.mine {
   background: #e4f6dd;
   color: #237a2f;
+}
+
+.holder-card-name,
+.holder-card-quantity {
+  display: block;
+  overflow: hidden;
+  font-weight: 900;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holder-card-name {
+  font-size: 19rpx;
+}
+
+.holder-card-quantity {
+  font-size: 17rpx;
 }
 
 .state-box {

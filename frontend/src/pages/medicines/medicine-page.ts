@@ -2,6 +2,7 @@ import type { MedicineCatalogPayload, MedicineCreatePayload } from "@/api/medici
 
 export type MedicineHoldingRelation = "all" | "mine" | "others";
 export type MedicineStockTone = "empty" | "low" | "normal";
+export type MedicineLogFilterValue = "all" | "use" | "purchase" | "other";
 
 export interface MedicineOption {
   label: string;
@@ -13,6 +14,7 @@ export interface MedicineCreateDraft {
   selected_medicine_id: string;
   name: string;
   category_id: string;
+  category_name: string;
   specification: string;
   unit: string;
   description: string;
@@ -51,6 +53,18 @@ export const MEDICINE_STOCK_STATUS_OPTIONS: MedicineOption[] = [
   { label: "库存正常", value: "normal" },
   { label: "库存较少", value: "low" },
   { label: "暂无库存", value: "empty" },
+];
+
+export const MEDICINE_DEFAULT_CATEGORY_NAME = "其他";
+
+export const MEDICINE_LOG_FILTER_OPTIONS: Array<{
+  label: string;
+  value: MedicineLogFilterValue;
+}> = [
+  { label: "全部", value: "all" },
+  { label: "使用", value: "use" },
+  { label: "购入", value: "purchase" },
+  { label: "其他", value: "other" },
 ];
 
 const MEDICINE_OPERATION_LABELS: Record<string, string> = {
@@ -93,6 +107,7 @@ export function createDefaultMedicineDraft(): MedicineCreateDraft {
     selected_medicine_id: "",
     name: "",
     category_id: "",
+    category_name: "",
     specification: "",
     unit: "",
     description: "",
@@ -117,6 +132,7 @@ export function applySelectedMedicineToDraft(
     selected_medicine_id: medicine.medicine_id,
     name: medicine.name,
     category_id: medicine.category?.id || medicine.category_id || "",
+    category_name: "",
     specification: medicine.specification || "",
     unit: medicine.unit,
     description: medicine.description || "",
@@ -136,6 +152,7 @@ export function clearSelectedMedicineDraft(draft: MedicineCreateDraft): Medicine
     selected_medicine_id: "",
     name: "",
     category_id: "",
+    category_name: "",
     specification: "",
     unit: "",
     description: "",
@@ -168,6 +185,10 @@ export function buildMedicineCreatePayload(
 ): MedicineCreatePayload {
   const photoUrls = normalizedPhotoUrls(draft.photo_urls);
   const coverImageUrl = photoUrls[0] || nullableTrim(draft.cover_image_url);
+  const categoryName = nullableTrim(draft.category_name);
+  const categoryPayload = nullableTrim(draft.category_id)
+    ? { category_id: draft.category_id.trim() }
+    : { category_name: categoryName || MEDICINE_DEFAULT_CATEGORY_NAME };
   const basePayload = {
     ...(nullableTrim(draft.holder_id) ? { holder_id: draft.holder_id.trim() } : {}),
     initial_quantity: Number(draft.initial_quantity),
@@ -185,7 +206,7 @@ export function buildMedicineCreatePayload(
     ...basePayload,
     catalog: {
       name: draft.name.trim(),
-      category_id: nullableTrim(draft.category_id),
+      ...categoryPayload,
       specification: nullableTrim(draft.specification),
       unit: draft.unit.trim(),
       description: nullableTrim(draft.description),
@@ -218,4 +239,50 @@ export function getMedicineStockClass(status: string | null | undefined): string
 
 export function getMedicineOperationLabel(operationType: string): string {
   return MEDICINE_OPERATION_LABELS[operationType] || operationType;
+}
+
+export function getMedicineCategoryClass(categoryName: string | null | undefined): string {
+  const name = categoryName || "";
+  if (name.includes("抗生素") || name.includes("消炎")) {
+    return "category-antibiotic";
+  }
+  if (name.includes("止疼") || name.includes("镇痛")) {
+    return "category-painkiller";
+  }
+  if (name.includes("驱虫")) {
+    return "category-deworming";
+  }
+  if (name.includes("消毒") || name.includes("外用")) {
+    return "category-disinfection";
+  }
+  if (name.includes("眼") || name.includes("耳")) {
+    return "category-eye-ear";
+  }
+  if (name.includes("营养") || name.includes("补充")) {
+    return "category-nutrition";
+  }
+  return "category-other";
+}
+
+function medicineLogGroup(operationType: string): MedicineLogFilterValue {
+  if (["use_self", "application_use"].includes(operationType)) {
+    return "use";
+  }
+  if (
+    ["initial_in", "purchase", "distribute_in", "transfer_in"].includes(operationType)
+  ) {
+    return "purchase";
+  }
+  return "other";
+}
+
+export function getMedicineLogToneClass(operationType: string): string {
+  return `log-${medicineLogGroup(operationType)}`;
+}
+
+export function isMedicineLogVisibleForFilter(
+  operationType: string,
+  filter: MedicineLogFilterValue,
+): boolean {
+  return filter === "all" || medicineLogGroup(operationType) === filter;
 }

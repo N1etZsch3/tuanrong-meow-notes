@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 class MedicineCatalogCreateRequest(BaseModel):
     name: str = Field(min_length=1, max_length=128)
     category_id: UUID | None = None
+    category_name: str | None = Field(default=None, max_length=64)
     specification: str | None = Field(default=None, max_length=128)
     unit: str = Field(min_length=1, max_length=32)
     description: str | None = Field(default=None, max_length=1000)
@@ -16,6 +17,7 @@ class MedicineCatalogCreateRequest(BaseModel):
 
     @field_validator(
         "name",
+        "category_name",
         "specification",
         "unit",
         "description",
@@ -201,6 +203,7 @@ class MedicineCategoryStatusRequest(BaseModel):
 class MedicineCatalogUpdateRequest(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=128)
     category_id: UUID | None = None
+    category_name: str | None = Field(default=None, max_length=64)
     specification: str | None = Field(default=None, max_length=128)
     unit: str | None = Field(default=None, min_length=1, max_length=32)
     description: str | None = Field(default=None, max_length=1000)
@@ -209,6 +212,7 @@ class MedicineCatalogUpdateRequest(BaseModel):
 
     @field_validator(
         "name",
+        "category_name",
         "specification",
         "unit",
         "description",

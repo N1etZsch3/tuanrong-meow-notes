@@ -251,6 +251,59 @@ def test_admin_create_medicine_without_holder_defaults_to_self(api_client, db_se
     assert holding.admin_creator_id is None
 
 
+def test_create_medicine_defaults_to_other_and_allows_custom_category(
+    api_client,
+    db_session,
+):
+    member = create_user(db_session, nickname="分类测试成员")
+    headers = auth_headers(member)
+
+    other_response = api_client.post(
+        "/api/v1/medicines",
+        headers=headers,
+        json={
+            "catalog": {
+                "name": "未分类药品",
+                "unit": "瓶",
+            },
+            "initial_quantity": 1,
+        },
+    )
+    assert other_response.status_code == 200
+    other_created = other_response.json()["data"]
+    other_detail = api_client.get(
+        f"/api/v1/medicines/{other_created['medicine_id']}",
+        headers=headers,
+    ).json()["data"]
+    assert other_detail["category"]["name"] == "其他"
+
+    custom_response = api_client.post(
+        "/api/v1/medicines",
+        headers=headers,
+        json={
+            "catalog": {
+                "name": "皮肤喷剂",
+                "category_name": "皮肤护理",
+                "unit": "瓶",
+            },
+            "initial_quantity": 2,
+        },
+    )
+    assert custom_response.status_code == 200
+    custom_created = custom_response.json()["data"]
+    custom_detail = api_client.get(
+        f"/api/v1/medicines/{custom_created['medicine_id']}",
+        headers=headers,
+    ).json()["data"]
+    assert custom_detail["category"]["name"] == "皮肤护理"
+
+    categories_response = api_client.get("/api/v1/medicine-categories", headers=headers)
+    assert categories_response.status_code == 200
+    category_names = [item["name"] for item in categories_response.json()["data"]["items"]]
+    assert "其他" in category_names
+    assert "皮肤护理" in category_names
+
+
 def test_holder_can_record_purchase_use_and_scrap(api_client, db_session):
     holder = create_user(db_session, nickname="持有人A")
     created = create_medicine(api_client, holder, db_session, initial_quantity=20)
@@ -540,6 +593,7 @@ def test_admin_can_manage_categories_and_edit_catalog(api_client, db_session):
         headers=admin_headers,
         json={
             "name": "阿莫西林克拉维酸钾",
+            "category_name": "术后护理",
             "specification": "50mg/片",
             "unit": "片",
             "description": "更新后的说明",
@@ -554,6 +608,7 @@ def test_admin_can_manage_categories_and_edit_catalog(api_client, db_session):
         headers=auth_headers(member),
     ).json()["data"]
     assert detail["name"] == "阿莫西林克拉维酸钾"
+    assert detail["category"]["name"] == "术后护理"
     assert detail["specification"] == "50mg/片"
     assert detail["description"] == "更新后的说明"
 

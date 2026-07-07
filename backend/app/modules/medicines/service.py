@@ -49,6 +49,7 @@ MEDICINE_ERROR_APPLY_TO_SELF = 66020
 MEDICINE_ERROR_HAS_STOCK = 66013
 MEDICINE_ERROR_HAS_PENDING_APPLICATION = 66014
 MEDICINE_ERROR_HOLDING_DELETE_NON_EMPTY = 66022
+DEFAULT_CATEGORY_NAME = "其他"
 
 DEFAULT_CATEGORIES = [
     ("抗生素", "antibiotic"),
@@ -248,6 +249,49 @@ def _get_category_or_raise(db: Session, category_id: UUID | None) -> MedicineCat
             status_code=400,
         )
     return category
+
+
+def _resolve_category_id(
+    db: Session,
+    *,
+    category_id: UUID | None,
+    category_name: str | None,
+    user: User,
+    now: datetime,
+) -> UUID | None:
+    if category_id is not None:
+        category = _get_category_or_raise(db, category_id)
+        return category.id if category else None
+
+    normalized_name = (category_name or DEFAULT_CATEGORY_NAME).strip() or DEFAULT_CATEGORY_NAME
+    ensure_default_categories(db, created_by=user.id)
+    category = db.scalar(
+        select(MedicineCategory).where(
+            func.lower(MedicineCategory.name) == normalized_name.lower(),
+            MedicineCategory.deleted_at.is_(None),
+        )
+    )
+    if category is not None:
+        if not category.is_enabled:
+            category.is_enabled = True
+            category.updated_by = user.id
+            category.updated_at = now
+        return category.id
+
+    max_sort_order = db.scalar(select(func.max(MedicineCategory.sort_order))) or 0
+    category = MedicineCategory(
+        name=normalized_name,
+        code=None,
+        sort_order=max_sort_order + 1,
+        is_enabled=True,
+        created_by=user.id,
+        updated_by=user.id,
+        created_at=now,
+        updated_at=now,
+    )
+    db.add(category)
+    db.flush()
+    return category.id
 
 
 def _category_payload(category: MedicineCategory) -> dict:
@@ -576,7 +620,13 @@ def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) 
             raise APIError(code=66012, message="药品已归档，不能执行该操作", status_code=409)
     else:
         assert payload.catalog is not None
-        _get_category_or_raise(db, payload.catalog.category_id)
+        category_id = _resolve_category_id(
+            db,
+            category_id=payload.catalog.category_id,
+            category_name=payload.catalog.category_name,
+            user=user,
+            now=now,
+        )
         photo_urls = _catalog_photo_urls(
             cover_image_url=payload.catalog.cover_image_url,
             photo_urls=payload.catalog.photo_urls,
@@ -584,7 +634,7 @@ def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) 
         cover_image_url = payload.catalog.cover_image_url or (photo_urls[0] if photo_urls else None)
         catalog = MedicineCatalog(
             name=payload.catalog.name,
-            category_id=payload.catalog.category_id,
+            category_id=category_id,
             specification=payload.catalog.specification,
             unit=payload.catalog.unit,
             description=payload.catalog.description,
@@ -1586,6 +1636,14 @@ def update_catalog(
     if payload.category_id is not None:
         _get_category_or_raise(db, payload.category_id)
         catalog.category_id = payload.category_id
+    elif payload.category_name is not None:
+        catalog.category_id = _resolve_category_id(
+            db,
+            category_id=None,
+            category_name=payload.category_name,
+            user=admin,
+            now=_now(),
+        )
     if payload.name is not None:
         catalog.name = payload.name
     if payload.specification is not None:

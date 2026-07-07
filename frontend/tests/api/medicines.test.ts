@@ -12,6 +12,7 @@ import {
   getMedicineLogs,
   recordMedicineAdjustment,
   recordMedicinePurchase,
+  updateMedicineCatalog,
 } from "@/api/medicines";
 
 function mockSuccess(data: unknown) {
@@ -87,6 +88,31 @@ describe("medicines api", () => {
         data: expect.objectContaining({
           initial_quantity: 20,
           catalog: expect.objectContaining({ name: "阿莫西林" }),
+        }),
+      }),
+    );
+  });
+
+  it("updates medicine catalog through admin endpoint", async () => {
+    const requestMock = mockSuccess({ medicine_id: "medicine-1" });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await updateMedicineCatalog("token-1", "medicine-1", {
+      name: "生理盐水",
+      category_name: "护理药品",
+      specification: "330ml/瓶",
+      unit: "瓶",
+      description: "清洗使用",
+      usage_notes: "外用",
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "PATCH",
+        url: expect.stringContaining("/admin/medicines/medicine-1"),
+        data: expect.objectContaining({
+          name: "生理盐水",
+          category_name: "护理药品",
         }),
       }),
     );

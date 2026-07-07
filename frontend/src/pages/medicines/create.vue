@@ -83,6 +83,16 @@
                 <image class="picker-arrow-icon" :src="filterArrowIcon" mode="aspectFit" />
               </view>
             </picker>
+            <input
+              v-if="!isCatalogLinked"
+              v-model.trim="draft.category_name"
+              class="form-input category-custom-input"
+              placeholder="自定义分类，可不填，默认其他"
+              placeholder-class="placeholder"
+            />
+            <text v-if="!isCatalogLinked" class="hint-line">
+              不选择分类时默认保存为其他（默认）；填写自定义分类会优先使用自定义分类。
+            </text>
           </view>
           <view class="field-grid">
             <view class="field-group">
@@ -326,7 +336,7 @@ const selectedHolderLabel = computed(() => {
   return `${holder.profile.nickname || "未命名成员"}（${holder.meow_no || holder.student_no}）`;
 });
 const categoryOptions = computed(() => [
-  { label: "请选择分类", value: "" },
+  { label: "其他（默认）", value: "" },
   ...categories.value.map((category) => ({
     label: category.name,
     value: category.id,
@@ -339,7 +349,7 @@ const selectedCategoryIndex = computed(() =>
   ),
 );
 const selectedCategoryLabel = computed(
-  () => categoryOptions.value[selectedCategoryIndex.value]?.label || "请选择分类",
+  () => categoryOptions.value[selectedCategoryIndex.value]?.label || "其他（默认）",
 );
 const showCatalogSuggestions = computed(
   () =>
@@ -389,6 +399,9 @@ function handleCategoryChange(event: PickerChangeEvent) {
     return;
   }
   draft.value.category_id = categoryOptions.value[pickerIndex(event)]?.value || "";
+  if (draft.value.category_id) {
+    draft.value.category_name = "";
+  }
 }
 
 function readInputValue(event: unknown): string | null {
@@ -829,6 +842,10 @@ onLoad(() => {
   width: 22rpx;
   height: 22rpx;
   transform: rotate(180deg);
+}
+
+.category-custom-input {
+  margin-top: 14rpx;
 }
 
 .form-textarea {

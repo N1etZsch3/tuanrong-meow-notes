@@ -12,6 +12,7 @@ import {
   applySelectedMedicineToDraft,
   buildMedicineCreatePayload,
   clearSelectedMedicineDraft,
+  createDefaultMedicineOperationDraft,
   createDefaultMedicineDraft,
   formatMedicineQuantity,
   getMedicineCategoryClass,
@@ -20,6 +21,7 @@ import {
   getMedicineStockTone,
   isMedicineLogVisibleForFilter,
   isMedicineCatalogLinked,
+  validateMedicineOperationDraft,
   validateMedicineCreateDraft,
 } from "../../src/pages/medicines/medicine-page";
 
@@ -150,6 +152,9 @@ describe("medicine management pages", () => {
     expect(medicineHoldingSource).toContain("记录报废");
     expect(medicineHoldingSource).toContain("申请使用");
     expect(medicineHoldingSource).toContain("通过申请");
+    expect(medicineHoldingSource).toContain("createDefaultMedicineOperationDraft");
+    expect(medicineHoldingSource).toContain("validateMedicineOperationDraft");
+    expect(medicineHoldingSource).not.toContain("v-model.number");
   });
 
   it("builds validated create payloads for manually entered and linked medicines", () => {
@@ -314,5 +319,61 @@ describe("medicine management pages", () => {
     expect(isMedicineLogVisibleForFilter("use_self", "use")).toBe(true);
     expect(isMedicineLogVisibleForFilter("purchase", "use")).toBe(false);
     expect(isMedicineLogVisibleForFilter("initial_in", "purchase")).toBe(true);
+  });
+
+  it("validates holding operation quantities before submitting", () => {
+    expect(createDefaultMedicineOperationDraft()).toEqual({
+      quantity: "",
+      reason_text: "",
+      remark: "",
+    });
+
+    expect(
+      validateMedicineOperationDraft(createDefaultMedicineOperationDraft(), "use", 2),
+    ).toEqual({
+      valid: false,
+      message: "请输入大于 0 的数量",
+    });
+
+    expect(
+      validateMedicineOperationDraft(
+        { quantity: 0, reason_text: "外用", remark: "" },
+        "use",
+        2,
+      ),
+    ).toEqual({
+      valid: false,
+      message: "请输入大于 0 的数量",
+    });
+
+    expect(
+      validateMedicineOperationDraft(
+        { quantity: 3, reason_text: "外用", remark: "" },
+        "application",
+        2,
+      ),
+    ).toEqual({
+      valid: false,
+      message: "数量不能超过当前库存",
+    });
+
+    expect(
+      validateMedicineOperationDraft(
+        { quantity: 3, reason_text: "", remark: "补货" },
+        "purchase",
+        2,
+      ),
+    ).toEqual({ valid: true });
+
+    expect(
+      validateMedicineOperationDraft(
+        { quantity: 1, reason_text: "", remark: "" },
+        "scrap",
+        2,
+      ),
+    ).toEqual({
+      valid: false,
+      message: "请填写原因说明",
+    });
   });
 });

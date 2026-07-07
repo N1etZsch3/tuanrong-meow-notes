@@ -1,11 +1,14 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import select
+from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
+from app.modules.medicines import service as medicine_service
 from app.modules.medicines.models import MedicineHolding, MedicinePhoto, MedicineUseApplication
 
 EXPECTED_MEDICINE_TABLES = {
@@ -397,6 +400,29 @@ def test_holder_can_record_purchase_use_and_scrap(api_client, db_session):
         "purchase",
         "initial_in",
     ]
+
+
+def test_holding_write_query_locks_only_holding_table_for_postgres():
+    class CaptureSession:
+        statement = None
+
+        def scalar(self, statement):
+            self.statement = statement
+            raise RuntimeError("captured holding write query")
+
+    db = CaptureSession()
+
+    with pytest.raises(RuntimeError, match="captured holding write query"):
+        medicine_service._holding_for_update_or_raise(db, uuid4())
+
+    compiled_sql = str(
+        db.statement.compile(
+            dialect=postgresql.dialect(),
+            compile_kwargs={"literal_binds": False},
+        )
+    ).upper()
+    assert "FOR UPDATE" in compiled_sql
+    assert "LEFT OUTER JOIN" not in compiled_sql
 
 
 def test_medicine_log_list_and_holding_adjustment_contracts(api_client, db_session):

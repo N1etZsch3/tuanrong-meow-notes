@@ -5,7 +5,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.errors import APIError, ErrorCode
 from app.modules.auth.models import User
@@ -334,11 +334,11 @@ def _holding_for_update_or_raise(db: Session, holding_id: UUID) -> MedicineHoldi
     holding = db.scalar(
         select(MedicineHolding)
         .options(
-            joinedload(MedicineHolding.medicine).joinedload(MedicineCatalog.category),
-            joinedload(MedicineHolding.holder).joinedload(User.profile),
+            selectinload(MedicineHolding.medicine).selectinload(MedicineCatalog.category),
+            selectinload(MedicineHolding.holder).selectinload(User.profile),
         )
         .where(MedicineHolding.id == holding_id, MedicineHolding.deleted_at.is_(None))
-        .with_for_update()
+        .with_for_update(of=MedicineHolding)
     )
     if holding is None:
         raise APIError(code=66004, message="持有库存不存在", status_code=404)

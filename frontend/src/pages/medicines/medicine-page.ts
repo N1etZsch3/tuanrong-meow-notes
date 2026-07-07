@@ -3,6 +3,7 @@ import type { MedicineCatalogPayload, MedicineCreatePayload } from "@/api/medici
 export type MedicineHoldingRelation = "all" | "mine" | "others";
 export type MedicineStockTone = "empty" | "low" | "normal";
 export type MedicineLogFilterValue = "all" | "use" | "purchase" | "other";
+export type MedicineOperationKind = "purchase" | "use" | "scrap" | "application";
 
 export interface MedicineOption {
   label: string;
@@ -29,6 +30,12 @@ export interface MedicineCatalogSuggestion extends MedicineCatalogPayload {
   medicine_id: string;
   category?: { id: string; name: string } | null;
   category_name?: string | null;
+}
+
+export interface MedicineOperationDraft {
+  quantity: number | string;
+  reason_text: string;
+  remark: string;
 }
 
 export interface MedicineValidationResult {
@@ -115,6 +122,13 @@ function normalizeInitialQuantity(value: number | ""): number {
   return Number(value);
 }
 
+function normalizeOperationQuantity(value: number | string): number {
+  if (typeof value === "string" && !value.trim()) {
+    return Number.NaN;
+  }
+  return Number(value);
+}
+
 export function createDefaultMedicineDraft(): MedicineCreateDraft {
   return {
     holder_id: "",
@@ -129,6 +143,14 @@ export function createDefaultMedicineDraft(): MedicineCreateDraft {
     cover_image_url: "",
     photo_urls: [],
     initial_quantity: "",
+    remark: "",
+  };
+}
+
+export function createDefaultMedicineOperationDraft(): MedicineOperationDraft {
+  return {
+    quantity: "",
+    reason_text: "",
     remark: "",
   };
 }
@@ -190,6 +212,27 @@ export function validateMedicineCreateDraft(
   const initialQuantity = normalizeInitialQuantity(draft.initial_quantity);
   if (!Number.isFinite(initialQuantity) || initialQuantity < 0) {
     return { valid: false, message: "请输入初始数量" };
+  }
+
+  return { valid: true };
+}
+
+export function validateMedicineOperationDraft(
+  draft: MedicineOperationDraft,
+  operationKind: MedicineOperationKind,
+  currentQuantity: number,
+): MedicineValidationResult {
+  const quantity = normalizeOperationQuantity(draft.quantity);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return { valid: false, message: "请输入大于 0 的数量" };
+  }
+
+  if (operationKind !== "purchase" && quantity > currentQuantity) {
+    return { valid: false, message: "数量不能超过当前库存" };
+  }
+
+  if (operationKind !== "purchase" && !draft.reason_text.trim()) {
+    return { valid: false, message: "请填写原因说明" };
   }
 
   return { valid: true };

@@ -169,7 +169,7 @@
         <view class="field-group">
           <text class="field-label">数量</text>
           <input
-            v-model.number="operationForm.quantity"
+            v-model="operationForm.quantity"
             class="form-input"
             type="digit"
             placeholder="0"
@@ -229,27 +229,24 @@ import {
   getMedicineLogToneClass,
   formatMedicineQuantity,
   getMedicineOperationLabel,
+  createDefaultMedicineOperationDraft,
+  validateMedicineOperationDraft,
+  type MedicineOperationKind,
 } from "@/pages/medicines/medicine-page";
 
 import medicineIcon from "../../../素材/png/地图点/医疗任务.png";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
-type OperationKind = "purchase" | "use" | "scrap" | "application";
-
 const userStore = useUserStore();
 const holdingId = ref("");
 const holding = ref<MedicineHoldingDetailDto | null>(null);
 const loadState = ref<LoadState>("idle");
 const errorMessage = ref("");
 const operationFormVisible = ref(false);
-const operationKind = ref<OperationKind>("purchase");
+const operationKind = ref<MedicineOperationKind>("purchase");
 const isSubmittingOperation = ref(false);
-const operationForm = reactive({
-  quantity: 0,
-  reason_text: "",
-  remark: "",
-});
+const operationForm = reactive(createDefaultMedicineOperationDraft());
 
 const operationTitle = computed(() => {
   if (operationKind.value === "purchase") {
@@ -295,11 +292,9 @@ async function loadMedicineHoldingDetail() {
   }
 }
 
-function openOperationForm(kind: OperationKind) {
+function openOperationForm(kind: MedicineOperationKind) {
   operationKind.value = kind;
-  operationForm.quantity = 0;
-  operationForm.reason_text = "";
-  operationForm.remark = "";
+  Object.assign(operationForm, createDefaultMedicineOperationDraft());
   operationFormVisible.value = true;
 }
 
@@ -311,12 +306,13 @@ function closeOperationForm() {
 }
 
 function validateOperationForm(): boolean {
-  if (!Number.isFinite(Number(operationForm.quantity)) || Number(operationForm.quantity) <= 0) {
-    uni.showToast({ title: "请输入数量", icon: "none" });
-    return false;
-  }
-  if (operationKind.value !== "purchase" && !operationForm.reason_text.trim()) {
-    uni.showToast({ title: "请填写原因说明", icon: "none" });
+  const result = validateMedicineOperationDraft(
+    operationForm,
+    operationKind.value,
+    holding.value?.current_quantity ?? 0,
+  );
+  if (!result.valid) {
+    uni.showToast({ title: result.message || "请检查表单", icon: "none" });
     return false;
   }
   return true;

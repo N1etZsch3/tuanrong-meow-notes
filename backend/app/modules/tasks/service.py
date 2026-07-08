@@ -63,6 +63,7 @@ TASK_ERROR_CANCELLED_CANNOT_CHECKIN = 62015
 
 LOCAL_TZ = ZoneInfo("Asia/Shanghai")
 AUTO_ARCHIVE_CANCEL_REASON = "父任务已归档，未完成子任务自动取消"
+PARENT_CANCEL_REASON = "父任务已取消，未完成子任务自动取消"
 
 
 def _now() -> datetime:
@@ -294,12 +295,16 @@ def _normalize_task_lifecycle(task: Task, *, today: date | None = None) -> bool:
             or changed
         )
         changed = True
-    if task.status == "archived":
+    if task.status in {"cancelled", "archived"}:
         changed = (
             cancel_unfinished_execution_dates(
                 task.execution_dates,
                 now=now,
-                reason=AUTO_ARCHIVE_CANCEL_REASON,
+                reason=(
+                    AUTO_ARCHIVE_CANCEL_REASON
+                    if task.status == "archived"
+                    else PARENT_CANCEL_REASON
+                ),
             )
             or changed
         )
@@ -1450,7 +1455,7 @@ def update_task_status(
             reason=(
                 AUTO_ARCHIVE_CANCEL_REASON
                 if payload.status == "archived"
-                else "父任务已取消，未完成子任务自动取消"
+                else PARENT_CANCEL_REASON
             ),
             cancelled_by=admin.id,
         )

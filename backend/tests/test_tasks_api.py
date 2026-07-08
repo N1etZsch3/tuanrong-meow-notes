@@ -1135,6 +1135,73 @@ def test_archived_parent_detail_normalizes_unfinished_last_execution(
     assert execution_detail["execution"]["display_status"] == "cancelled"
 
 
+def test_cancelled_parent_detail_normalizes_unstarted_and_running_executions(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 6))
+    monkeypatch.setattr(
+        task_service,
+        "_now",
+        lambda: datetime(2026, 7, 6, 19, 49, tzinfo=UTC),
+    )
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    payload["execute_dates"] = ["2026-07-06", "2026-07-09"]
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    task = db_session.get(Task, UUID(task_id))
+    assert task is not None
+    task.status = "cancelled"
+    task.cancelled_at = datetime(2026, 7, 6, 18, 0, tzinfo=UTC)
+    for execution in task.execution_dates:
+        execution.status = "pending"
+    db_session.commit()
+    db_session.expire_all()
+
+    detail_response = api_client.get(
+        f"/api/v1/tasks/{task_id}?current_date=2026-07-06",
+        headers=auth_headers(member),
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert detail["status"] == "cancelled"
+    statuses = {
+        item["execute_date"]: (item["status"], item["display_status"])
+        for item in detail["execution_dates"]
+    }
+    assert statuses == {
+        "2026-07-06": ("cancelled", "cancelled"),
+        "2026-07-09": ("cancelled", "cancelled"),
+    }
+    assert detail["current_execution"]["execute_date"] == "2026-07-06"
+    assert detail["current_execution"]["display_status"] == "cancelled"
+
+    future_execution = next(
+        item
+        for item in detail["execution_dates"]
+        if item["execute_date"] == "2026-07-09"
+    )
+    execution_detail_response = api_client.get(
+        f"/api/v1/tasks/{task_id}?current_date=2026-07-06"
+        f"&execution_date_id={future_execution['execution_date_id']}",
+        headers=auth_headers(member),
+    )
+    assert execution_detail_response.status_code == 200
+    execution_detail = execution_detail_response.json()["data"]
+    assert execution_detail["execution"]["status"] == "cancelled"
+    assert execution_detail["execution"]["display_status"] == "cancelled"
+
+
 def test_list_filters_child_execution_cards_by_display_status(
     api_client,
     db_session,

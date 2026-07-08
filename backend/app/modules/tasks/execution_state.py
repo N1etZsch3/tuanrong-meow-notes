@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
+from uuid import UUID
 
 from app.modules.tasks.models import TaskExecutionDate
 
@@ -10,6 +11,8 @@ DISPLAY_STATUS_LABELS = {
     "completed": "已完成",
     "cancelled": "已取消",
 }
+
+AUTO_ARCHIVE_AFTER_DAYS = 3
 
 
 def active_execution_dates(
@@ -38,6 +41,38 @@ def normalize_execution_date_states(
             execution.remark = execution.remark or execution.cancel_reason
             changed = True
     return changed
+
+
+def cancel_unfinished_execution_dates(
+    execution_dates: list[TaskExecutionDate],
+    *,
+    now: datetime,
+    reason: str,
+    cancelled_by: UUID | None = None,
+) -> bool:
+    changed = False
+    for execution in active_execution_dates(execution_dates):
+        if execution.status not in {"pending", "missed"}:
+            continue
+        execution.status = "cancelled"
+        execution.cancelled_at = now
+        execution.cancelled_by = cancelled_by
+        execution.cancel_reason = reason
+        execution.remark = execution.remark or reason
+        changed = True
+    return changed
+
+
+def should_auto_archive_task(
+    execution_dates: list[TaskExecutionDate],
+    *,
+    today: date,
+) -> bool:
+    active_dates = active_execution_dates(execution_dates)
+    if not active_dates:
+        return False
+    archive_date = active_dates[-1].execute_date + timedelta(days=AUTO_ARCHIVE_AFTER_DAYS)
+    return today >= archive_date
 
 
 def execution_display_status(
@@ -73,4 +108,3 @@ def active_execution(
     if past_or_today:
         return past_or_today[-1]
     return active_dates[0]
-

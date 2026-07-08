@@ -393,6 +393,7 @@ const activityCountText = computed(() => {
 });
 const primaryActionState = computed(() =>
   getTaskDetailActionState({
+    task_status: task.value?.status || null,
     can_checkin: Boolean(task.value?.actions.can_checkin && currentExecution.value),
     checkin_disabled_reason: task.value?.actions.checkin_disabled_reason || null,
     current_execution: currentExecution.value
@@ -1423,6 +1424,13 @@ onLoad((query) => {
 
 .primary-action.action-cancelled,
 .primary-action.action-cancelled[disabled] {
+  background: #9ca3af;
+  color: #ffffff;
+  box-shadow: 0 14rpx 34rpx rgba(75, 85, 99, 0.14);
+}
+
+.primary-action.action-archived,
+.primary-action.action-archived[disabled] {
   background: #9ca3af;
   color: #ffffff;
   box-shadow: 0 14rpx 34rpx rgba(75, 85, 99, 0.14);

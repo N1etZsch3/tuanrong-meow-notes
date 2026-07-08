@@ -68,6 +68,17 @@ describe("supply point detail page", () => {
     expect(formReadSource).toContain("uni.removeStorageSync(SUPPLY_LOCATION_STORAGE_KEY)");
   });
 
+  it("starts and resets supply point selection at the current user location", () => {
+    const resetSource = extractFunctionSource(adminSupplyLocationSource, "resetLocation");
+
+    expect(adminSupplyLocationSource).toContain("getCachedUserLocation");
+    expect(adminSupplyLocationSource).toContain("refreshUserLocation");
+    expect(adminSupplyLocationSource).toContain("void placeAtCurrentUserLocation()");
+    expect(adminSupplyLocationSource).toContain(':show-location="true"');
+    expect(resetSource).toContain("void placeAtCurrentUserLocation({ silent: false })");
+    expect(resetSource).not.toContain("HBNU_DEFAULT_SUPPLY_LOCATION");
+  });
+
   it("lets members adjust selected supply quantities before submitting a record", () => {
     const payloadSource = extractFunctionSource(supplyDetailSource, "recordPayloadItems");
 

@@ -88,6 +88,17 @@ describe("admin entry pages", () => {
     expect(formReadSource).toContain("uni.removeStorageSync(LANDMARK_LOCATION_STORAGE_KEY)");
   });
 
+  it("starts and resets landmark point selection at the current user location", () => {
+    const resetSource = extractFunctionSource(adminLandmarkLocationSource, "resetLocation");
+
+    expect(adminLandmarkLocationSource).toContain("getCachedUserLocation");
+    expect(adminLandmarkLocationSource).toContain("refreshUserLocation");
+    expect(adminLandmarkLocationSource).toContain("void placeAtCurrentUserLocation()");
+    expect(adminLandmarkLocationSource).toContain(':show-location="true"');
+    expect(resetSource).toContain("void placeAtCurrentUserLocation({ silent: false })");
+    expect(resetSource).not.toContain("HBNU_DEFAULT_LANDMARK_LOCATION");
+  });
+
   it("lets admins soft delete editable members from member detail", () => {
     expect(adminUsersApiSource).toContain("deleteAdminUser");
     expect(adminUsersApiSource).toContain('method: "DELETE"');

@@ -20,6 +20,30 @@ import {
   validatePublishDraft,
 } from "@/pages/tasks/task-page";
 
+function extractFunctionSource(source: string, functionName: string): string {
+  const normalStart = source.indexOf(`function ${functionName}`);
+  const asyncStart = source.indexOf(`async function ${functionName}`);
+  const start = normalStart >= 0 ? normalStart : asyncStart;
+  expect(start).toBeGreaterThanOrEqual(0);
+  const bodyStart = source.indexOf("{", start);
+  expect(bodyStart).toBeGreaterThan(start);
+
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return source.slice(start);
+}
+
 function extractCssRule(source: string, selector: string): string {
   const start = source.indexOf(`${selector} {`);
   expect(start).toBeGreaterThanOrEqual(0);
@@ -555,6 +579,17 @@ describe("summer feeding task pages", () => {
     expect(adminTaskLocationSource).toContain("clearAssociatedPoi");
     expect(adminTaskLocationSource).not.toContain("自选喂食点");
     expect(adminTaskLocationSource).not.toContain("请补充具体参照物");
+  });
+
+  it("starts and resets task point selection at the current user location", () => {
+    const resetSource = extractFunctionSource(adminTaskLocationSource, "resetLocation");
+
+    expect(adminTaskLocationSource).toContain("getCachedUserLocation");
+    expect(adminTaskLocationSource).toContain("refreshUserLocation");
+    expect(adminTaskLocationSource).toContain("void placeAtCurrentUserLocation()");
+    expect(adminTaskLocationSource).toContain(':show-location="true"');
+    expect(resetSource).toContain("void placeAtCurrentUserLocation({ silent: false })");
+    expect(resetSource).not.toContain("HBNU_DEFAULT_TASK_LOCATION");
   });
 
   it("defaults materials to cat food and water and builds the publish payload", () => {

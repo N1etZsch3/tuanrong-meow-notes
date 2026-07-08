@@ -1422,21 +1422,21 @@ def _application_or_raise(db: Session, application_id: UUID) -> MedicineUseAppli
     application = db.scalar(
         select(MedicineUseApplication)
         .options(
-            joinedload(MedicineUseApplication.medicine),
-            joinedload(MedicineUseApplication.holding)
-            .joinedload(MedicineHolding.medicine)
-            .joinedload(MedicineCatalog.category),
-            joinedload(MedicineUseApplication.holding)
-            .joinedload(MedicineHolding.holder)
-            .joinedload(User.profile),
-            joinedload(MedicineUseApplication.applicant).joinedload(User.profile),
-            joinedload(MedicineUseApplication.holder).joinedload(User.profile),
+            selectinload(MedicineUseApplication.medicine),
+            selectinload(MedicineUseApplication.holding)
+            .selectinload(MedicineHolding.medicine)
+            .selectinload(MedicineCatalog.category),
+            selectinload(MedicineUseApplication.holding)
+            .selectinload(MedicineHolding.holder)
+            .selectinload(User.profile),
+            selectinload(MedicineUseApplication.applicant).selectinload(User.profile),
+            selectinload(MedicineUseApplication.holder).selectinload(User.profile),
         )
         .where(
             MedicineUseApplication.id == application_id,
             MedicineUseApplication.deleted_at.is_(None),
         )
-        .with_for_update()
+        .with_for_update(of=MedicineUseApplication)
     )
     if application is None:
         raise APIError(

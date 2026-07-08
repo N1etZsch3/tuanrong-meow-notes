@@ -352,6 +352,7 @@ export function getExecutionDisplayLabel(
 }
 
 interface TaskDetailActionStateSource {
+  task_status?: string | null;
   can_checkin: boolean;
   checkin_disabled_reason: string | null;
   current_execution?: {
@@ -362,14 +363,38 @@ interface TaskDetailActionStateSource {
 }
 
 export interface TaskDetailActionState {
-  label: "未开始" | "投喂" | "已完成" | "已取消";
-  tone: "not_started" | "ready" | "completed" | "cancelled";
+  label: "未开始" | "投喂" | "已完成" | "已取消" | "已归档";
+  tone: "not_started" | "ready" | "completed" | "cancelled" | "archived";
   disabled: boolean;
 }
 
 export function getTaskDetailActionState(
   source: TaskDetailActionStateSource,
 ): TaskDetailActionState {
+  if (source.task_status === "archived") {
+    return {
+      label: "已归档",
+      tone: "archived",
+      disabled: true,
+    };
+  }
+
+  if (source.task_status === "cancelled") {
+    return {
+      label: "已取消",
+      tone: "cancelled",
+      disabled: true,
+    };
+  }
+
+  if (source.task_status === "completed") {
+    return {
+      label: "已完成",
+      tone: "completed",
+      disabled: true,
+    };
+  }
+
   const executionTone = getExecutionDisplayTone(source.current_execution);
   if (executionTone === "completed") {
     return {

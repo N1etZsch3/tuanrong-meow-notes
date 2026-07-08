@@ -22,9 +22,11 @@ from app.modules.tasks.execution_state import (
     active_execution_dates as sorted_active_execution_dates,
 )
 from app.modules.tasks.execution_state import (
+    cancel_unfinished_execution_dates,
     execution_display_status,
     execution_display_status_label,
     normalize_execution_date_states,
+    should_auto_archive_task,
 )
 from app.modules.tasks.models import Task, TaskPhoto
 
@@ -554,6 +556,7 @@ def task_by_map_point_ids(db: Session, points: list[MapPoint]) -> dict[UUID, Tas
     point_ids = [point.id for point in points if point.point_type == "task"]
     if not point_ids:
         return {}
+    point_lookup = {point.id: point for point in points}
     tasks = db.scalars(
         select(Task)
         .options(
@@ -574,6 +577,28 @@ def task_by_map_point_ids(db: Session, points: list[MapPoint]) -> dict[UUID, Tas
             today=today,
             now=now,
         ) or changed
+        if task.status == "in_progress" and should_auto_archive_task(
+            task.execution_dates,
+            today=today,
+        ):
+            task.status = "archived"
+            task.completed_at = now
+            task.cancelled_at = None
+            task.updated_at = now
+            point = point_lookup.get(task.map_point_id)
+            if point is not None and point.deleted_at is None:
+                point.visibility = "hidden"
+                point.status = "active"
+                point.updated_at = now
+            changed = (
+                cancel_unfinished_execution_dates(
+                    task.execution_dates,
+                    now=now,
+                    reason="父任务已归档，未完成子任务自动取消",
+                )
+                or changed
+            )
+            changed = True
     if changed:
         db.commit()
         tasks = db.scalars(

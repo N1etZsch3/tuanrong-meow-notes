@@ -392,6 +392,25 @@ describe("summer feeding task pages", () => {
     });
   });
 
+  it("shows archived parent tasks as archived in the task detail action area", () => {
+    expect(
+      getTaskDetailActionState({
+        task_status: "archived",
+        can_checkin: false,
+        checkin_disabled_reason: "任务当前状态不可完成",
+        current_execution: {
+          status: "pending",
+          display_status: "not_started",
+          execute_date: "2026-07-06",
+        },
+      }),
+    ).toEqual({
+      label: "已归档",
+      tone: "archived",
+      disabled: true,
+    });
+  });
+
   it("filters and colors task status pills by parent task status", () => {
     expect(taskListSource).toContain(":class=\"taskStatusClass(task)\"");
     expect(taskListSource).toContain("task-status-in-progress");
@@ -400,7 +419,7 @@ describe("summer feeding task pages", () => {
     expect(taskListSource).toContain("task-status-archived");
     expect(taskListSource).toContain('{ label: "未开始", value: "not_started" }');
     expect(taskListSource).toContain('{ label: "已取消", value: "cancelled" }');
-    expect(taskListSource).not.toContain('{ label: "已归档", value: "archived" }');
+    expect(taskListSource).toContain('{ label: "已归档", value: "archived" }');
 
     expect(
       getTaskStatusTone({

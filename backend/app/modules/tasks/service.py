@@ -16,9 +16,11 @@ from app.modules.map.service import associated_poi_payload, get_default_campus
 from app.modules.tasks.execution_state import (
     active_execution,
     active_execution_dates,
+    cancel_unfinished_execution_dates,
     execution_display_status,
     execution_display_status_label,
     normalize_execution_date_states,
+    should_auto_archive_task,
 )
 from app.modules.tasks.models import (
     Task,
@@ -60,6 +62,7 @@ TASK_ERROR_STATUS_CONFLICT = 62013
 TASK_ERROR_CANCELLED_CANNOT_CHECKIN = 62015
 
 LOCAL_TZ = ZoneInfo("Asia/Shanghai")
+AUTO_ARCHIVE_CANCEL_REASON = "父任务已归档，未完成子任务自动取消"
 
 
 def _now() -> datetime:
@@ -257,13 +260,41 @@ def _date_in_query_window(
     return True
 
 
-def _normalize_task_execution_dates(task: Task, *, today: date | None = None) -> bool:
+def _hide_task_map_point_for_archived_task(task: Task, *, now: datetime) -> None:
+    if task.map_point is None or task.map_point.deleted_at is not None:
+        return
+    task.map_point.visibility = "hidden"
+    task.map_point.status = "active"
+    task.map_point.updated_at = now
+
+
+def _normalize_task_lifecycle(task: Task, *, today: date | None = None) -> bool:
     today = today or _today()
-    return normalize_execution_date_states(
+    now = _now()
+    changed = normalize_execution_date_states(
         task.execution_dates,
         today=today,
-        now=_now(),
+        now=now,
     )
+    if task.status == "in_progress" and should_auto_archive_task(
+        task.execution_dates,
+        today=today,
+    ):
+        task.status = "archived"
+        task.completed_at = now
+        task.cancelled_at = None
+        task.updated_at = now
+        _hide_task_map_point_for_archived_task(task, now=now)
+        changed = (
+            cancel_unfinished_execution_dates(
+                task.execution_dates,
+                now=now,
+                reason=AUTO_ARCHIVE_CANCEL_REASON,
+            )
+            or changed
+        )
+        changed = True
+    return changed
 
 
 def _execution_matches_filters(
@@ -800,7 +831,7 @@ def list_tasks(
     tasks = db.scalars(statement.order_by(Task.start_at.asc(), Task.published_at.desc())).all()
     changed = False
     for task in tasks:
-        changed = _normalize_task_execution_dates(task, today=today) or changed
+        changed = _normalize_task_lifecycle(task, today=today) or changed
     if changed:
         db.commit()
         tasks = db.scalars(statement.order_by(Task.start_at.asc(), Task.published_at.desc())).all()
@@ -1071,7 +1102,7 @@ def get_task_detail(
     viewer: User | None = None,
 ) -> dict:
     task = get_task_or_raise(db, task_id, include_private=include_private)
-    if _normalize_task_execution_dates(task, today=current_date or _today()):
+    if _normalize_task_lifecycle(task, today=current_date or _today()):
         db.commit()
         task = get_task_or_raise(db, task_id, include_private=include_private)
     return task_detail_payload(
@@ -1116,6 +1147,10 @@ def checkin_task(
     payload: TaskCheckinRequest,
 ) -> dict:
     task = get_task_or_raise(db, task_id)
+    today = _today()
+    if _normalize_task_lifecycle(task, today=today):
+        db.commit()
+        task = get_task_or_raise(db, task_id)
     if task.status == "cancelled":
         raise APIError(
             code=TASK_ERROR_CANCELLED_CANNOT_CHECKIN,
@@ -1129,10 +1164,6 @@ def checkin_task(
             status_code=409,
         )
 
-    today = _today()
-    if _normalize_task_execution_dates(task, today=today):
-        db.commit()
-        task = get_task_or_raise(db, task_id)
     execute_date = payload.execute_date or today
     if execute_date > today:
         raise APIError(
@@ -1401,6 +1432,19 @@ def update_task_status(
         task.completed_at = now
     elif payload.status in {"in_progress", "cancelled"}:
         task.completed_at = None
+    if payload.status == "archived":
+        task.completed_at = now
+    if payload.status in {"cancelled", "archived"}:
+        cancel_unfinished_execution_dates(
+            task.execution_dates,
+            now=now,
+            reason=(
+                AUTO_ARCHIVE_CANCEL_REASON
+                if payload.status == "archived"
+                else "父任务已取消，未完成子任务自动取消"
+            ),
+            cancelled_by=admin.id,
+        )
     task.updated_at = now
     _sync_task_map_point_status(db, task=task, admin=admin, now=now)
     db.add(

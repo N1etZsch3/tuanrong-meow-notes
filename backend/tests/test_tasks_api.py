@@ -947,6 +947,127 @@ def test_list_exposes_child_execution_cards_and_auto_cancels_previous_pending(
     assert detail_dates[0]["status"] == "cancelled"
 
 
+def test_archiving_parent_task_cancels_unfinished_child_executions(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    payload["execute_dates"] = ["2026-07-03", "2026-07-04", "2026-07-05", "2026-07-06"]
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 3))
+    monkeypatch.setattr(
+        task_service,
+        "_now",
+        lambda: datetime(2026, 7, 3, 18, 0, tzinfo=UTC),
+    )
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{task_id}/checkins",
+        headers=auth_headers(member),
+        json={"execute_date": "2026-07-03", "is_completed": True},
+    )
+    assert checkin_response.status_code == 200
+
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 9))
+    monkeypatch.setattr(
+        task_service,
+        "_now",
+        lambda: datetime(2026, 7, 9, 8, 0, tzinfo=UTC),
+    )
+    archive_response = api_client.patch(
+        f"/api/v1/admin/tasks/{task_id}/status",
+        headers=auth_headers(admin),
+        json={"status": "archived", "reason": "投喂周期结束"},
+    )
+    assert archive_response.status_code == 200
+
+    detail_response = api_client.get(
+        f"/api/v1/tasks/{task_id}?current_date=2026-07-09",
+        headers=auth_headers(member),
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert detail["status"] == "archived"
+    assert detail["status_label"] == "已归档"
+    assert detail["actions"]["can_checkin"] is False
+    statuses = {
+        item["execute_date"]: item["status"]
+        for item in detail["execution_dates"]
+    }
+    assert statuses == {
+        "2026-07-03": "completed",
+        "2026-07-04": "cancelled",
+        "2026-07-05": "cancelled",
+        "2026-07-06": "cancelled",
+    }
+    assert detail["current_execution"]["display_status"] == "cancelled"
+
+
+def test_parent_task_auto_archives_on_third_day_after_last_execution(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 9))
+    monkeypatch.setattr(
+        task_service,
+        "_now",
+        lambda: datetime(2026, 7, 9, 8, 0, tzinfo=UTC),
+    )
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    payload = publish_payload(campus)
+    payload["execute_dates"] = ["2026-07-03", "2026-07-06"]
+    publish_response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+    assert publish_response.status_code == 200
+    task_id = publish_response.json()["data"]["task_id"]
+
+    detail_response = api_client.get(
+        f"/api/v1/tasks/{task_id}?current_date=2026-07-09",
+        headers=auth_headers(member),
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert detail["status"] == "archived"
+    assert detail["status_label"] == "已归档"
+    assert [item["status"] for item in detail["execution_dates"]] == [
+        "cancelled",
+        "cancelled",
+    ]
+
+    db_session.expire_all()
+    task = db_session.get(Task, UUID(task_id))
+    assert task is not None
+    assert task.status == "archived"
+    assert task.completed_at is not None
+    assert task.completed_at.replace(tzinfo=UTC) == datetime(2026, 7, 9, 8, 0, tzinfo=UTC)
+
+    list_response = api_client.get(
+        "/api/v1/tasks?status=in_progress,completed,cancelled,archived",
+        headers=auth_headers(member),
+    )
+    assert list_response.status_code == 200
+    list_item = list_response.json()["data"]["items"][0]
+    assert list_item["task_id"] == task_id
+    assert list_item["status"] == "archived"
+    assert list_item["status_label"] == "已归档"
+
+
 def test_list_filters_child_execution_cards_by_display_status(
     api_client,
     db_session,
@@ -1270,7 +1391,7 @@ def test_completion_activity_content_uses_actual_completed_date(
     monkeypatch.setattr(
         task_service,
         "_now",
-        lambda: datetime(2026, 7, 10, 12, 44, tzinfo=UTC),
+        lambda: datetime(2026, 7, 4, 12, 44, tzinfo=UTC),
     )
 
     checkin_response = api_client.post(
@@ -1285,8 +1406,13 @@ def test_completion_activity_content_uses_actual_completed_date(
         headers=auth_headers(member),
     )
     assert detail_response.status_code == 200
-    content = detail_response.json()["data"]["activities"][0]["content"]
-    assert content == "Nietzsche 于 2026-07-10 完成投喂"
+    activities = detail_response.json()["data"]["activities"]
+    content = next(
+        item["content"]
+        for item in activities
+        if item["activity_type"] == "execution_completed"
+    )
+    assert content == "Nietzsche 于 2026-07-04 完成投喂"
 
 
 def test_map_init_and_points_use_dynamic_feeding_completion_filters(api_client, db_session):

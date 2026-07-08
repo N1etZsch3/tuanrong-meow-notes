@@ -111,6 +111,11 @@ import { onLoad } from "@dcloudio/uni-app";
 import { computed, reactive, ref } from "vue";
 
 import { getNearbyMapPois, type TencentPoiDto } from "@/api/map";
+import {
+  getCachedUserLocation,
+  refreshUserLocation,
+  type UserLocationPoint,
+} from "@/services/user-location";
 import { useUserStore } from "@/stores/user";
 import {
   HBNU_DEFAULT_LANDMARK_LOCATION,
@@ -126,12 +131,15 @@ type PoiLoadState = "idle" | "loading" | "ready" | "error";
 const LOCATION_PICKER_POI_KEYWORD = "\u6e56\u5317\u5e08\u8303\u5927\u5b66";
 
 const userStore = useUserStore();
+const initialUserLocation = getCachedUserLocation();
 const selectedLocation = reactive<SelectedLandmarkLocation>({
   ...HBNU_DEFAULT_LANDMARK_LOCATION,
+  ...(initialUserLocation ? toSelectedCoordinates(initialUserLocation) : {}),
 });
 const associatedPoiCandidates = ref<TencentPoiDto[]>([]);
 const poiLoadState = ref<PoiLoadState>("idle");
 const initialName = ref("");
+let currentLocationRequestId = 0;
 const currentAssociatedPoi = computed(() => selectedLocationAssociatedPoi(selectedLocation));
 const markers = computed(() => [
   {
@@ -157,6 +165,41 @@ function getLocationPickerPoiKeyword(): string {
   return LOCATION_PICKER_POI_KEYWORD;
 }
 
+function toSelectedCoordinates(point: UserLocationPoint): Pick<SelectedLandmarkLocation, "lng" | "lat"> {
+  return {
+    lng: Number(point.lng.toFixed(7)),
+    lat: Number(point.lat.toFixed(7)),
+  };
+}
+
+function applyUserLocationToSelection(point: UserLocationPoint | null): boolean {
+  if (!point) {
+    return false;
+  }
+
+  Object.assign(selectedLocation, toSelectedCoordinates(point), {
+    location_name: initialName.value,
+  });
+  clearAssociatedPoi({ keepCandidates: false });
+  poiLoadState.value = "idle";
+  return true;
+}
+
+async function placeAtCurrentUserLocation(options: { silent?: boolean } = { silent: true }) {
+  const requestId = ++currentLocationRequestId;
+  const silent = options.silent ?? true;
+  const usedCached = applyUserLocationToSelection(getCachedUserLocation());
+  const refreshed = await refreshUserLocation({ silent: silent || usedCached });
+  if (requestId !== currentLocationRequestId) {
+    return;
+  }
+
+  const usedRefreshed = applyUserLocationToSelection(refreshed);
+  if (usedCached || usedRefreshed) {
+    void loadNearbyPoiCandidates();
+  }
+}
+
 function readLocationTransfer() {
   const value = uni.getStorageSync(LANDMARK_LOCATION_STORAGE_KEY);
   if (value && typeof value === "object") {
@@ -172,6 +215,7 @@ function selectLocationFromMap(event: any) {
   if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
     return;
   }
+  currentLocationRequestId += 1;
   selectedLocation.lng = Number(lng.toFixed(7));
   selectedLocation.lat = Number(lat.toFixed(7));
   selectedLocation.location_name = initialName.value;
@@ -180,12 +224,7 @@ function selectLocationFromMap(event: any) {
 }
 
 function resetLocation() {
-  Object.assign(selectedLocation, {
-    ...HBNU_DEFAULT_LANDMARK_LOCATION,
-    location_name: initialName.value,
-  });
-  clearAssociatedPoi({ keepCandidates: false });
-  poiLoadState.value = "idle";
+  void placeAtCurrentUserLocation({ silent: false });
 }
 
 async function loadNearbyPoiCandidates() {
@@ -258,6 +297,7 @@ function goBack() {
 
 onLoad(() => {
   readLocationTransfer();
+  void placeAtCurrentUserLocation();
 });
 </script>
 

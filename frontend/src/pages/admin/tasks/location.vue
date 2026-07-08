@@ -111,9 +111,15 @@
 </template>
 
 <script setup lang="ts">
+import { onLoad } from "@dcloudio/uni-app";
 import { computed, reactive, ref } from "vue";
 
 import { getNearbyMapPois, type TencentPoiDto } from "@/api/map";
+import {
+  getCachedUserLocation,
+  refreshUserLocation,
+  type UserLocationPoint,
+} from "@/services/user-location";
 import {
   HBNU_DEFAULT_TASK_LOCATION,
   TASK_PUBLISH_LOCATION_STORAGE_KEY,
@@ -127,11 +133,14 @@ import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 type PoiLoadState = "idle" | "loading" | "ready" | "error";
 
 const userStore = useUserStore();
+const initialUserLocation = getCachedUserLocation();
 const selectedLocation = reactive<SelectedTaskLocation>({
   ...HBNU_DEFAULT_TASK_LOCATION,
+  ...(initialUserLocation ? toSelectedCoordinates(initialUserLocation) : {}),
 });
 const associatedPoiCandidates = ref<TencentPoiDto[]>([]);
 const poiLoadState = ref<PoiLoadState>("idle");
+let currentLocationRequestId = 0;
 const currentAssociatedPoi = computed<TencentPoiDto | null>(() => {
   if (!selectedLocation.tencent_poi_id && !selectedLocation.tencent_poi_name) {
     return null;
@@ -168,6 +177,39 @@ const markers = computed(() => [
   },
 ]);
 
+function toSelectedCoordinates(point: UserLocationPoint): Pick<SelectedTaskLocation, "lng" | "lat"> {
+  return {
+    lng: Number(point.lng.toFixed(7)),
+    lat: Number(point.lat.toFixed(7)),
+  };
+}
+
+function applyUserLocationToSelection(point: UserLocationPoint | null): boolean {
+  if (!point) {
+    return false;
+  }
+
+  Object.assign(selectedLocation, toSelectedCoordinates(point));
+  clearAssociatedPoi({ keepCandidates: false });
+  poiLoadState.value = "idle";
+  return true;
+}
+
+async function placeAtCurrentUserLocation(options: { silent?: boolean } = { silent: true }) {
+  const requestId = ++currentLocationRequestId;
+  const silent = options.silent ?? true;
+  const usedCached = applyUserLocationToSelection(getCachedUserLocation());
+  const refreshed = await refreshUserLocation({ silent: silent || usedCached });
+  if (requestId !== currentLocationRequestId) {
+    return;
+  }
+
+  const usedRefreshed = applyUserLocationToSelection(refreshed);
+  if (usedCached || usedRefreshed) {
+    void loadNearbyPoiCandidates();
+  }
+}
+
 function selectLocationFromMap(event: any) {
   const lng = Number(event.detail?.longitude);
   const lat = Number(event.detail?.latitude);
@@ -175,6 +217,7 @@ function selectLocationFromMap(event: any) {
     return;
   }
 
+  currentLocationRequestId += 1;
   selectedLocation.lng = Number(lng.toFixed(7));
   selectedLocation.lat = Number(lat.toFixed(7));
   clearAssociatedPoi({ keepCandidates: false });
@@ -182,9 +225,7 @@ function selectLocationFromMap(event: any) {
 }
 
 function resetLocation() {
-  Object.assign(selectedLocation, HBNU_DEFAULT_TASK_LOCATION);
-  clearAssociatedPoi({ keepCandidates: false });
-  poiLoadState.value = "idle";
+  void placeAtCurrentUserLocation({ silent: false });
 }
 
 async function loadNearbyPoiCandidates() {
@@ -256,6 +297,10 @@ function confirmLocation() {
 function goBack() {
   uni.navigateBack();
 }
+
+onLoad(() => {
+  void placeAtCurrentUserLocation();
+});
 </script>
 
 <style scoped>

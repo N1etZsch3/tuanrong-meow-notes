@@ -294,6 +294,15 @@ def _normalize_task_lifecycle(task: Task, *, today: date | None = None) -> bool:
             or changed
         )
         changed = True
+    if task.status == "archived":
+        changed = (
+            cancel_unfinished_execution_dates(
+                task.execution_dates,
+                now=now,
+                reason=AUTO_ARCHIVE_CANCEL_REASON,
+            )
+            or changed
+        )
     return changed
 
 

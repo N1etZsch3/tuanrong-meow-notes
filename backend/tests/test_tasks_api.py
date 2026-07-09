@@ -611,6 +611,66 @@ def test_admin_can_get_editable_task_detail_with_dates_point_and_photos(
     assert data["photos"][0]["file_url"] == "https://img.example.com/task-feeding.jpg"
 
 
+def test_task_detail_exposes_checkin_records_for_record_modal(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 2))
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session, nickname="Nietzsche")
+    campus = seed_campus(db_session)
+    published = publish_task(api_client, admin, campus)
+    asset = create_uploaded_asset(
+        db_session,
+        member,
+        usage_type="task_checkin_photo",
+        default_url="https://cos.test/catmap/dev/checkin/record/display.jpg",
+        default_thumb_url="https://cos.test/catmap/dev/checkin/record/thumb_md.jpg",
+    )
+
+    checkin_response = api_client.post(
+        f"/api/v1/tasks/{published['task_id']}/checkins",
+        headers=auth_headers(member),
+        json={
+            "execute_date": "2026-07-02",
+            "is_completed": True,
+            "process_result": "已完成投喂",
+            "remark": "猫粮已补满，水碗已清洗",
+            "photos": [
+                {
+                    "file_id": str(asset.id),
+                    "file_url": asset.default_url,
+                    "thumbnail_url": asset.default_thumb_url,
+                }
+            ],
+        },
+    )
+    assert checkin_response.status_code == 200
+
+    detail_response = api_client.get(
+        f"/api/v1/tasks/{published['task_id']}?current_date=2026-07-02",
+        headers=auth_headers(member),
+    )
+    assert detail_response.status_code == 200
+    detail = detail_response.json()["data"]
+    assert len(detail["checkins"]) == 1
+    record = detail["checkins"][0]
+    assert record["remark"] == "猫粮已补满，水碗已清洗"
+    assert record["process_result"] == "已完成投喂"
+    assert record["submitter"]["nickname"] == "Nietzsche"
+    assert record["execute_date"] == "2026-07-02"
+    assert len(record["photos"]) == 1
+    assert record["photos"][0]["file_url"] == asset.default_url
+
+    completed_activity = next(
+        item
+        for item in detail["activities"]
+        if item["activity_type"] == "execution_completed"
+    )
+    assert completed_activity["metadata"]["checkin_id"] == str(record["checkin_id"])
+
+
 def test_member_checkin_completes_one_execution_date_without_completing_parent_task(
     api_client,
     db_session,

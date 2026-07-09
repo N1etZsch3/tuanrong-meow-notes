@@ -157,6 +157,8 @@
                 v-for="activity in detailActivities"
                 :key="activity.activity_id"
                 class="timeline-row"
+                :class="{ 'timeline-row-tappable': hasActivityRecord(activity) }"
+                @tap="openRecordDetail(activity)"
               >
                 <view class="timeline-dot" />
                 <view class="timeline-copy">
@@ -164,6 +166,7 @@
                   <text class="timeline-content">{{ activity.content || "暂无备注" }}</text>
                   <text class="timeline-time">{{ formatActivityTime(activity.created_at) }}</text>
                 </view>
+                <text v-if="hasActivityRecord(activity)" class="timeline-view-link">查看 ›</text>
               </view>
             </view>
             <view v-else-if="!isExecutionDetail && activityExecutionGroups.length" class="execution-groups">
@@ -183,6 +186,8 @@
                     v-for="activity in group.activities"
                     :key="activity.activity_id"
                     class="timeline-row"
+                    :class="{ 'timeline-row-tappable': hasActivityRecord(activity) }"
+                    @tap="openRecordDetail(activity)"
                   >
                     <view class="timeline-dot" />
                     <view class="timeline-copy">
@@ -190,6 +195,7 @@
                       <text class="timeline-content">{{ activity.content || "暂无备注" }}</text>
                       <text class="timeline-time">{{ formatActivityTime(activity.created_at) }}</text>
                     </view>
+                    <text v-if="hasActivityRecord(activity)" class="timeline-view-link">查看 ›</text>
                   </view>
                 </view>
               </view>
@@ -200,16 +206,6 @@
           <view class="section-card">
             <view class="section-head">
               <text class="section-title">完成照片</text>
-              <button
-                v-if="isExecutionDetail"
-                class="small-button"
-                :loading="isUploading"
-                :disabled="!canCheckin || isUploading"
-                hover-class="button-hover"
-                @tap="chooseCheckinPhoto"
-              >
-                上传
-              </button>
             </view>
             <view v-if="isExecutionDetail && displayCheckinPhotos.length" class="photo-strip">
               <view
@@ -262,7 +258,7 @@
               </view>
             </view>
             <text v-else class="empty-line">
-              {{ isExecutionDetail ? "完成投喂前可上传现场照片" : "暂无完成照片" }}
+              {{ isExecutionDetail ? "完成记录后现场照片会展示在这里" : "暂无完成照片" }}
             </text>
           </view>
         </view>
@@ -276,14 +272,95 @@
       <button
         class="primary-action"
         :class="`action-${primaryActionState.tone}`"
-        :loading="isSubmitting"
         :disabled="primaryActionState.disabled"
         hover-class="button-hover"
-        @tap="completeFeedingTask"
+        @tap="openRecordForm"
       >
         {{ primaryActionState.label }}
       </button>
     </view>
+
+    <view v-if="recordFormVisible" class="modal-mask" @tap="closeRecordForm">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-head">
+          <text class="modal-title">任务记录</text>
+          <button class="modal-close" hover-class="button-hover" @tap="closeRecordForm">×</button>
+        </view>
+        <text class="modal-hint">
+          记录本次投喂情况：上传现场照片，并补充说明（均可选填）。
+        </text>
+        <view class="record-photo-grid">
+          <view
+            v-for="(photo, index) in pendingCheckinPhotos"
+            :key="`${photo.file_id || photo.file_url}-${index}`"
+            class="record-photo-cell"
+          >
+            <image
+              class="record-photo"
+              :src="photo.thumbnail_url || photo.file_url"
+              mode="aspectFill"
+              @tap="openPendingRecordPhotoPreview(photo)"
+            />
+            <button
+              class="record-photo-remove"
+              hover-class="button-hover"
+              @tap.stop="removeRecordPhoto(photo)"
+            >
+              ×
+            </button>
+          </view>
+          <button
+            v-if="pendingCheckinPhotos.length < 3"
+            class="record-photo-upload"
+            :loading="isUploading"
+            hover-class="button-hover"
+            @tap="chooseCheckinPhoto"
+          >
+            上传图片
+          </button>
+        </view>
+        <textarea
+          v-model.trim="recordRemark"
+          class="record-remark"
+          maxlength="120"
+          placeholder="补充说明，可不填"
+          placeholder-class="placeholder"
+        />
+        <button
+          class="modal-submit"
+          :loading="isSubmitting"
+          hover-class="button-hover"
+          @tap="submitTaskRecord"
+        >
+          完成记录
+        </button>
+      </view>
+    </view>
+
+    <view v-if="viewingRecord" class="modal-mask" @tap="closeRecordDetail">
+      <view class="modal-panel" @tap.stop>
+        <view class="modal-head">
+          <text class="modal-title">记录详情</text>
+          <button class="modal-close" hover-class="button-hover" @tap="closeRecordDetail">×</button>
+        </view>
+        <text class="modal-hint">{{ viewingRecordMeta }}</text>
+        <text class="modal-record-remark">
+          {{ viewingRecord.remark || "暂无补充说明" }}
+        </text>
+        <view v-if="viewingRecord.photos.length" class="record-photo-grid">
+          <image
+            v-for="photo in viewingRecord.photos"
+            :key="photo.photo_id"
+            class="record-photo"
+            :src="photo.thumbnail_url || photo.file_url"
+            mode="aspectFill"
+            @tap="openRecordDetailPhotoPreview(photo)"
+          />
+        </view>
+        <text v-else class="empty-line">本次记录没有照片</text>
+      </view>
+    </view>
+
     <ImagePreviewModal
       :visible="imagePreviewVisible"
       :images="imagePreviewUrls"
@@ -303,7 +380,9 @@ import {
   checkinTask,
   deleteTaskCheckinPhoto,
   getTaskDetail,
+  type TaskActivityDto,
   type TaskCheckinPhotoDto,
+  type TaskCheckinRecordDto,
   type TaskDetailDto,
   type TaskExecutionDto,
   type TaskExecutionGroupDto,
@@ -351,6 +430,9 @@ const failedHeroPhotoIds = ref<string[]>([]);
 const imagePreviewVisible = ref(false);
 const imagePreviewUrls = ref<string[]>([]);
 const imagePreviewIndex = ref(0);
+const recordFormVisible = ref(false);
+const recordRemark = ref("");
+const viewingRecord = ref<TaskCheckinRecordDto | null>(null);
 
 const heroPhotos = computed(() => {
   if (!task.value) {
@@ -436,6 +518,61 @@ const checkinPhotoPreviewUrls = computed(() =>
     .map((photo) => photo.file_url || photo.thumbnail_url || "")
     .filter((url) => url),
 );
+const checkinRecords = computed<TaskCheckinRecordDto[]>(() => task.value?.checkins || []);
+const viewingRecordMeta = computed(() => {
+  if (!viewingRecord.value) {
+    return "";
+  }
+  const nickname = viewingRecord.value.submitter?.nickname || "成员";
+  const time = formatActivityTime(viewingRecord.value.submitted_at);
+  return time ? `${nickname} · ${time}` : nickname;
+});
+
+function findActivityRecord(activity: TaskActivityDto): TaskCheckinRecordDto | null {
+  if (activity.activity_type !== "execution_completed") {
+    return null;
+  }
+  const checkinId = activity.metadata?.checkin_id;
+  if (typeof checkinId === "string" && checkinId) {
+    const byCheckinId = checkinRecords.value.find((record) => record.checkin_id === checkinId);
+    if (byCheckinId) {
+      return byCheckinId;
+    }
+  }
+  if (activity.task_execution_date_id) {
+    return (
+      checkinRecords.value.find(
+        (record) => record.task_execution_date_id === activity.task_execution_date_id,
+      ) || null
+    );
+  }
+  return null;
+}
+
+function hasActivityRecord(activity: TaskActivityDto): boolean {
+  return findActivityRecord(activity) !== null;
+}
+
+function openRecordDetail(activity: TaskActivityDto) {
+  const record = findActivityRecord(activity);
+  if (record) {
+    viewingRecord.value = record;
+  }
+}
+
+function closeRecordDetail() {
+  viewingRecord.value = null;
+}
+
+function openRecordDetailPhotoPreview(photo: TaskCheckinPhotoDto) {
+  if (!viewingRecord.value) {
+    return;
+  }
+  const urls = viewingRecord.value.photos
+    .map((item) => item.file_url || item.thumbnail_url || "")
+    .filter((url) => url);
+  openImagePreview(urls, photo.file_url || photo.thumbnail_url || "");
+}
 
 function getExecutionDisplayClass(execution: TaskExecutionDto): string {
   return `execution-status-${getExecutionDisplayTone(execution)}`;
@@ -541,6 +678,21 @@ function retryTaskDetail() {
   void loadTaskDetail({ retry: true });
 }
 
+function openRecordForm() {
+  if (!canCheckin.value) {
+    uni.showToast({
+      title: task.value?.actions.checkin_disabled_reason || "当前不可记录",
+      icon: "none",
+    });
+    return;
+  }
+  recordFormVisible.value = true;
+}
+
+function closeRecordForm() {
+  recordFormVisible.value = false;
+}
+
 function chooseCheckinPhoto() {
   if (!canCheckin.value) {
     uni.showToast({
@@ -550,33 +702,21 @@ function chooseCheckinPhoto() {
     return;
   }
 
+  const remaining = 3 - pendingCheckinPhotos.value.length;
+  if (remaining <= 0) {
+    uni.showToast({ title: "最多上传 3 张照片", icon: "none" });
+    return;
+  }
+
   uni.chooseImage({
-    count: 3,
+    count: remaining,
     sizeType: ["compressed"],
     sourceType: ["album", "camera"],
     success: (result) => {
       const paths = Array.isArray(result.tempFilePaths)
         ? result.tempFilePaths
         : [result.tempFilePaths].filter(Boolean);
-      void confirmUploadCheckinPhotos(paths);
-    },
-  });
-}
-
-async function confirmUploadCheckinPhotos(paths: string[]) {
-  if (!paths.length) {
-    return;
-  }
-
-  uni.showModal({
-    title: "确认上传",
-    content: `确认上传 ${paths.length} 张完成照片？照片会随本次投喂记录提交，并在任务详情页展示。`,
-    confirmText: "上传",
-    cancelText: "取消",
-    success: (result) => {
-      if (result.confirm) {
-        void uploadCheckinPhotos(paths);
-      }
+      void uploadCheckinPhotos(paths.slice(0, remaining));
     },
   });
 }
@@ -615,6 +755,30 @@ function removePendingCheckinPhotoLocally(photo: CheckinPhotoDisplay) {
     const key = `pending-${item.file_id || item.file_url}-${index}`;
     return key !== photo.key;
   });
+}
+
+function openPendingRecordPhotoPreview(photo: UploadedFileRef) {
+  const urls = pendingCheckinPhotos.value
+    .map((item) => item.file_url || item.thumbnail_url || "")
+    .filter((url) => url);
+  openImagePreview(urls, photo.file_url || photo.thumbnail_url || "");
+}
+
+async function removeRecordPhoto(photo: UploadedFileRef) {
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+
+  try {
+    if (photo.file_id) {
+      await deleteImageAsset(token, photo.file_id);
+    }
+    pendingCheckinPhotos.value = pendingCheckinPhotos.value.filter((item) => item !== photo);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "删除失败";
+    uni.showToast({ title: message, icon: "none" });
+  }
 }
 
 async function deletePendingCheckinPhoto(photo: CheckinPhotoDisplay) {
@@ -686,7 +850,7 @@ async function deletePersistedCheckinPhoto(photoId: string) {
   }
 }
 
-async function completeFeedingTask() {
+async function submitTaskRecord() {
   const token = await getAccessToken();
   if (!token || !task.value || !currentExecution.value || isSubmitting.value) {
     return;
@@ -694,7 +858,7 @@ async function completeFeedingTask() {
 
   if (!canCheckin.value) {
     uni.showToast({
-      title: task.value.actions.checkin_disabled_reason || "当前不可完成",
+      title: task.value.actions.checkin_disabled_reason || "当前不可记录",
       icon: "none",
     });
     return;
@@ -706,11 +870,13 @@ async function completeFeedingTask() {
       execute_date: currentExecution.value.execute_date,
       is_completed: true,
       process_result: "已完成投喂",
-      remark: "",
+      remark: recordRemark.value || null,
       photos: pendingCheckinPhotos.value,
     });
-    uni.showToast({ title: "投喂已完成", icon: "success" });
+    uni.showToast({ title: "记录已提交", icon: "success" });
     pendingCheckinPhotos.value = [];
+    recordRemark.value = "";
+    recordFormVisible.value = false;
     clearTaskListCache();
     await loadTaskDetail();
   } catch (error) {
@@ -845,7 +1011,6 @@ onLoad((query) => {
 
 .back-button::after,
 .retry-button::after,
-.small-button::after,
 .task-edit-button::after,
 .poi-map-button::after,
 .ghost-action::after,
@@ -1278,6 +1443,18 @@ onLoad((query) => {
   gap: 18rpx;
 }
 
+.timeline-row-tappable {
+  grid-template-columns: 24rpx minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.timeline-view-link {
+  color: #2f8037;
+  font-size: 24rpx;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
 .timeline-dot {
   width: 16rpx;
   height: 16rpx;
@@ -1303,25 +1480,6 @@ onLoad((query) => {
 
 .timeline-time {
   margin-top: 7rpx;
-}
-
-.small-button {
-  width: 108rpx;
-  height: 58rpx;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 18rpx;
-  background: #e9f7e9;
-  color: #287c31;
-  font-size: 24rpx;
-  font-weight: 900;
-  line-height: 58rpx;
-}
-
-.small-button[disabled] {
-  background: #edf1ed;
-  color: #9aa59a;
 }
 
 .photo-strip {
@@ -1438,6 +1596,187 @@ onLoad((query) => {
 
 .primary-action[disabled] {
   opacity: 1;
+}
+
+.modal-mask {
+  position: fixed;
+  z-index: 20;
+  inset: 0;
+  background: rgba(17, 24, 39, 0.46);
+  display: flex;
+  align-items: flex-end;
+  animation: modal-mask-fade 200ms ease-out;
+}
+
+.modal-panel {
+  box-sizing: border-box;
+  width: 100%;
+  max-height: 82vh;
+  padding: 30rpx 32rpx calc(env(safe-area-inset-bottom) + 32rpx);
+  border-radius: 36rpx 36rpx 0 0;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 -18rpx 46rpx rgba(42, 63, 43, 0.18);
+  animation: modal-panel-rise 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.modal-title {
+  color: #171b22;
+  font-size: 34rpx;
+  font-weight: 900;
+}
+
+.modal-close::after,
+.record-photo-upload::after,
+.record-photo-remove::after,
+.modal-submit::after {
+  border: 0;
+}
+
+.modal-close {
+  width: 58rpx;
+  height: 58rpx;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #eef2ee;
+  color: #526070;
+  font-size: 36rpx;
+  line-height: 54rpx;
+}
+
+.modal-hint {
+  display: block;
+  margin-top: 12rpx;
+  color: #6b7280;
+  font-size: 24rpx;
+  font-weight: 700;
+  line-height: 1.45;
+}
+
+.record-photo-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18rpx;
+  margin-top: 24rpx;
+}
+
+.record-photo-cell {
+  position: relative;
+}
+
+.record-photo {
+  display: block;
+  width: 190rpx;
+  height: 190rpx;
+  border-radius: 24rpx;
+  background: #f1f5f0;
+  box-shadow: 0 8rpx 22rpx rgba(42, 63, 43, 0.12);
+}
+
+.record-photo-remove {
+  position: absolute;
+  top: -14rpx;
+  right: -14rpx;
+  width: 44rpx;
+  height: 44rpx;
+  margin: 0;
+  padding: 0;
+  border: 4rpx solid #ffffff;
+  border-radius: 50%;
+  background: #3c4553;
+  color: #ffffff;
+  font-size: 28rpx;
+  line-height: 36rpx;
+}
+
+.record-photo-upload {
+  width: 190rpx;
+  height: 190rpx;
+  margin: 0;
+  padding: 0;
+  border: 2rpx dashed rgba(47, 128, 55, 0.5);
+  border-radius: 24rpx;
+  background: #f4fbef;
+  color: #2f8037;
+  font-size: 25rpx;
+  font-weight: 900;
+  line-height: 186rpx;
+}
+
+.record-remark {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 150rpx;
+  margin-top: 24rpx;
+  padding: 22rpx;
+  border: 2rpx solid rgba(47, 128, 55, 0.24);
+  border-radius: 22rpx;
+  background: #fcfefb;
+  color: #171b22;
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.placeholder {
+  color: #8b919b;
+}
+
+.modal-submit {
+  width: 100%;
+  height: 86rpx;
+  margin: 28rpx 0 0;
+  padding: 0;
+  border: 0;
+  border-radius: 26rpx;
+  background: #2f8037;
+  color: #ffffff;
+  font-size: 29rpx;
+  font-weight: 900;
+  line-height: 86rpx;
+  box-shadow: 0 14rpx 34rpx rgba(47, 128, 55, 0.24);
+}
+
+.modal-record-remark {
+  display: block;
+  margin-top: 20rpx;
+  padding: 20rpx 22rpx;
+  border-radius: 20rpx;
+  background: #f4fbef;
+  color: #273040;
+  font-size: 25rpx;
+  font-weight: 800;
+  line-height: 1.55;
+}
+
+@keyframes modal-mask-fade {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-panel-rise {
+  from {
+    opacity: 0.6;
+    transform: translateY(64rpx);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .button-hover {

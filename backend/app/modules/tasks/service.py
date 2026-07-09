@@ -461,6 +461,40 @@ def _task_checkin_photos_payload(
     ]
 
 
+def _checkin_record_payload(checkin: TaskCheckin, viewer: User | None) -> dict:
+    return {
+        "checkin_id": checkin.id,
+        "task_execution_date_id": checkin.task_execution_date_id,
+        "execute_date": checkin.execute_date,
+        "submitter": _user_payload(checkin.submitter),
+        "is_completed": checkin.is_completed,
+        "process_result": checkin.process_result,
+        "remark": checkin.remark,
+        "submitted_at": checkin.submitted_at,
+        "photos": [
+            _checkin_photo_payload(photo, viewer)
+            for photo in sorted(checkin.photos, key=lambda item: item.sort_order)
+            if photo.deleted_at is None
+        ],
+    }
+
+
+def _task_checkins_payload(
+    task: Task,
+    viewer: User | None,
+    *,
+    execution_date_id: UUID | None = None,
+) -> list[dict]:
+    checkins = [
+        checkin
+        for checkin in task.checkins
+        if checkin.deleted_at is None
+        and (execution_date_id is None or checkin.task_execution_date_id == execution_date_id)
+    ]
+    checkins.sort(key=lambda item: item.submitted_at or item.created_at, reverse=True)
+    return [_checkin_record_payload(checkin, viewer) for checkin in checkins]
+
+
 def _activities_payload(
     activities: list[TaskActivityLog],
     *,
@@ -704,6 +738,11 @@ def task_detail_payload(
             if photo.deleted_at is None
         ],
         "checkin_photos": _task_checkin_photos_payload(
+            task,
+            viewer,
+            execution_date_id=scoped_execution_id,
+        ),
+        "checkins": _task_checkins_payload(
             task,
             viewer,
             execution_date_id=scoped_execution_id,

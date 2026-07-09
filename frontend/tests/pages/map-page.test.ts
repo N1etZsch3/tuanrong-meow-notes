@@ -959,10 +959,14 @@ describe("map page shell behavior", () => {
     expect(layerIndex).toBeLessThan(drawerIndex);
   });
 
-  it("hides the native filter cover layer while the image preview mask is open", () => {
+  it("hides the filter cover layer without unmounting it while the image preview is open", () => {
     const previewSource = extractFunctionSource("openImagePreview");
 
-    expect(indexPageSource).toContain('<cover-view v-if="!imagePreviewVisible" class="map-filter-layer"');
+    expect(indexPageSource).not.toContain('v-if="!imagePreviewVisible"');
+    expect(indexPageSource).toContain(
+      "'map-filter-layer--preview-open': imagePreviewVisible",
+    );
+    expect(indexPageSource).toContain(".map-filter-layer--preview-open");
     expect(previewSource).toContain("filterMenuOpen.value = false");
   });
 

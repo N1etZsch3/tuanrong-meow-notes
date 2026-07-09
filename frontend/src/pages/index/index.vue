@@ -80,7 +80,10 @@
       </view>
     </view>
 
-    <cover-view v-if="!imagePreviewVisible" class="map-filter-layer">
+    <cover-view
+      class="map-filter-layer"
+      :class="{ 'map-filter-layer--preview-open': imagePreviewVisible }"
+    >
       <cover-view class="filter-panel-hit-layer">
         <cover-view
           class="filter-chip"
@@ -2958,6 +2961,12 @@ onBeforeUnmount(() => {
   top: 380rpx;
   width: 360rpx;
   pointer-events: none;
+}
+
+/* 预览大图时仅隐藏不卸载：drawer.wxs 写在该节点上的内联定位样式
+   得以保留，退出预览不会出现位置回跳闪烁 */
+.map-filter-layer--preview-open {
+  display: none;
 }
 
 .filter-panel-hit-layer {

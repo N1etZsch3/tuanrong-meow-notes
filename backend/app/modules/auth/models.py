@@ -21,6 +21,9 @@ class User(Base):
     login_failed_count: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     token_version: Mapped[int] = mapped_column(Integer, default=1)
+    wechat_openid: Mapped[str | None] = mapped_column(String(128), unique=True, index=True)
+    wechat_bound_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_wechat_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),

@@ -175,6 +175,12 @@ class AdminResetPasswordResponse(BaseModel):
     must_change_password: bool
 
 
+class AdminClearWeChatBindingResponse(BaseModel):
+    user_id: UUID
+    wechat_bound: bool
+    token_version: int
+
+
 class AdminUpdateStatusRequest(BaseModel):
     status: str
     reason: str | None = None

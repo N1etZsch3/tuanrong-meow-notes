@@ -92,6 +92,12 @@ export interface AdminResetPasswordResponse {
   must_change_password: boolean;
 }
 
+export interface AdminClearWeChatBindingResponse {
+  user_id: string;
+  wechat_bound: boolean;
+  token_version: number;
+}
+
 export interface AdminDeleteUserResponse {
   user_id: string;
   status: UserStatus | string;
@@ -155,6 +161,17 @@ export function resetAdminUserPassword(
     url: API_ENDPOINTS.admin.userResetPassword(userId),
     method: "PATCH",
     data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function clearAdminUserWechatBinding(
+  accessToken: string,
+  userId: string,
+): Promise<AdminClearWeChatBindingResponse> {
+  return request<AdminClearWeChatBindingResponse>({
+    url: API_ENDPOINTS.admin.userWechatBinding(userId),
+    method: "DELETE",
     token: accessToken,
   });
 }

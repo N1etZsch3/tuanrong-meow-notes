@@ -745,3 +745,35 @@ def update_user_role(
     db.commit()
     db.refresh(user)
     return user
+
+
+def clear_user_wechat_binding(
+    db: Session,
+    *,
+    admin: User,
+    user_id: UUID,
+) -> User:
+    if admin.id == user_id:
+        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
+    user = get_target_user(db, user_id)
+    ensure_target_is_editable(user)
+    before = {
+        "wechat_bound": bool(user.wechat_openid),
+        "token_version": user.token_version,
+    }
+    user.wechat_openid = None
+    user.wechat_bound_at = None
+    user.last_wechat_login_at = None
+    user.token_version += 1
+    log_admin_operation(
+        db,
+        admin=admin,
+        operation_type="user_clear_wechat_binding",
+        target_id=user.id,
+        summary=f"清除成员微信绑定 {user.student_no}",
+        before_data=before,
+        after_data={"wechat_bound": False, "token_version": user.token_version},
+    )
+    db.commit()
+    db.refresh(user)
+    return user

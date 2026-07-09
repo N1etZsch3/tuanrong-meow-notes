@@ -15,20 +15,24 @@ describe("image preview modal", () => {
     expect(imagePreviewModalSource).not.toContain("image-preview-close");
   });
 
-  it("closes when tapping the non-image backdrop area", () => {
-    expect(imagePreviewModalSource).toContain('class="image-preview-backdrop"');
-    expect(imagePreviewModalSource).toContain('@tap="close"');
-    expect(imagePreviewModalSource).toContain("emit(\"close\")");
-  });
-
-  it("supports swiping between multiple preview images inside the app", () => {
-    expect(imagePreviewModalSource).toContain('@touchstart="handlePreviewTouchStart"');
-    expect(imagePreviewModalSource).toContain('@touchend="handlePreviewTouchEnd"');
-    expect(imagePreviewModalSource).toContain("showPrevious");
-    expect(imagePreviewModalSource).toContain("showNext");
-    expect(imagePreviewModalSource).toContain("activeIndex");
+  it("uses a native swiper so pages follow the finger while dragging", () => {
+    expect(imagePreviewModalSource).toContain("<swiper");
+    expect(imagePreviewModalSource).toContain("<swiper-item");
+    expect(imagePreviewModalSource).toContain(':current="activeIndex"');
+    expect(imagePreviewModalSource).toContain('@change="handleSwiperChange"');
     expect(imagePreviewModalSource).toContain("emit(\"change\"");
     expect(imagePreviewModalSource).not.toContain("uni.previewImage");
+    expect(imagePreviewModalSource).not.toContain("handlePreviewTouchEnd");
+    expect(imagePreviewModalSource).not.toContain("SWIPE_MIN_DISTANCE");
+  });
+
+  it("closes when tapping anywhere on the screen, including the image", () => {
+    expect(imagePreviewModalSource).toContain('@tap="close"');
+    expect(imagePreviewModalSource).toContain("emit(\"close\")");
+    expect(imagePreviewModalSource).toMatch(
+      /<image[^>]*@tap="close"|@tap="close"[^>]*>[\s\S]*?<image/,
+    );
+    expect(imagePreviewModalSource).not.toContain("@tap.stop");
   });
 
   it("does not render side pagination buttons in the large image viewer", () => {

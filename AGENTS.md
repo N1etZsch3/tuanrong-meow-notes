@@ -1,723 +1,328 @@
 # AGENTS.md
 
-This file is the development playbook for agents working on the Campus Cat Association Map Task System.
+This file is the project-level development handbook for agents working on CatMap / 团绒喵记本.
 
-The project documents are written in Chinese and are the source of truth for product scope, module behavior, API rules, and database design. Read the relevant documents before changing code or creating new implementation plans.
+It defines how to work in this repository. It intentionally does not define the current product feature list, module completion status, or release scope. Those facts change quickly and must be read from the current code, progress notes, plans, and module documents.
 
-## Project Positioning
+## Scope Of This Handbook
 
-This project is a mobile-first internal collaboration tool for a campus cat association.
+- Use this file for development process, safety rules, verification expectations, documentation discipline, and handoff format.
+- Do not use this file as the source of truth for concrete module behavior.
+- Do not add long module feature lists, release changelogs, or detailed product requirements here.
+- When functionality changes, update the relevant module docs, API docs, schema docs, plans, and `docs/开发进度.md` instead.
 
-The MVP is not a general map product. It is designed to help association members find campus task locations, view cat and supply points, join multi-person tasks, abandon tasks, complete photo check-ins, and keep task/cat records over time.
+## Operating Principles
 
-## Release Status
+- Treat the current deployed behavior and current repository state as real production context, not as a blank-slate MVP.
+- Prefer small, reviewable changes tied to one task.
+- Verify before asserting. If a document, branch name, or old plan conflicts with code and progress notes, investigate instead of guessing.
+- Preserve data safety, rollback ability, and production stability.
+- Do not silently expand scope. If the user asks for a fix, do the fix; move unrelated ideas into notes or future plans.
+- Never revert, overwrite, or clean up work you did not create unless the user explicitly asks.
+- Keep secrets, credentials, environment values, private keys, and push-sensitive identifiers out of logs, commits, and summaries.
 
-Version `1.0.0` is the first production release and the baseline for post-launch maintenance.
+## Current Fact Sources
 
-Treat the current online behavior as the `1.0.0` release baseline. Do not make breaking API, schema, deployment, or user-flow changes on `main` without an explicit release plan and progress entry.
+Before development work, gather current facts in this order:
 
-For the `1.0.x` line, prioritize production stability, bug fixes, data safety, deployment rollback ability, and small scoped improvements. Unfinished or postponed MVP ideas should move into `1.1.0+` planning instead of being silently added to patch releases.
+1. `git status --short --branch` and `git worktree list`.
+2. The latest entries in `docs/开发进度.md`.
+3. Current code, tests, migrations, routes, pages, scripts, and deployment configuration.
+4. Recent commits and tags.
+5. Relevant files under `docs/plans/`.
+6. Relevant module, API, and database design documents under `docs/模块功能/`, `docs/接口文档/`, and `docs/库表文档/`.
+7. Older project overview documents as background only.
 
-The launched `1.0.x` product line should stay focused on:
+If sources conflict:
 
-- Campus map with task, cat, and supply points.
-- Member login using student number, password, letter captcha, and JWT.
-- Admin-created member accounts; no public registration.
-- Multi-person task join, full-capacity display, abandon, completion, and photo check-in.
-- Admin map point selection for publishing tasks and adding cat/supply points.
-- Cat archive and basic observation data.
-- Personal task history and notification center.
-- Duty schedule and task assignment support.
+- Prefer current code plus the latest progress entry for what has actually shipped or been verified.
+- Prefer the latest approved plan for work that is in progress.
+- Treat older overview documents as historical unless they are confirmed by current code or recent progress.
+- Record important conflicts in the handoff or progress entry.
 
-Do not add these to V1 unless the user explicitly asks:
+Use explicit UTF-8 reads for Chinese docs when needed. If a Chinese document appears garbled, re-read it with UTF-8 before drawing conclusions.
 
-- Self-developed map engine.
-- Complex Web admin dashboard.
-- WebSocket real-time system.
-- Redis.
-- Public registration.
-- Phone, email, OAuth, WeChat, QQ, or other third-party login.
-- Password recovery workflow.
-- AI cat recognition.
-- Complex data dashboard.
-- Complex role approval workflow.
-- Indoor-grade navigation or custom route planning algorithm.
+## Required Start Checklist
 
-## Required Reading Order
+At the start of a task:
 
-Before starting any development task, read documents in this order.
+- Identify whether the request is a feature, fix, documentation update, deployment task, release task, investigation, or review.
+- Check branch and worktree state.
+- Notice untracked files, ignored local artifacts, and dirty files before editing.
+- Identify the affected area and the smallest useful change.
+- Read only the relevant current docs and code for that area.
+- Decide what is explicitly out of scope.
+- Decide how the change will be verified.
 
-1. `docs/校园猫协地图任务系统_项目说明文档.md`
-2. `docs/校园猫协地图任务系统_库表设计说明.md`
-3. `docs/接口文档/接口设计规范文档.md`
-4. `docs/开发进度.md`, focusing on the most recent entries for the modules affected by the task.
-5. The module-specific product or interface document for the task.
-6. The relevant table design document if the task touches persistence.
-7. The relevant non-prototype visual asset if the task touches UI.
+For bugs, reproduce the issue or locate concrete evidence before changing behavior whenever practical.
 
-For authentication work, also read:
+For documentation-only tasks, still inspect current state. Documentation that describes stale behavior is a bug.
 
-- `docs/接口文档/鉴权模块_接口文档.md`
-- `docs/库表文档/鉴权模块_库表设计文档.md`
+## File And Search Practices
 
-For map work, also read:
+- Use `rg` / `rg --files` first for text and file searches.
+- Avoid opening ignored prototype images unless the user explicitly asks.
+- For frontend visuals, prefer current implementation, approved assets, prototype code, and current docs over old screenshots.
+- Do not inspect or print environment file contents unless the user explicitly asks and it is safe to do so.
+- Use structured parsers or project APIs when available instead of brittle string manipulation.
 
-- `docs/模块功能/地图模块_详细功能说明.md`
+## Git And Worktree Workflow
 
-When more module documents are added under `docs/模块功能`, `docs/接口文档`, or `docs/库表文档`, prefer the latest module-specific document over inferred behavior.
-
-## Technology Stack
-
-Use the stack specified in the project docs unless the user changes it.
-
-- Frontend: `uni-app`, `Vue 3`, `TypeScript`, `Pinia`.
-- UI: `uView Plus` or lightweight custom components.
-- Map: Amap/Gaode Map SDK.
-- Backend: `FastAPI`, `Pydantic`, `SQLAlchemy 2.0`, `Alembic`.
-- Database: `PostgreSQL` with `PostGIS`.
-- Auth: student number, password, letter captcha, JWT.
-- File storage: local storage for V1, with later migration path to OSS/COS/MinIO.
-- Notifications: database notification table plus frontend polling for V1.
-- Deployment: `Docker Compose`.
-
-Avoid introducing extra infrastructure until the documented MVP needs it.
-
-## Development Workflow
-
-Work module by module. Keep changes small, reviewable, and tied to one product area.
-
-Recommended post-`1.0.0` branch model:
-
-- `main`: production-stable branch. It should match the latest released version or an approved release/hotfix candidate.
-- `dev`: integration branch for accepted `1.x` work before the next release branch.
-- `release/<version>`: stabilization branch for a planned release, such as `release/1.1.0`.
-- `hotfix/<version-or-topic>`: urgent production fix branch created from `main`, such as `hotfix/1.0.1-login-token`.
-- `feature/<module-or-task>`: one focused feature or module slice.
-- `fix/<bug-or-module>`: one focused bug fix.
-- `docs/<topic>`: documentation-only changes.
-
-Recommended module branch examples:
-
-- `feature/auth`
-- `feature/map`
-- `feature/tasks`
-- `feature/cats`
-- `feature/profile`
-- `feature/admin`
-- `feature/notifications`
-- `feature/duty-assignment`
-
-### Default AI Git Workflow
-
-Future agents should use this path unless the user explicitly asks for a different branch strategy.
-
-Default worktree location for this repository:
+The repository root is the production-facing workspace. Normal development should happen in project-local worktrees under:
 
 ```text
 D:\Study\Project\CatMap\.worktrees
 ```
 
-Use project-local worktrees under `.worktrees/` for ongoing AI development. The previous CatMap worktree under `C:\Users\N1etZsch3\.config\superpowers\worktrees` came from the superpowers global worktree fallback, not from this project's long-term convention. Do not create new CatMap worktrees there unless the user explicitly asks for a global worktree location. Keep the main workspace at `D:\Study\Project\CatMap` on `main` as the production-stable baseline, and use `.worktrees/dev` or focused `.worktrees/<branch-name>` directories for `dev`, `feature/*`, `fix/*`, `release/*`, and `hotfix/*` work.
+Default branch roles:
 
-1. Before starting work, run `git status --short --branch`, check the current branch, and notice untracked local files.
-2. Normal feature, fix, and documentation work must happen inside `.worktrees/<branch-slug>`, not in the repository root. The repository root should stay on `main` and should only be used for release integration, merging release or hotfix branches into `main`, creating annotated version tags, and other explicit release operations.
-3. Prefer the existing project-local `.worktrees` directory. Before creating a project-local worktree, verify it is ignored:
+- `main`: production-stable branch, release candidate, or explicit hotfix integration.
+- `dev`: local integration branch for accepted development work.
+- `feature/<topic>`: focused feature work.
+- `fix/<topic>`: focused bug fix.
+- `docs/<topic>`: documentation-only change.
+- `release/<version>`: release stabilization.
+- `hotfix/<version-or-topic>`: urgent production fix from `main`.
 
-```bash
-git check-ignore -q .worktrees
-```
+Before creating a focused worktree:
 
-If `.worktrees` is not ignored, add it to the appropriate ignore file before creating any worktree.
-
-4. For normal feature, fix, or documentation work, the development baseline is always the local `dev` branch checked out at:
-
-```text
-D:\Study\Project\CatMap\.worktrees\dev
-```
-
-In this project, "branch from `dev`" means branch from the committed `HEAD` of that local `.worktrees/dev` worktree. Do not create feature, fix, or documentation branches directly from `origin/dev`. `origin/dev` is only a remote reference used to update or compare the local dev worktree.
-
-5. Before creating or rebasing a focused worktree, fetch from the repository root and compare the local dev worktree with the remote:
-
-```bash
+```powershell
 git -C D:\Study\Project\CatMap fetch origin
 git -C D:\Study\Project\CatMap\.worktrees\dev status --short --branch
 git -C D:\Study\Project\CatMap\.worktrees\dev rev-list --left-right --count origin/dev...dev
 ```
 
-If `.worktrees/dev` is ahead of `origin/dev`, keep that local `dev` as the source of truth because it contains accepted local development work. If `origin/dev` is newer, update the dev worktree first:
+Use the committed `HEAD` of the local `.worktrees/dev` worktree as the normal baseline. If local `dev` is ahead of `origin/dev`, treat local `dev` as the current accepted development baseline. If `origin/dev` is ahead and local `dev` can be fast-forwarded safely, update it first:
 
-```bash
+```powershell
 git -C D:\Study\Project\CatMap\.worktrees\dev pull --ff-only origin dev
 ```
 
-After that update, still create or rebase the focused branch from the local `.worktrees/dev` `HEAD`, not from `origin/dev`. Do not touch unrelated uncommitted files in `.worktrees/dev`; branch from its committed `HEAD` unless the user explicitly asks to include local uncommitted changes.
+Create focused worktrees from local `dev`, for example:
 
-6. Create the focused branch as a new project-local worktree from the local `dev` branch. Run this from `D:\Study\Project\CatMap`:
-
-```bash
-git worktree add .worktrees/fix-<bug-or-module> -b fix/<bug-or-module> dev
+```powershell
+git -C D:\Study\Project\CatMap worktree add .worktrees\docs-agents-handbook -b docs/agents-handbook dev
 ```
 
-Use `feature/<module-or-task>` for feature work, `fix/<bug-or-module>` for non-urgent bug fixes, and `docs/<topic>` for documentation-only changes. The worktree directory name should be path-safe, for example `.worktrees/fix-map-point-detail-bugs` for branch `fix/map-point-detail-bugs`.
+Do not create new project worktrees under global fallback directories unless the user explicitly asks.
 
-7. Local env files are required for this project to run tests and builds. After creating a worktree, copy the valid ignored env files from `.worktrees/dev` into the new worktree using the same relative paths, such as `frontend/.env.production`, `frontend/.env`, `backend/.env`, or root `.env` when those files exist. Do not print env file contents, do not commit env files, and verify they remain ignored with `git status --short --ignored -- <env-file>`. If the required env file is missing from `.worktrees/dev`, stop and ask the user rather than inventing placeholder credentials.
+If a worktree has unrelated uncommitted files, do not touch them. If they block the task, stop and explain the blocker.
 
-8. Mini Program AppIDs are required to be correct for local development, local verification, and release builds. Keep `frontend/project.config.json` and `frontend/src/manifest.json` aligned with the authorized AppID in local `dev`, feature/fix worktrees, and release worktrees. Treat the AppID as push-sensitive rather than local-development-sensitive: do not print it unnecessarily, and before pushing to a remote, inspect the staged diff and the commit range being pushed. Unless the user explicitly approves pushing the real AppID to that remote, create a push-safe state or branch that does not expose the real AppID.
+## Environment Files And Local Config
 
-9. Finish the focused branch inside its worktree, run the relevant verification, update `docs/开发进度.md`, then merge the branch back into `dev`.
-10. Do not develop normal feature work directly on `main`. `main` is for released code, release candidates, and urgent production hotfixes. Even urgent hotfix coding should be done in a `hotfix/<version-or-topic>` worktree created from `main`; return to the repository root only for the final verified merge into `main` and release tag.
-11. When a planned version is ready, create `release/<version>` from `dev` in `.worktrees/release-<version>`. Freeze new features there; only allow release bug fixes, version notes, documentation updates, and deployment hardening. After verification, return to the repository root, merge `release/<version>` into `main`, create an annotated tag such as `v1.1.0`, push `main` and the tag, then merge the release branch back into `dev`.
-12. For an urgent production fix, create `hotfix/<version-or-topic>` from `main` in `.worktrees/hotfix-<version-or-topic>`, verify the fix there, then return to the repository root to merge it into `main`, tag the patch release such as `v1.0.1`, push `main` and the tag, then merge or cherry-pick the same fix back into `dev`.
-13. Before committing or pushing, stage explicit files only. Do not use `git add .` when untracked local files, private documents, secrets, screenshots, or scratch directories are present.
-14. Before pushing to a remote, check for information leaks in the staged diff and the commit range being pushed. Look for real server IPs, private domains, map keys, Mini Program AppIDs, COS identifiers, access tokens, private keys, passwords, `.env` values, and deployment credentials.
-15. Push only the intended branch or tag. Never run `git push --all origin`, and do not push old local `feature/`, `fix/`, or `codex/` branches unless the user explicitly asks.
+Ignored environment and local config files are required for many checks, builds, and deployments.
 
-### Required Test Deployment Rules
+- Copy required ignored env files from the local `dev` worktree into a new focused worktree using the same relative paths.
+- Do not invent placeholder secrets.
+- If required env files are missing from `dev`, ask the user instead of fabricating values.
+- Verify copied env files remain ignored with `git status --short --ignored -- <path>`.
+- Do not print env contents.
 
-These rules apply to future backend-related development tasks unless the user explicitly changes them.
+Mini Program AppIDs and third-party service keys are push-sensitive. Keep local development config aligned with the authorized app, but inspect staged diffs and push ranges before pushing. Do not push real AppIDs, keys, tokens, or private credentials to a remote unless the user explicitly approves that remote state.
 
-1. The backend request host for integration and deployment verification is `http://49.235.238.143`.
-2. Environment files used for local production builds or deployment verification should be copied from the `dev` worktree/branch environment files before testing. Do not invent replacement `.env` values; if the required `dev` env file is missing, report the missing file before deployment.
-3. After backend code is ready, running the deployment script under `scripts/` is part of the required test pass. Use `scripts/deploy-backend.ps1` with the configured backend host and env file, then verify the deployed `/api/v1/health` result before handing off.
+## Commit And Push Discipline
 
-For every feature branch:
+- Stage explicit files only. Do not use `git add .`.
+- Check `git status` before committing.
+- Use concise conventional commit messages.
+- Do not commit generated artifacts unless the release process or user explicitly requires them.
+- Before pushing, inspect staged diffs and commits being pushed for secrets, private hosts, access keys, map keys, storage credentials, AppIDs, `.env` values, and deployment credentials.
+- Push only the intended branch or tag. Never run `git push --all origin`.
+- Do not delete or prune old branches or worktrees without user approval.
 
-1. Read the required docs.
-2. Identify module boundaries and dependencies.
-3. Update or create API/schema contracts first when needed.
-4. Implement database models and migrations before backend endpoints that depend on them.
-5. Implement backend APIs before frontend screens that consume them, unless building a static prototype.
-6. Keep frontend types aligned with backend response fields.
-7. Add focused tests or verification steps for the changed behavior.
-8. Update progress notes before handing off.
-
-Do not mix unrelated module changes in one branch.
-
-## Git Version Management
-
-Use semantic versioning after `1.0.0`:
-
-- `MAJOR.MINOR.PATCH`, for example `1.0.1`, `1.1.0`, `2.0.0`.
-- Patch releases such as `1.0.1` are for production bug fixes, security fixes, deployment fixes, and documentation corrections. They should not introduce breaking API or database changes.
-- Minor releases such as `1.1.0` are for backward-compatible feature improvements or deferred MVP modules.
-- Major releases such as `2.0.0` are reserved for breaking API, data model, or product behavior changes.
-
-Every production release should have an annotated Git tag:
-
-```bash
-git switch main
-git pull
-git tag -a v1.0.0 -m "release: v1.0.0"
-git push origin v1.0.0
-```
-
-Create the tag on the exact commit that was deployed. If the tag was missed during deployment, add it later only after confirming the deployed commit hash.
-
-Mandatory workflow summary:
-
-1. Normal feature release: branch from `dev`, merge back to `dev`, stabilize on `release/<version>`, merge into `main`, then tag `v<version>`.
-2. Production hotfix: branch from `main`, merge the fix into `main`, tag the next patch version, then merge or cherry-pick the same fix back to `dev`.
-3. Documentation-only update: use `docs/<topic>` when the change is not tied to code. Release process documentation can go directly through the same review path as code.
-
-For merge strategy, keep release and hotfix history easy to audit. Squash noisy feature branches if needed, but preserve release and hotfix merge commits when they explain what shipped.
-
-Each release progress entry in `docs/开发进度.md` should include:
-
-- Version number and release date.
-- Source branch and Git tag.
-- Important changes or known exclusions.
-- Verification commands and manual checks.
-- Deployment notes, rollback notes, and next planned version.
-
-## Commit Rules
-
-Use concise conventional commit messages.
-
-Recommended prefixes:
-
-- `feat:` new feature.
-- `fix:` bug fix.
-- `docs:` documentation.
-- `refactor:` behavior-preserving code restructuring.
-- `test:` tests only.
-- `chore:` tooling or maintenance.
-- `db:` database schema or migration work.
-- `release:` release notes, version tagging, or release coordination.
-
-Examples:
+Recommended commit prefixes:
 
 ```text
-feat(auth): add student number login endpoint
-db(tasks): add task participants table
-feat(map): show task and cat markers
-docs(progress): update task module status
-release: publish v1.0.0 baseline
+feat:
+fix:
+docs:
+refactor:
+test:
+chore:
+db:
+release:
 ```
 
-Before committing:
+## Version And Release Rules
 
-- Check `git status`.
-- Do not revert or overwrite unrelated user changes.
-- Include only files related to the current task.
-- Run the relevant tests, type checks, linters, or manual verification.
-- If verification cannot run, record why in the handoff.
-
-## Module Development Order
-
-Prefer this order unless the user gives a different priority:
-
-1. Project skeleton and shared conventions.
-2. Authentication and member account management.
-3. Database base models, migrations, and common utilities.
-4. Map module.
-5. Task module.
-6. Cat archive module.
-7. Personal center module.
-8. Admin module.
-9. Notification center.
-10. Duty schedule and task assignment.
-11. File upload and photo check-in hardening.
-12. Cross-module polish and deployment.
-
-This order keeps the authentication, user identity, point data, and task flow stable before building dependent UI.
-
-## Module Start Checklist
-
-Before coding a module, answer these points in the task notes or progress file:
-
-- What module is being changed?
-- Which docs were read?
-- Which APIs are needed or affected?
-- Which tables are needed or affected?
-- Which non-image references or assets are relevant?
-- Which upstream modules are required?
-- What is the smallest useful vertical slice?
-- What is explicitly out of scope for this branch?
-- How will the change be verified?
-
-## Module Guides
-
-### Authentication
-
-Core scope:
-
-- Captcha generation and validation.
-- Student number and password login.
-- JWT authentication.
-- `token_version` validation.
-- First-login password change.
-- Admin-created member accounts.
-- Admin password reset.
-- Admin disable/restore account.
-
-Required docs:
-
-- `docs/接口文档/鉴权模块_接口文档.md`
-- `docs/库表文档/鉴权模块_库表设计文档.md`
-- `docs/接口文档/接口设计规范文档.md`
-
-Key rules:
-
-- `student_no` is the V1 login identifier.
-- Store password hashes only.
-- Store captcha hashes only.
-- Do not implement refresh tokens for V1.
-- When passwords are changed or reset, increment `users.token_version`.
-- When `must_change_password` is true, allow only `GET /api/v1/auth/me`, `PATCH /api/v1/auth/password`, and `POST /api/v1/auth/logout`.
-
-### Map Module
-
-Core scope:
-
-- Campus-centered map homepage.
-- Task, cat, supply, and emergency task markers.
-- Marker filtering.
-- Bottom detail card after marker click.
-- Navigation through Amap/Gaode capability.
-- Admin map point selection.
-
-Required docs:
-
-- `docs/模块功能/地图模块_详细功能说明.md`
-- `docs/校园猫协地图任务系统_项目说明文档.md`
-- `docs/校园猫协地图任务系统_库表设计说明.md`
-
-Key rules:
-
-- `map_points` stores spatial and display information only.
-- Do not put full task, cat health, or supply inventory data into `map_points`.
-- Route text, location notes, and onsite photos are part of the system's own business data.
-- Limit or de-emphasize areas outside the campus.
-- Clicking a marker should first show a bottom detail card instead of immediately navigating to a full detail page.
-
-### Task Module
-
-Core scope:
-
-- Task list and detail.
-- Task status.
-- Multi-person joining.
-- Full-capacity display.
-- Participant list.
-- Abandon task.
-- Complete task with check-in photo and feedback.
-- Task activity logs.
-
-Key rules:
-
-- Task process status belongs in `tasks.status`.
-- User participation status belongs in `task_participants.status`.
-- Do not store "full" as a task status. Compute it with `participant_count >= max_participants`.
-- V1 does not require admin completion review.
-- V1 completion flow is: member submits check-in, write `task_checkins`, mark task completed, create activity logs and notifications.
-
-### Cat Archive Module
-
-Core scope:
-
-- Cat list.
-- Cat detail.
-- Cat photos.
-- Cat aliases.
-- Health status.
-- Resident area and related map points.
-- Observation records.
-
-Key rules:
-
-- Cat archive is long-term association data, not just a gallery.
-- Observation records should help update recent appearance, health signals, and activity area.
-- Future conversion from abnormal observation to task should be kept possible, but not overbuilt in V1.
-
-### Personal Center
-
-Core scope:
-
-- Current user profile.
-- Edit basic profile.
-- Current tasks.
-- Historical tasks.
-- Check-in records.
-- Observation records.
-- Basic personal statistics.
-- Notification entry.
-- Admin entry when role is `admin`.
-
-Key rules:
-
-- Do not create a duplicate `my_tasks` table.
-- Personal center data should be queried or aggregated from existing business tables.
-- Admin entry belongs in the personal center, not in the bottom tab bar.
-
-### Admin Module
-
-Core scope:
-
-- Admin home.
-- Publish task.
-- Map point selection.
-- Add/edit cat.
-- Add/edit supply point.
-- Edit or hide map points.
-- Member account management.
-- Batch import members.
-- Reset passwords.
-- Disable or restore accounts.
-- Task management.
-
-Key rules:
-
-- Admin module is a management layer, not an isolated business domain.
-- Admin task publishing may write `map_points`, `tasks`, `task_activity_logs`, `notifications`, and `admin_operation_logs`.
-- Prefer hiding map points over hard deletion in V1.
-- Complex statistics and review workflows can be reserved for later versions.
-
-### Notification Module
-
-Core scope:
-
-- Notification table records.
-- Unread count.
-- Notification center.
-- Link notification to task or cat details when applicable.
-- Frontend polling.
-
-Key rules:
-
-- V1 uses database records plus polling.
-- Do not introduce WebSocket or Redis for V1 unless explicitly requested.
-- Notifications are user-facing reminders.
-- Task activity logs are part of task detail history.
-- Keep those two concepts separate.
-
-### Duty Schedule And Task Assignment
-
-Core scope:
-
-- Duty schedules.
-- Admin task assignment.
-- Assignment acceptance flow.
-- Sync accepted assignment into task participants.
-
-Key rules:
-
-- `duty_schedules` and `task_assignments` are MVP tables.
-- `task_assignments` records admin assignment intent.
-- `task_participants` records actual task participation.
-- Free joining and admin assignment are different sources of participation.
-
-### File Upload And Photos
-
-Core scope:
-
-- User avatar.
-- Cat photos.
-- Task reference photos.
-- Task check-in photos.
-- Observation photos.
-- Supply point photos.
-- Route explanation photos.
-
-Key rules:
-
-- V1 can use local file storage.
-- Keep a future migration path to OSS/COS/MinIO.
-- Frontend should compress images before upload where practical.
-- Store file metadata consistently so records can reference uploaded photos.
-
-## API Conventions
-
-Follow `docs/接口文档/接口设计规范文档.md`.
-
-Base path:
+Use semantic versioning:
 
 ```text
-/api/v1
+MAJOR.MINOR.PATCH
 ```
 
-Use lowercase plural resource names:
+Release facts must be discovered from `docs/开发进度.md`, Git tags, recent commits, deployment scripts, and actual deployed health checks. Do not rely on stale text in old overview docs.
 
-```http
-GET /api/v1/tasks
-GET /api/v1/tasks/{task_id}
-POST /api/v1/tasks/{task_id}/join
+Production releases should use annotated tags on the exact deployed commit:
+
+```powershell
+git tag -a v<version> -m "release: v<version>"
 ```
 
-Use `snake_case` for request and response fields:
+For release and hotfix work:
 
-```json
-{
-  "student_no": "20252160A1010",
-  "must_change_password": true,
-  "created_at": "2026-06-19T10:00:00+08:00"
-}
-```
+- Create release branches from `dev`.
+- Create hotfix branches from `main`.
+- Verify before merging into `main`.
+- Record deployment, rollback notes, verification commands, and known exclusions in `docs/开发进度.md`.
+- After a hotfix, merge or cherry-pick the fix back to `dev` as appropriate.
 
-Use the unified response envelope:
+## Backend Development Standards
 
-```json
-{
-  "code": 0,
-  "message": "success",
-  "data": {},
-  "trace_id": "018f3c2e9b7e4f1a9a7e6c8d9"
-}
-```
-
-Authenticated endpoints use:
-
-```http
-Authorization: Bearer <access_token>
-```
-
-Use action subpaths for action-like operations:
-
-```http
-POST /api/v1/tasks/{task_id}/join
-POST /api/v1/tasks/{task_id}/abandon
-POST /api/v1/tasks/{task_id}/checkins
-POST /api/v1/auth/logout
-```
-
-## Database And Migration Rules
-
-Use PostgreSQL and PostGIS.
-
-Use SQLAlchemy models and Alembic migrations for schema changes.
-
-General rules:
-
-- Prefer UUID primary keys.
-- Use `created_at`, `updated_at`, and `deleted_at` where the table needs lifecycle tracking.
-- Use soft deletion or hidden status for user-facing records when accidental deletion is risky.
-- Keep spatial point data separate from business details.
-- Keep task status separate from participant status.
-- Keep notification records persistent in the database.
-- Keep admin operations auditable when they affect accounts, tasks, points, or roles.
-
-When changing schema:
-
-1. Check the relevant table design document.
-2. Create or update the model.
-3. Create an Alembic migration.
-4. Verify upgrade and downgrade where practical.
-5. Update API schemas if the change affects responses.
-6. Update progress notes with the migration name.
-
-## Frontend Rules
-
-The frontend is a uni-app WeChat Mini Program. Mobile is the primary experience, and WeChat Mini Program behavior is the primary target. H5 can be used for local debugging, but it must not drive platform-specific decisions when it conflicts with the Mini Program target.
-
-- Every frontend page must be designed and checked against phone-sized 微信小程序视口 first. Keep onboarding and form pages within the visible 手机 viewport when the flow is intended to fit one screen; use responsive `rpx`, bounded heights, and remove non-essential decorative blocks before allowing layout overflow.
-- All frontend pages should use `frontend/素材/加载页素材/背景.jpg` as the shared page background unless the user explicitly asks for a page-specific exception.
-
-Bottom tab pages:
-
-```text
-地图
-猫咪库
-任务
-我的
-```
-
-Admin entry belongs under `我的`.
-
-Frontend typography and 中文字体 rules:
-
-- All Chinese UI text must use Songti-style fonts.
-- Use this font stack for app pages and components: `"Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif`.
-- Do not override Chinese UI text with unrelated sans-serif fonts unless the user explicitly asks for a page-specific exception.
-- If an SVG or generated asset contains visible Chinese text, set the text font to the same Songti stack where the asset format supports it.
-
-Frontend development workflow:
-
-1. Work from a feature branch such as `feature/frontend-login`, `feature/frontend-map`, or `feature/frontend-tasks`.
-2. Do not read or open images under `frontend/页面原型` unless the user explicitly asks.
-3. Reproduce page layout, spacing, colors, typography, icons, empty states, and interaction states from module docs, existing implementation, `frontend/页面原型代码` when available, and approved assets.
-4. Check `frontend/页面原型代码` when it exists, but do not treat images under `frontend/页面原型` as required reading or visual source of truth.
-5. Check `frontend/素材` before adding any icon, image, illustration, marker, empty-state image, or decorative asset.
-6. If the needed visual asset is not in `frontend/素材`, use a clear placeholder component or placeholder block with a meaningful label. Do not use a random replacement icon, third-party image, or near-match asset.
-7. Keep page implementation scoped to the current page or module. Do not redesign other pages while matching one prototype or reference.
-8. Run `npm run type-check` and the relevant uni-app build command before handoff.
-
-Frontend data rules:
-
-- Keep TypeScript types aligned with backend `snake_case` fields.
-- Use Pinia for user identity, task state, map filters, and other shared state.
-- Handle loading, empty, error, permission-denied, and image-failed states using existing implementation/assets where available.
-- Do not invent unrelated visual systems when page references exist.
-- Do not substitute missing icons or components with arbitrary online assets or unrelated local assets.
-- Prefer existing assets and reference styles over new visual abstractions.
-- Map pages should prioritize usable map area and task/cat/supply point interaction.
-
-Prototype and asset folders:
-
-- `frontend/页面原型` is ignored by git and should not be read for images unless the user explicitly asks.
-- `frontend/页面原型代码`
-- `frontend/素材`
-
-Asset rules:
-
-- `frontend/素材/icon` contains the original icon assets.
-- `frontend/素材/svg` contains the original SVG assets.
-- Keep new frontend-used assets under `frontend/素材`.
-- Do not store frontend page assets in the repository root.
-- When an asset is missing, create an obvious placeholder in the UI and record the missing asset in the handoff or progress notes.
-
-## Backend Rules
-
-Backend APIs should follow FastAPI and Pydantic conventions.
+Backend work uses FastAPI, Pydantic, SQLAlchemy 2.0, Alembic, PostgreSQL, and PostGIS.
 
 General rules:
 
 - Keep route handlers thin.
-- Put business logic in services or clearly named helper modules.
+- Put business logic in services or clear helper modules.
 - Use Pydantic schemas for request and response validation.
-- Keep database access consistent and transaction-aware.
-- Use password hashing utilities rather than custom hash logic.
-- Avoid storing secrets or credentials in source files.
-- Include trace IDs in API responses as specified by the interface docs.
+- Keep database access transaction-aware.
+- Enforce auth and role checks at the API boundary or service boundary as appropriate.
+- Return unified API envelopes with trace IDs.
+- Use `snake_case` request and response fields.
+- Keep API routes under `/api/v1`.
+- Use action subpaths for action-like operations.
+- Do not store secrets in source files.
+- Do not write custom password, token, or crypto logic when project utilities exist.
 
-## Progress Synchronization
+When adding or changing endpoints:
 
-Every agent should update development progress before ending a development handoff.
+- Update schemas and tests with the behavior.
+- Keep frontend API types aligned.
+- Update API docs when the public contract changes.
+- Confirm error responses follow the project error format.
 
-Recommended progress file:
+## Database And Migration Standards
+
+Schema changes must use SQLAlchemy models and Alembic migrations.
+
+For database work:
+
+- Check current migrations and table docs before editing schema.
+- Prefer UUID primary keys unless an existing table pattern differs.
+- Use lifecycle timestamps where records need lifecycle tracking.
+- Prefer soft deletion or archival for user-facing records where accidental deletion is risky.
+- Keep spatial point data separate from business details.
+- Avoid destructive migrations in patch-level maintenance unless the user approves a release plan.
+- Add downgrade logic where practical.
+- Verify upgrade and, when practical, downgrade.
+- Record migration names in progress notes.
+
+For production-impacting data changes, include rollback notes or backup expectations in the handoff.
+
+## Frontend Development Standards
+
+Frontend work targets uni-app, Vue 3, TypeScript, Pinia, and WeChat Mini Program first. H5 is useful for local debugging but must not override Mini Program behavior.
+
+General rules:
+
+- Design for phone-sized Mini Program viewports first.
+- Every frontend page should be checked against a phone-sized 微信小程序视口 first.
+- Keep pages usable, dense enough for mobile, and free of accidental overflow.
+- Use existing app components, request services, stores, and assets before creating new abstractions.
+- Use the shared page background `frontend/素材/加载页素材/背景.jpg` unless the user explicitly asks for a page-specific exception.
+- 中文字体 must use the project Songti-style font stack: `"Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif`.
+- Keep Chinese UI readable on 手机 viewports; do not override Chinese UI text with unrelated sans-serif fonts unless explicitly requested.
+- Prefer current approved assets under `frontend/素材`.
+- Do not add random online assets or near-match replacements.
+- If a needed asset is missing, use an obvious placeholder and record the gap.
+- Handle loading, empty, error, permission-denied, unauthenticated, and image-failed states.
+- Keep TypeScript types aligned with backend `snake_case` fields.
+- Use Pinia for shared app state.
+
+Prototype and asset rules:
+
+- `frontend/页面原型` is ignored and should not be opened for images unless the user explicitly asks.
+- `frontend/页面原型代码` may be used when relevant.
+- New frontend-used assets belong under `frontend/素材`, not the repository root.
+
+Before frontend handoff, run the relevant tests and build:
+
+```powershell
+cd frontend
+npm run test -- --run
+npm run type-check
+npm run build:mp-weixin
+```
+
+Use narrower test commands first when iterating, then run the broader relevant set before handoff.
+
+## External Services And Deployment Config
+
+Third-party services such as map providers, object storage, HTTPS certificates, and deployment hosts must be configured through environment variables, deployment scripts, or approved config files.
+
+- Do not hardcode secrets or private credentials.
+- Do not print keys, tokens, certificates, or env values.
+- When changing external-service behavior, update `.env.example`, settings, docs, and tests together.
+- When changing request domains, CORS, certificates, or deployment scripts, verify both local contract tests and deployed health checks.
+- Treat Mini Program request domains, AppID config, map provider keys, and object storage credentials as release-sensitive.
+
+## Verification Standards
+
+Run the smallest meaningful verification while developing, then broaden before handoff.
+
+Backend:
+
+```powershell
+cd backend
+python -m pytest <targeted-test> -q
+python -m pytest -q
+python -m ruff check .
+python -m alembic upgrade head
+```
+
+Frontend:
+
+```powershell
+cd frontend
+npm run test -- --run <targeted-test>
+npm run test -- --run
+npm run type-check
+npm run build:mp-weixin
+```
+
+Deployment-impacting backend work should also run the repository deployment verification path unless the user explicitly scopes the task to local-only work:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy-backend.ps1 -EnvFile backend\.env
+```
+
+Then verify the deployed `/api/v1/health` endpoint using the currently configured production or test host from scripts and progress notes.
+
+If a verification step cannot be run, record exactly why and what risk remains.
+
+Manual Mini Program verification is expected for changes involving navigation, native map behavior, location authorization, image upload/display, AppID config, permissions, or platform-specific UI.
+
+## Documentation And Progress Updates
+
+Update `docs/开发进度.md` before handoff for development, release, deployment, or meaningful documentation work.
+
+Use local `+08:00` timestamps in this format:
 
 ```text
-docs/开发进度.md
+YYYY-MM-DD HH:mm:ss +08:00
 ```
 
-If the file does not exist, create it when the first development module starts. Keep it short and factual.
+A useful progress entry includes:
 
-Use this format:
-
-```md
-# 开发进度
-
-## 当前总览
-
-- 当前阶段：MVP / 已上线维护（x.y.z）
-- 当前线上版本：
-- 当前重点模块：
-- 当前分支：
-- 推荐 Git 标签：
-- 最近更新时间：YYYY-MM-DD HH:mm:ss +08:00
-
-## 模块状态
-
-| 模块 | 状态 | 分支 | 负责人/Agent | 备注 |
-|---|---|---|---|---|
-| 鉴权模块 | 未开始 |  |  |  |
-| 地图模块 | 未开始 |  |  |  |
-| 任务模块 | 未开始 |  |  |  |
-| 猫咪库模块 | 未开始 |  |  |  |
-| 个人中心模块 | 未开始 |  |  |  |
-| 管理员模块 | 未开始 |  |  |  |
-| 通知模块 | 未开始 |  |  |  |
-| 排班与任务指派 | 未开始 |  |  |  |
-
-## 最近进展
-
-### YYYY-MM-DD HH:mm:ss +08:00
-
-- 分支：
-- 完成：
-- 修改文件：
-- 验证：
-- 阻塞：
-- 下一步：
-```
-
-Suggested statuses:
-
-- `未开始`
-- `设计中`
-- `开发中`
-- `待联调`
-- `待测试`
-- `已完成`
-- `已上线维护`
-- `1.x 规划复核`
-- `阻塞`
-
-Progress updates should include:
-
-- Branch name.
+- Branch or worktree.
+- Affected area.
 - Completed work.
-- Important files changed.
-- API or table changes.
+- Files changed.
+- API or schema changes.
 - Migration names.
 - Verification commands and results.
-- Known blockers.
-- Next recommended task.
-- Release version and Git tag when the work changes or documents a production release.
-- Current local timestamp with timezone. New progress entries, implementation plans, design notes, and other development documents should record the current time in `YYYY-MM-DD HH:mm:ss +08:00` format, not just the date.
+- Manual checks not yet done.
+- Known blockers or risks.
+- Next recommended step.
+
+Plans belong under `docs/plans/` and should be short, actionable, and tied to the current repository state. Do not create large speculative plans unless the user asks.
+
+When a module contract changes, update the relevant module, API, or table document. Do not encode module-specific contract details in this handbook.
 
 ## Handoff Format
 
-When ending a coding session, summarize in this order:
+End coding sessions with a concise handoff in this order:
 
 1. What changed.
 2. Files touched.
@@ -726,34 +331,49 @@ When ending a coding session, summarize in this order:
 5. Known risks or blockers.
 6. Next step.
 
-Keep handoffs short enough for another agent to continue quickly.
+Keep the handoff factual. Do not claim a module, release, or deployment is complete unless verification supports it.
 
-## Definition Of Done
+## Review Mode
 
-A module slice is done only when:
+When asked for a review, lead with findings.
 
-- Relevant docs were read.
-- Scope matches the MVP boundary.
-- API contracts follow `/api/v1`, `snake_case`, and unified response rules.
-- Database changes have migrations when needed.
-- Frontend screens handle loading, empty, error, and permission states where relevant.
-- Auth and role checks are enforced where relevant.
-- Task/map/cat/admin behavior respects the documented module boundaries.
-- Tests, type checks, or manual verification were run.
-- Development progress was updated.
-- Remaining risks are documented.
+- Prioritize bugs, regressions, data risks, deployment risks, security issues, and missing tests.
+- Include file and line references.
+- Keep summaries secondary.
+- If no issues are found, say so and mention residual risk or unrun checks.
 
-Do not mark a module as complete just because code was written.
+## Security And Privacy Rules
 
-## Quick Start For A New Agent
+- Never commit `.env` files, private keys, certificates, tokens, passwords, database dumps, or secret screenshots.
+- Do not paste secret values into chat or progress notes.
+- Before pushing, inspect diffs and commit ranges for credentials, private domains, service keys, Mini Program AppIDs, and deployment details.
+- If a change adds or changes personal-information processing, permissions, image/file upload behavior, location behavior, or third-party sharing, update the relevant privacy/compliance documentation and Mini Program configuration notes.
+- Keep user data retention, deletion, and audit implications in mind when changing persistence.
 
-1. Read this file.
-2. Read `docs/校园猫协地图任务系统_项目说明文档.md`.
-3. Read `docs/校园猫协地图任务系统_库表设计说明.md`.
-4. Read `docs/接口文档/接口设计规范文档.md`.
-5. Read `docs/开发进度.md`, especially the recent entries for the module you will change.
-6. Check current files and branch state.
-7. Select one module slice.
-8. Read that module's docs and non-image references.
-9. Implement the smallest useful vertical slice.
-10. Verify and update progress before handoff.
+## Completion Checklist
+
+Before handing off:
+
+- Relevant current docs and code were checked.
+- Scope stayed focused.
+- API/schema changes, if any, have docs and tests.
+- Database changes, if any, have migrations.
+- Frontend changes handle important states and Mini Program constraints.
+- Backend changes preserve auth, response envelopes, and transaction safety.
+- Relevant tests, type checks, linters, builds, migrations, or deployment checks were run.
+- `docs/开发进度.md` was updated when appropriate.
+- Remaining manual checks, risks, and blockers are documented.
+
+## What Not To Put In This File
+
+Do not add:
+
+- Full module feature lists.
+- Temporary launch checklists.
+- Detailed API examples for one module.
+- Table-by-table schema specs.
+- Historical progress logs.
+- Screenshots or prototype analysis.
+- Secrets, env values, AppIDs, private keys, or deployment credentials.
+
+Put those in the appropriate current docs, plans, progress notes, or private environment files instead.

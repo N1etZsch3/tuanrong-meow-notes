@@ -614,7 +614,9 @@ def test_admin_can_get_editable_task_detail_with_dates_point_and_photos(
 def test_member_checkin_completes_one_execution_date_without_completing_parent_task(
     api_client,
     db_session,
+    monkeypatch,
 ):
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 2))
     admin = create_user(db_session, role="admin", nickname="管理员")
     member = create_user(db_session, nickname="Nietzsche")
     campus = seed_campus(db_session)
@@ -654,7 +656,9 @@ def test_member_checkin_completes_one_execution_date_without_completing_parent_t
 def test_task_checkin_photos_use_file_asset_cos_urls_instead_of_client_content_urls(
     api_client,
     db_session,
+    monkeypatch,
 ):
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 2))
     admin = create_user(db_session, role="admin", nickname="管理员")
     member = create_user(db_session, nickname="Nietzsche")
     campus = seed_campus(db_session)
@@ -698,7 +702,9 @@ def test_task_checkin_photos_use_file_asset_cos_urls_instead_of_client_content_u
 def test_task_detail_exposes_checkin_photos_to_members_with_delete_permissions(
     api_client,
     db_session,
+    monkeypatch,
 ):
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 2))
     admin = create_user(db_session, role="admin", nickname="管理员")
     uploader = create_user(db_session, nickname="Nietzsche")
     viewer = create_user(db_session, nickname="旁观成员")
@@ -760,7 +766,9 @@ def test_task_detail_exposes_checkin_photos_to_members_with_delete_permissions(
 def test_only_checkin_photo_uploader_or_admin_can_soft_delete_photo(
     api_client,
     db_session,
+    monkeypatch,
 ):
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 2))
     admin = create_user(db_session, role="admin", nickname="管理员")
     uploader = create_user(db_session, nickname="Nietzsche")
     viewer = create_user(db_session, nickname="旁观成员")
@@ -1282,7 +1290,9 @@ def test_list_filters_child_execution_cards_by_display_status(
 def test_task_detail_groups_parent_history_and_supports_execution_scope(
     api_client,
     db_session,
+    monkeypatch,
 ):
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 2))
     admin = create_user(db_session, role="admin", nickname="管理员")
     member = create_user(db_session, nickname="Nietzsche")
     campus = seed_campus(db_session)

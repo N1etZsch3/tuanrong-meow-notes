@@ -2,7 +2,7 @@ param(
     [string] $ServerHost = "49.235.238.143",
     [string] $ServerUser = "root",
     [int] $SshPort = 22,
-    [string] $Domain = "49.235.238.143",
+    [string] $Domain = "trmx.fun",
     [string] $DeployDir = "/opt/catmap/backend",
     [string] $ServiceName = "catmap-backend",
     [string] $SshKeyPath = (Join-Path $env:USERPROFILE ".ssh\catmap_deploy_ed25519"),
@@ -18,7 +18,7 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $backendDir = Join-Path $repoRoot "backend"
 $nginxConfig = Join-Path $repoRoot "deploy\nginx\catmap.conf"
 $systemdService = Join-Path $repoRoot "deploy\systemd\catmap-backend.service"
-$healthUrl = "http://$ServerHost/api/v1/health"
+$healthUrl = "https://$Domain/api/v1/health"
 
 function Invoke-Native {
     param(
@@ -160,11 +160,12 @@ fi
 command -v nginx >/dev/null 2>&1 || { echo 'nginx is not installed.' >&2; exit 1; }
 command -v python3.11 >/dev/null 2>&1 || { echo 'python3.11 is not installed.' >&2; exit 1; }
 
-mkdir -p "`$(dirname "`$DEPLOY_DIR")" "`$DEPLOY_DIR" /etc/nginx/ssl/catmap /tmp/catmap-backend-new
+mkdir -p "`$(dirname "`$DEPLOY_DIR")" "`$DEPLOY_DIR" /tmp/catmap-backend-new
 
 if [ -f "`$CERT_UPLOAD" ] && [ -f "`$KEY_UPLOAD" ]; then
-    install -m 644 "`$CERT_UPLOAD" /etc/nginx/ssl/catmap/origin.pem
-    install -m 600 "`$KEY_UPLOAD" /etc/nginx/ssl/catmap/origin.key
+    mkdir -p /etc/letsencrypt/live/"`$DOMAIN"
+    install -m 644 "`$CERT_UPLOAD" /etc/letsencrypt/live/"`$DOMAIN"/fullchain.pem
+    install -m 600 "`$KEY_UPLOAD" /etc/letsencrypt/live/"`$DOMAIN"/privkey.pem
 fi
 
 rm -rf /tmp/catmap-backend-new

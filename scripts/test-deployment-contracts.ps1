@@ -113,23 +113,33 @@ Assert-Before `
 
 Assert-Contains `
     -Content $deployScript `
-    -Needle '$healthUrl = "http://$ServerHost/api/v1/health"' `
-    -Message "deploy-backend.ps1 must derive the health endpoint from ServerHost."
+    -Needle '$healthUrl = "https://$Domain/api/v1/health"' `
+    -Message "deploy-backend.ps1 must verify the HTTPS health endpoint for the configured domain."
 
 Assert-Contains `
     -Content $nginxConfig `
-    -Needle "server_name 49.235.238.143" `
-    -Message "Nginx config must include the current backend deployment host."
+    -Needle "server_name trmx.fun" `
+    -Message "Nginx config must serve the production API domain."
 
 Assert-Contains `
     -Content $nginxConfig `
     -Needle "listen 80 default_server;" `
-    -Message "Nginx config must expose the HTTP API on port 80."
+    -Message "Nginx config must listen on HTTP for redirects."
 
-Assert-NotContains `
+Assert-Contains `
     -Content $nginxConfig `
     -Needle "return 301 https://" `
-    -Message "Nginx config must not redirect HTTP to HTTPS for temporary IP access."
+    -Message "Nginx config must redirect HTTP to HTTPS."
+
+Assert-Contains `
+    -Content $nginxConfig `
+    -Needle "listen 443 ssl default_server;" `
+    -Message "Nginx config must expose the HTTPS API on port 443."
+
+Assert-Contains `
+    -Content $nginxConfig `
+    -Needle "/etc/letsencrypt/live/trmx.fun/fullchain.pem" `
+    -Message "Nginx config must use the public CA full certificate chain."
 
 Assert-Contains `
     -Content $nginxConfig `
@@ -143,7 +153,7 @@ Assert-Contains `
 
 Assert-Contains `
     -Content $frontendEnvExample `
-    -Needle "VITE_API_BASE_URL=http://203.0.113.10/api/v1" `
-    -Message "Frontend env example must document a placeholder temporary HTTP IP endpoint."
+    -Needle "VITE_API_BASE_URL=https://trmx.fun/api/v1" `
+    -Message "Frontend env example must document the production HTTPS API endpoint."
 
 Write-Host "Deployment contract checks passed."

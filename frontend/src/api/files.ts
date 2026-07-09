@@ -112,6 +112,20 @@ export function uploadImage(
   });
 }
 
+export function uploadUserAvatar(
+  accessToken: string,
+  filePath: string,
+  ownerId?: string,
+): Promise<UploadedImageAsset> {
+  return uploadImage(accessToken, filePath, {
+    usage_type: "user_avatar",
+    owner_type: "user",
+    owner_id: ownerId,
+    visibility: "public",
+    caption: "用户头像",
+  });
+}
+
 export function deleteImageAsset(
   accessToken: string,
   assetId: string,

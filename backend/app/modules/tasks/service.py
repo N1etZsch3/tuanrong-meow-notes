@@ -14,13 +14,15 @@ from app.modules.files.models import FileAsset
 from app.modules.map.models import MapPoint
 from app.modules.map.service import associated_poi_payload, get_default_campus
 from app.modules.tasks.execution_state import (
+    AUTO_ARCHIVE_CANCEL_REASON,
+    PARENT_CANCEL_REASON,
+    PARENT_COMPLETE_CANCEL_REASON,
     active_execution,
     active_execution_dates,
     cancel_unfinished_execution_dates,
     execution_display_status,
     execution_display_status_label,
-    normalize_execution_date_states,
-    should_auto_archive_task,
+    normalize_task_lifecycle,
 )
 from app.modules.tasks.models import (
     Task,
@@ -62,8 +64,7 @@ TASK_ERROR_STATUS_CONFLICT = 62013
 TASK_ERROR_CANCELLED_CANNOT_CHECKIN = 62015
 
 LOCAL_TZ = ZoneInfo("Asia/Shanghai")
-AUTO_ARCHIVE_CANCEL_REASON = "父任务已归档，未完成子任务自动取消"
-PARENT_CANCEL_REASON = "父任务已取消，未完成子任务自动取消"
+EXECUTION_REMOVED_CANCEL_REASON = "管理员调整执行日期，该子任务自动取消"
 
 
 def _now() -> datetime:
@@ -261,54 +262,8 @@ def _date_in_query_window(
     return True
 
 
-def _hide_task_map_point_for_archived_task(task: Task, *, now: datetime) -> None:
-    if task.map_point is None or task.map_point.deleted_at is not None:
-        return
-    task.map_point.visibility = "hidden"
-    task.map_point.status = "active"
-    task.map_point.updated_at = now
-
-
 def _normalize_task_lifecycle(task: Task, *, today: date | None = None) -> bool:
-    today = today or _today()
-    now = _now()
-    changed = normalize_execution_date_states(
-        task.execution_dates,
-        today=today,
-        now=now,
-    )
-    if task.status == "in_progress" and should_auto_archive_task(
-        task.execution_dates,
-        today=today,
-    ):
-        task.status = "archived"
-        task.completed_at = now
-        task.cancelled_at = None
-        task.updated_at = now
-        _hide_task_map_point_for_archived_task(task, now=now)
-        changed = (
-            cancel_unfinished_execution_dates(
-                task.execution_dates,
-                now=now,
-                reason=AUTO_ARCHIVE_CANCEL_REASON,
-            )
-            or changed
-        )
-        changed = True
-    if task.status in {"cancelled", "archived"}:
-        changed = (
-            cancel_unfinished_execution_dates(
-                task.execution_dates,
-                now=now,
-                reason=(
-                    AUTO_ARCHIVE_CANCEL_REASON
-                    if task.status == "archived"
-                    else PARENT_CANCEL_REASON
-                ),
-            )
-            or changed
-        )
-    return changed
+    return normalize_task_lifecycle(task, today=today or _today(), now=_now())
 
 
 def _execution_matches_filters(
@@ -1276,6 +1231,7 @@ def checkin_task(
             created_at=now,
         )
     )
+    _normalize_task_lifecycle(task, today=today)
     db.commit()
     return {
         "execution_date_id": execution.id,
@@ -1387,6 +1343,7 @@ def update_summer_feeding_task(
         task.route_instruction = payload.map_point.route_instruction
     if payload.execute_dates is not None:
         execute_dates = _normalize_dates(payload.execute_dates)
+        removal_time = _now()
         existing = {
             item.execute_date: item
             for item in task.execution_dates
@@ -1394,9 +1351,8 @@ def update_summer_feeding_task(
         }
         for execute_date in execute_dates:
             if execute_date not in existing:
-                db.add(
+                task.execution_dates.append(
                     TaskExecutionDate(
-                        task_id=task.id,
                         execute_date=execute_date,
                         status="pending",
                     )
@@ -1404,6 +1360,10 @@ def update_summer_feeding_task(
         for execute_date, execution in existing.items():
             if execute_date not in execute_dates and execution.status != "completed":
                 execution.status = "cancelled"
+                execution.cancelled_at = removal_time
+                execution.cancelled_by = admin.id
+                execution.cancel_reason = EXECUTION_REMOVED_CANCEL_REASON
+                execution.remark = execution.remark or EXECUTION_REMOVED_CANCEL_REASON
         task.start_at = _start_of_day(execute_dates[0])
         task.deadline_at = _end_of_day(execute_dates[-1])
     if payload.photos is not None:
@@ -1424,6 +1384,7 @@ def update_summer_feeding_task(
         )
     )
     task.updated_at = now
+    _normalize_task_lifecycle(task)
     db.commit()
     return {"task_id": task.id, "updated_at": task.updated_at}
 
@@ -1447,16 +1408,17 @@ def update_task_status(
     elif payload.status in {"in_progress", "cancelled"}:
         task.completed_at = None
     if payload.status == "archived":
-        task.completed_at = now
-    if payload.status in {"cancelled", "archived"}:
+        task.completed_at = task.completed_at or now
+    if payload.status in {"completed", "cancelled", "archived"}:
+        cancel_reasons = {
+            "completed": PARENT_COMPLETE_CANCEL_REASON,
+            "cancelled": PARENT_CANCEL_REASON,
+            "archived": AUTO_ARCHIVE_CANCEL_REASON,
+        }
         cancel_unfinished_execution_dates(
             task.execution_dates,
             now=now,
-            reason=(
-                AUTO_ARCHIVE_CANCEL_REASON
-                if payload.status == "archived"
-                else PARENT_CANCEL_REASON
-            ),
+            reason=cancel_reasons[payload.status],
             cancelled_by=admin.id,
         )
     task.updated_at = now

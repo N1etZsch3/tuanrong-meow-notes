@@ -250,8 +250,9 @@ describe("summer feeding task pages", () => {
   });
 
   it("uses a mini-program-safe png marker on the admin location picker map", () => {
-    expect(adminTaskLocationSource).toContain("地图点/失败任务.png");
-    expect(adminTaskLocationSource).not.toContain("地图点/失败任务.svg");
+    expect(adminTaskLocationSource).toContain("地图点/日常任务红.png");
+    expect(adminTaskLocationSource).not.toContain("地图点/日常任务红.svg");
+    expect(adminTaskLocationSource).not.toContain("地图点/失败任务.png");
   });
 
   it("shows an admin edit shortcut beside the task detail title", () => {

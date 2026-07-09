@@ -346,10 +346,9 @@ import { useUserStore } from "@/stores/user";
 
 import allMarkerPointIcon from "../../../素材/png/地图点/全部.png";
 import catPointMarkerIcon from "../../../素材/png/地图点/猫咪点.png";
-import completedTaskMarkerIcon from "../../../素材/png/地图点/完成任务.png";
 import dailyTaskPointIcon from "../../../素材/png/地图点/日常任务.png";
+import dailyTaskPendingPointIcon from "../../../素材/png/地图点/日常任务红.png";
 import emergencyTaskPointIcon from "../../../素材/png/地图点/紧急任务.png";
-import failedTaskMarkerIcon from "../../../素材/png/地图点/失败任务.png";
 import filterArrowIcon from "../../../素材/png/地图点/箭头.png";
 import filterDefaultIcon from "../../../素材/png/地图点/筛选.png";
 import landmarkPointIcon from "../../../素材/png/地图点/地标.png";
@@ -499,8 +498,8 @@ const MAP_FILTER_ICON_SRC: Record<string, string> = {
   cat: catPointMarkerIcon,
   supply: supplyPointMarkerIcon,
   landmark: landmarkPointIcon,
-  feeding_pending: failedTaskMarkerIcon,
-  feeding_completed: completedTaskMarkerIcon,
+  feeding_pending: dailyTaskPendingPointIcon,
+  feeding_completed: dailyTaskPointIcon,
   filter_none: filterDefaultIcon,
 };
 const MARKER_LONG_PRESS_HIT_METERS = 60;
@@ -1411,12 +1410,12 @@ function getFeedingMarkerIcon(marker: MapPointMarkerDto): string {
   if (activeExecution && typeof activeExecution === "object") {
     const record = activeExecution as Record<string, unknown>;
     const status = record.display_status || record.status;
-    return status === "completed" ? completedTaskMarkerIcon : failedTaskMarkerIcon;
+    return status === "completed" ? dailyTaskPointIcon : dailyTaskPendingPointIcon;
   }
 
   return marker.extra.feeding_status === "completed"
-    ? completedTaskMarkerIcon
-    : failedTaskMarkerIcon;
+    ? dailyTaskPointIcon
+    : dailyTaskPendingPointIcon;
 }
 
 function getNativeMarkerIcon(

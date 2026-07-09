@@ -127,7 +127,7 @@ import {
 } from "@/pages/tasks/task-page";
 import { useUserStore } from "@/stores/user";
 
-import feedingPendingIcon from "../../../../素材/png/地图点/失败任务.png";
+import feedingPendingIcon from "../../../../素材/png/地图点/日常任务红.png";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 
 type PoiLoadState = "idle" | "loading" | "ready" | "error";

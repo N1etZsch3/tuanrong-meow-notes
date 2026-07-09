@@ -205,7 +205,27 @@ describe("summer feeding task pages", () => {
     expect(taskListSource).toContain("/pages/tasks/detail?task_id=");
     expect(taskListSource).not.toContain("任务模块建设中");
     expect(taskDetailSource).toContain("getTaskDetail");
-    expect(taskDetailSource).toContain("完成投喂");
+    expect(taskDetailSource).toContain("submitTaskRecord");
+  });
+
+  it("opens a supply-style record modal from the bottom record action", () => {
+    expect(taskDetailSource).toContain('@tap="openRecordForm"');
+    expect(taskDetailSource).toContain("任务记录");
+    expect(taskDetailSource).toContain('v-if="recordFormVisible"');
+    expect(taskDetailSource).toContain('v-model.trim="recordRemark"');
+    expect(taskDetailSource).toContain('placeholder="补充说明，可不填"');
+    expect(taskDetailSource).toContain("完成记录");
+    expect(taskDetailSource).toContain("remark: recordRemark.value || null");
+    expect(taskDetailSource).not.toContain("completeFeedingTask");
+  });
+
+  it("opens a record detail modal from completed feed activities", () => {
+    expect(taskDetailSource).toContain("记录详情");
+    expect(taskDetailSource).toContain('v-if="viewingRecord"');
+    expect(taskDetailSource).toContain('@tap="openRecordDetail(activity)"');
+    expect(taskDetailSource).toContain("hasActivityRecord");
+    expect(taskDetailSource).toContain("execution_completed");
+    expect(taskDetailSource).toContain("task.value?.checkins");
   });
 
   it("renders task detail photos in a five-second swipeable carousel", () => {
@@ -227,13 +247,13 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).not.toContain("uni.previewImage");
   });
 
-  it("confirms completion photo upload and renders persisted checkin photos", () => {
-    expect(taskDetailSource).toContain("confirmUploadCheckinPhotos");
-    expect(taskDetailSource).toContain("uni.showModal");
-    expect(taskDetailSource).toContain("确认上传");
+  it("uploads record photos inside the record modal and renders persisted checkin photos", () => {
+    expect(taskDetailSource).toContain("chooseCheckinPhoto");
+    expect(taskDetailSource).toContain("pendingCheckinPhotos.length < 3");
     expect(taskDetailSource).toContain("task.value?.checkin_photos");
     expect(taskDetailSource).toContain("displayCheckinPhotos");
     expect(taskDetailSource).toContain("photo.can_delete");
+    expect(taskDetailSource).not.toContain("confirmUploadCheckinPhotos");
   });
 
   it("lets the uploader or admin delete persisted checkin photos from task detail", () => {
@@ -250,8 +270,9 @@ describe("summer feeding task pages", () => {
   });
 
   it("uses a mini-program-safe png marker on the admin location picker map", () => {
-    expect(adminTaskLocationSource).toContain("地图点/失败任务.png");
-    expect(adminTaskLocationSource).not.toContain("地图点/失败任务.svg");
+    expect(adminTaskLocationSource).toContain("地图点/日常任务红.png");
+    expect(adminTaskLocationSource).not.toContain("地图点/日常任务红.svg");
+    expect(adminTaskLocationSource).not.toContain("地图点/失败任务.png");
   });
 
   it("shows an admin edit shortcut beside the task detail title", () => {
@@ -395,7 +416,7 @@ describe("summer feeding task pages", () => {
         },
       }),
     ).toEqual({
-      label: "投喂",
+      label: "记录",
       tone: "ready",
       disabled: false,
     });

@@ -9,7 +9,12 @@
 
         <view class="avatar-panel">
           <view class="avatar-shell" @tap="chooseAvatar">
-            <image class="avatar" :src="avatarPreview" mode="aspectFill" />
+            <image
+              class="avatar"
+              :src="avatarDisplay"
+              mode="aspectFill"
+              @error="avatarLoadFailed = true"
+            />
             <text class="avatar-plus">+</text>
           </view>
           <text class="avatar-note">点击更换头像，图片不超过 2MB</text>
@@ -63,9 +68,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 
+import { uploadUserAvatar } from "@/api/files";
 import { getMyProfile, updateMyProfile, type MyProfileResponse } from "@/api/profile";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
@@ -88,7 +94,13 @@ const form = reactive({
   contact_info: "",
 });
 
+const avatarLoadFailed = ref(false);
 const avatarPreview = computed(() => avatarUrl.value || profile.value?.avatar_url || defaultAvatar);
+const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : avatarPreview.value));
+
+watch(avatarPreview, () => {
+  avatarLoadFailed.value = false;
+});
 const roleLabel = computed(() => getRoleLabel(profile.value?.role || userStore.currentUser?.role));
 const departmentIndex = computed(() => {
   const index = departments.findIndex((department) => department === form.department);
@@ -135,9 +147,31 @@ function chooseAvatar() {
         uni.showToast({ title: "头像图片不能超过 2MB", icon: "none" });
         return;
       }
-      avatarUrl.value = result.tempFilePaths[0] || null;
+      const tempPath = result.tempFilePaths[0];
+      if (tempPath) {
+        void uploadAvatar(tempPath);
+      }
     },
   });
+}
+
+async function uploadAvatar(tempPath: string) {
+  const accessToken = await userStore.ensureFreshAccessToken();
+  if (!accessToken) {
+    uni.reLaunch({ url: LOGIN_ROUTE });
+    return;
+  }
+
+  uni.showLoading({ title: "头像上传中", mask: true });
+  try {
+    const asset = await uploadUserAvatar(accessToken, tempPath, userStore.currentUser?.id);
+    avatarUrl.value = asset.default_url;
+    uni.hideLoading();
+  } catch (error) {
+    uni.hideLoading();
+    const message = error instanceof Error ? error.message : "头像上传失败";
+    uni.showToast({ title: message, icon: "none" });
+  }
 }
 
 function validateProfile(): boolean {

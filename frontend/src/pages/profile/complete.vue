@@ -41,7 +41,12 @@
           </view>
           <view class="avatar-picker" @tap="chooseAvatar">
             <view class="avatar-shell">
-              <image class="avatar-image" :src="avatarPreview" mode="aspectFit" />
+              <image
+                class="avatar-image"
+                :src="avatarDisplay"
+                mode="aspectFit"
+                @error="avatarLoadFailed = true"
+              />
               <view class="camera-badge">
                 <text class="camera-text">+</text>
               </view>
@@ -97,8 +102,9 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 
+import { uploadUserAvatar } from "@/api/files";
 import { HOME_ROUTE, LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
@@ -132,7 +138,13 @@ const departmentIndex = computed(() => {
   const index = departments.findIndex((department) => department === form.department);
   return index >= 0 ? index : 0;
 });
+const avatarLoadFailed = ref(false);
 const avatarPreview = computed(() => avatarUrl.value || userStore.currentUser?.avatar_url || defaultAvatar);
+const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : avatarPreview.value));
+
+watch(avatarPreview, () => {
+  avatarLoadFailed.value = false;
+});
 
 function onDepartmentChange(event: any) {
   const index = Number(event.detail.value);
@@ -151,9 +163,30 @@ function chooseAvatar() {
         uni.showToast({ title: "头像图片不能超过 2MB", icon: "none" });
         return;
       }
-      avatarUrl.value = result.tempFilePaths[0] || null;
+      const tempPath = result.tempFilePaths[0];
+      if (tempPath) {
+        void uploadAvatar(tempPath);
+      }
     },
   });
+}
+
+async function uploadAvatar(tempPath: string) {
+  if (!userStore.accessToken) {
+    uni.reLaunch({ url: LOGIN_ROUTE });
+    return;
+  }
+
+  uni.showLoading({ title: "头像上传中", mask: true });
+  try {
+    const asset = await uploadUserAvatar(userStore.accessToken, tempPath, userStore.currentUser?.id);
+    avatarUrl.value = asset.default_url;
+    uni.hideLoading();
+  } catch (error) {
+    uni.hideLoading();
+    const message = error instanceof Error ? error.message : "头像上传失败";
+    uni.showToast({ title: message, icon: "none" });
+  }
 }
 
 function validateForm(): boolean {

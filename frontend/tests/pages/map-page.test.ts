@@ -928,17 +928,21 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("../../../素材/png/地图点/物资点.png");
     expect(indexPageSource).toContain("../../../素材/png/地图点/地标.png");
     expect(indexPageSource).toContain("../../../素材/png/地图点/箭头.png");
-    expect(indexPageSource).toContain("../../../素材/png/地图点/完成任务.png");
-    expect(indexPageSource).toContain("../../../素材/png/地图点/失败任务.png");
+    expect(indexPageSource).toContain("../../../素材/png/地图点/日常任务红.png");
+    expect(indexPageSource).not.toContain("素材/png/地图点/完成任务.png");
+    expect(indexPageSource).not.toContain("素材/png/地图点/失败任务.png");
     expect(indexPageSource).not.toContain("素材/svg/地图点");
     expect(indexPageSource).not.toContain("filter-chevron-mark");
     expect(indexPageSource).not.toContain("⌄");
   });
 
-  it("uses completion and failure task pngs for feeding task map markers", () => {
+  it("uses the daily task icon in blue for completed and red for pending feeding markers", () => {
     expect(indexPageSource).toContain("getFeedingMarkerIcon");
     expect(indexPageSource).toContain("marker.business_type === \"feeding\"");
     expect(indexPageSource).toContain("marker.extra.feeding_status === \"completed\"");
+    expect(indexPageSource).toContain(
+      'status === "completed" ? dailyTaskPointIcon : dailyTaskPendingPointIcon',
+    );
   });
 
   it("keeps the filter menu in a native-map-safe cover layer", () => {
@@ -959,10 +963,14 @@ describe("map page shell behavior", () => {
     expect(layerIndex).toBeLessThan(drawerIndex);
   });
 
-  it("hides the native filter cover layer while the image preview mask is open", () => {
+  it("hides the filter cover layer without unmounting it while the image preview is open", () => {
     const previewSource = extractFunctionSource("openImagePreview");
 
-    expect(indexPageSource).toContain('<cover-view v-if="!imagePreviewVisible" class="map-filter-layer"');
+    expect(indexPageSource).not.toContain('v-if="!imagePreviewVisible"');
+    expect(indexPageSource).toContain(
+      "'map-filter-layer--preview-open': imagePreviewVisible",
+    );
+    expect(indexPageSource).toContain(".map-filter-layer--preview-open");
     expect(previewSource).toContain("filterMenuOpen.value = false");
   });
 

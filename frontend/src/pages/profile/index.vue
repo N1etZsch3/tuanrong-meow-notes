@@ -13,7 +13,12 @@
         </view>
 
         <view class="profile-card" @tap="goProfileDetail">
-          <image class="avatar" :src="profileAvatar" mode="aspectFill" />
+          <image
+            class="avatar"
+            :src="avatarDisplay"
+            mode="aspectFill"
+            @error="avatarLoadFailed = true"
+          />
           <view class="profile-main">
             <view class="name-row">
               <text class="nickname">{{ dashboard?.profile.nickname || "未命名成员" }}</text>
@@ -91,7 +96,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 
 import { getMeDashboard, type MeDashboardResponse } from "@/api/me";
@@ -136,9 +141,15 @@ const profileMenuIconMap = {
   feedback: feedbackIcon,
 } as const;
 
+const avatarLoadFailed = ref(false);
 const profileAvatar = computed(
   () => dashboard.value?.profile.avatar_url || userStore.currentUser?.avatar_url || defaultAvatar,
 );
+const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : profileAvatar.value));
+
+watch(profileAvatar, () => {
+  avatarLoadFailed.value = false;
+});
 const currentRole = computed(() => dashboard.value?.profile.role || userStore.currentUser?.role);
 const roleLabel = computed(() => getRoleLabel(currentRole.value));
 const rolePillClass = computed(() => getRolePillClass(currentRole.value));

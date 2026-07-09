@@ -93,8 +93,9 @@
           >
             <image
               class="member-avatar"
-              :src="user.profile.avatar_url || defaultAvatar"
+              :src="memberAvatar(user)"
               mode="aspectFill"
+              @error="markAvatarFailed(user.id)"
             />
             <view class="member-main">
               <text class="member-name">{{ user.profile.nickname || "未命名成员" }}</text>
@@ -164,6 +165,19 @@ const hasMore = ref(false);
 const loadState = ref<"idle" | "loading" | "ready" | "error">("idle");
 const isLoadingMore = ref(false);
 const errorMessage = ref("");
+const failedAvatarUserIds = ref<Set<string>>(new Set());
+
+function memberAvatar(user: AdminUserDto): string {
+  const avatarUrl = user.profile.avatar_url;
+  if (!avatarUrl || failedAvatarUserIds.value.has(user.id)) {
+    return defaultAvatar;
+  }
+  return avatarUrl;
+}
+
+function markAvatarFailed(id: string) {
+  failedAvatarUserIds.value = new Set(failedAvatarUserIds.value).add(id);
+}
 
 const selectedRoleIndex = computed(() =>
   Math.max(0, roleOptions.findIndex((item) => item.value === selectedRole.value)),

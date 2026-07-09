@@ -363,7 +363,7 @@ interface TaskDetailActionStateSource {
 }
 
 export interface TaskDetailActionState {
-  label: "未开始" | "投喂" | "已完成" | "已取消" | "已归档";
+  label: "未开始" | "记录" | "已完成" | "已取消" | "已归档";
   tone: "not_started" | "ready" | "completed" | "cancelled" | "archived";
   disabled: boolean;
 }
@@ -414,7 +414,7 @@ export function getTaskDetailActionState(
 
   if (source.can_checkin) {
     return {
-      label: "投喂",
+      label: "记录",
       tone: "ready",
       disabled: false,
     };

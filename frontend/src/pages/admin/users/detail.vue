@@ -22,7 +22,12 @@
         <view v-else class="detail-content">
           <view class="avatar-panel">
             <view class="avatar-shell" @tap="chooseAvatar">
-              <image class="avatar" :src="avatarPreview" mode="aspectFill" />
+              <image
+                class="avatar"
+                :src="avatarDisplay"
+                mode="aspectFill"
+                @error="avatarLoadFailed = true"
+              />
               <text v-if="!readonlyMode" class="avatar-plus">+</text>
             </view>
             <text class="avatar-note">
@@ -183,7 +188,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 
 import {
@@ -193,6 +198,7 @@ import {
   updateAdminUser,
   type AdminUserDto,
 } from "@/api/admin-users";
+import { uploadUserAvatar } from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
@@ -238,7 +244,13 @@ const form = reactive({
 
 const readonlyMode = computed(() => !userDetail.value?.editable);
 const canResetPassword = computed(() => Boolean(userDetail.value?.can_reset_password));
+const avatarLoadFailed = ref(false);
 const avatarPreview = computed(() => avatarUrl.value || userDetail.value?.profile.avatar_url || defaultAvatar);
+const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : avatarPreview.value));
+
+watch(avatarPreview, () => {
+  avatarLoadFailed.value = false;
+});
 const departmentIndex = computed(() => Math.max(0, departments.findIndex((item) => item === form.department)));
 const roleIndex = computed(() => Math.max(0, roleOptions.findIndex((item) => item.value === form.role)));
 const statusIndex = computed(() => Math.max(0, statusOptions.findIndex((item) => item.value === form.status)));
@@ -309,9 +321,30 @@ function chooseAvatar() {
         uni.showToast({ title: "头像图片不能超过 2MB", icon: "none" });
         return;
       }
-      avatarUrl.value = result.tempFilePaths[0] || null;
+      const tempPath = result.tempFilePaths[0];
+      if (tempPath) {
+        void uploadAvatar(tempPath);
+      }
     },
   });
+}
+
+async function uploadAvatar(tempPath: string) {
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+
+  uni.showLoading({ title: "头像上传中", mask: true });
+  try {
+    const asset = await uploadUserAvatar(token, tempPath, userId.value || undefined);
+    avatarUrl.value = asset.default_url;
+    uni.hideLoading();
+  } catch (error) {
+    uni.hideLoading();
+    const message = error instanceof Error ? error.message : "头像上传失败";
+    uni.showToast({ title: message, icon: "none" });
+  }
 }
 
 function validateMember(): boolean {

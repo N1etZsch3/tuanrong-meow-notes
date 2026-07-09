@@ -154,6 +154,8 @@ export interface TaskActivityDto {
   title: string;
   content: string | null;
   execute_date: string | null;
+  task_execution_date_id?: string | null;
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -174,6 +176,18 @@ export interface TaskExecutionGroupDto {
   checkin_photos: TaskCheckinPhotoDto[];
 }
 
+export interface TaskCheckinRecordDto {
+  checkin_id: string;
+  task_execution_date_id: string | null;
+  execute_date: string | null;
+  submitter: TaskUserDto | null;
+  is_completed: boolean;
+  process_result: string | null;
+  remark: string | null;
+  submitted_at: string;
+  photos: TaskCheckinPhotoDto[];
+}
+
 export interface TaskDetailDto extends Omit<TaskListItemDto, "map_point"> {
   task_no: string;
   task_mode: string;
@@ -186,6 +200,7 @@ export interface TaskDetailDto extends Omit<TaskListItemDto, "map_point"> {
   };
   photos: TaskPhotoDto[];
   checkin_photos: TaskCheckinPhotoDto[];
+  checkins?: TaskCheckinRecordDto[];
   execution_dates: TaskExecutionDto[];
   activities: TaskActivityDto[];
   detail_scope?: "parent" | "execution";

@@ -1,5 +1,7 @@
 import type { CurrentUser } from "@/types/user";
 import { LOGIN_ROUTE } from "@/services/auth-session";
+import { ApiBusinessError } from "@/services/request";
+import { requestWechatLoginCode } from "@/services/wechat-auth";
 
 export { LOGIN_ROUTE };
 export const HOME_ROUTE = "/pages/index/index";
@@ -14,6 +16,7 @@ export type StartupRoute =
 
 export interface StartupUserSession {
   accessToken: string;
+  loginWithWechat: (code: string) => Promise<unknown>;
   refreshCurrentUser: () => Promise<CurrentUser | null>;
   clearSession: () => void;
 }
@@ -21,6 +24,17 @@ export interface StartupUserSession {
 export type StartupResourceLoader = (
   currentUser: CurrentUser,
 ) => Promise<void> | void;
+
+export type WechatLoginCodeProvider = () => Promise<string | null>;
+
+const WECHAT_SESSION_REJECTED_CODES = new Set([40104, 40303, 40304, 40903]);
+
+function shouldClearSessionAfterWechatLogin(error: unknown): boolean {
+  return (
+    error instanceof ApiBusinessError &&
+    WECHAT_SESSION_REJECTED_CODES.has(error.code)
+  );
+}
 
 async function loadMapResources(): Promise<void> {
   // Placeholder for map point data initialization.
@@ -47,7 +61,24 @@ export async function initializeAppResources(
 export async function resolveStartupRoute(
   session: StartupUserSession,
   initializeResources: StartupResourceLoader = initializeAppResources,
+  getWechatLoginCode: WechatLoginCodeProvider = requestWechatLoginCode,
 ): Promise<StartupRoute> {
+  const wechatCode = await getWechatLoginCode();
+  if (wechatCode) {
+    try {
+      await session.loginWithWechat(wechatCode);
+    } catch (error) {
+      if (shouldClearSessionAfterWechatLogin(error)) {
+        session.clearSession();
+        return LOGIN_ROUTE;
+      }
+
+      if (!session.accessToken) {
+        return LOGIN_ROUTE;
+      }
+    }
+  }
+
   if (!session.accessToken) {
     return LOGIN_ROUTE;
   }

@@ -9,6 +9,17 @@ def set_profile_department(db_session, user: User, department: str) -> None:
     db_session.refresh(user)
 
 
+def bind_wechat(db_session, user: User, openid: str = "openid-member-1") -> None:
+    from datetime import UTC, datetime
+
+    bound_at = datetime.now(tz=UTC)
+    user.wechat_openid = openid
+    user.wechat_bound_at = bound_at
+    user.last_wechat_login_at = bound_at
+    db_session.commit()
+    db_session.refresh(user)
+
+
 def test_admin_can_create_member_account(api_client, db_session):
     admin = create_user(
         db_session,
@@ -282,6 +293,7 @@ def test_admin_can_view_and_update_non_admin_member_detail(api_client, db_sessio
         student_no="trmx0101",
         must_change_password=False,
     )
+    bind_wechat(db_session, member, openid="openid-detail-member")
     token = create_token(admin)
 
     detail_response = api_client.get(
@@ -294,6 +306,7 @@ def test_admin_can_view_and_update_non_admin_member_detail(api_client, db_sessio
     assert detail["meow_no"] == "trmx0101"
     assert detail["editable"] is True
     assert detail["can_reset_password"] is True
+    assert detail["wechat_bound"] is True
 
     update_response = api_client.patch(
         f"/api/v1/admin/users/{member.id}",
@@ -365,6 +378,98 @@ def test_admin_can_soft_delete_non_admin_member(api_client, db_session):
         headers={"Authorization": f"Bearer {token}"},
     )
     assert detail_response.status_code == 404
+
+
+def test_admin_can_clear_member_wechat_binding_and_invalidate_token(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    member = create_user(
+        db_session,
+        student_no="trmx0301",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    bind_wechat(db_session, member)
+    member_token = create_token(member)
+    admin_token = create_token(admin)
+    original_token_version = member.token_version
+
+    response = api_client.delete(
+        f"/api/v1/admin/users/{member.id}/wechat-binding",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "user_id": str(member.id),
+        "wechat_bound": False,
+        "token_version": original_token_version + 1,
+    }
+    db_session.refresh(member)
+    assert member.wechat_openid is None
+    assert member.wechat_bound_at is None
+    assert member.last_wechat_login_at is None
+    assert member.token_version == original_token_version + 1
+
+    old_token_response = api_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {member_token}"},
+    )
+    assert old_token_response.status_code == 401
+
+
+def test_member_cannot_clear_wechat_binding(api_client, db_session):
+    actor = create_user(
+        db_session,
+        student_no="trmx0300",
+        must_change_password=False,
+    )
+    target = create_user(
+        db_session,
+        student_no="trmx0301",
+        must_change_password=False,
+    )
+    bind_wechat(db_session, target)
+    token = create_token(actor)
+
+    response = api_client.delete(
+        f"/api/v1/admin/users/{target.id}/wechat-binding",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == 40302
+
+
+def test_admin_cannot_clear_admin_wechat_binding(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    target_admin = create_user(
+        db_session,
+        student_no="admin002",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    bind_wechat(db_session, target_admin)
+    token = create_token(admin)
+
+    response = api_client.delete(
+        f"/api/v1/admin/users/{target_admin.id}/wechat-binding",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403
 
 
 def test_admin_cannot_modify_or_reset_admin_account(api_client, db_session):

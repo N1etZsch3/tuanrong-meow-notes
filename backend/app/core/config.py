@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -27,6 +28,10 @@ class Settings(BaseSettings):
     captcha_expire_seconds: int = 300
     auth_lock_failed_attempts: int = 5
     auth_lock_minutes: int = 15
+    wechat_miniapp_appid: str = ""
+    wechat_miniapp_secret: str = ""
+    wechat_auth_mode: Literal["off", "optional", "enforced"] = "off"
+    wechat_code2session_timeout_seconds: float = 3.0
     amap_web_key: str = ""
     amap_web_service_key: str = ""
     amap_security_js_code: str = ""

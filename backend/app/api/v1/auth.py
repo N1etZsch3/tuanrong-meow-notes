@@ -6,7 +6,7 @@ from app.db.session import get_db
 from app.modules.auth import service
 from app.modules.auth.dependencies import get_current_user, require_password_changed
 from app.modules.auth.models import User
-from app.modules.auth.schemas import ChangePasswordRequest, LoginRequest
+from app.modules.auth.schemas import ChangePasswordRequest, LoginRequest, WeChatLoginRequest
 
 router = APIRouter(tags=["Auth"])
 
@@ -25,6 +25,12 @@ def get_captcha(request: Request, db: Session = Depends(get_db)):
 @router.post("/login", summary="Student number login")
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)):
     data = service.login(db, payload)
+    return api_success(data=data, trace_id=request.state.trace_id, message="login success")
+
+
+@router.post("/wechat/login", summary="WeChat OpenID login")
+def wechat_login(payload: WeChatLoginRequest, request: Request, db: Session = Depends(get_db)):
+    data = service.login_with_wechat(db, payload)
     return api_success(data=data, trace_id=request.state.trace_id, message="login success")
 
 
@@ -59,6 +65,20 @@ def change_password(
         data=data,
         trace_id=request.state.trace_id,
         message="密码修改成功",
+    )
+
+
+@router.delete("/wechat-binding", summary="Clear current user's WeChat binding")
+def clear_wechat_binding(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    data = service.clear_current_user_wechat_binding(db, current_user)
+    return api_success(
+        data=data,
+        trace_id=request.state.trace_id,
+        message="微信绑定已清除",
     )
 
 

@@ -17,6 +17,8 @@ class LoginRequest(BaseModel):
     captcha_id: UUID
     captcha_code: str = Field(min_length=1, max_length=8)
     agree_terms: bool
+    wechat_code: str | None = Field(default=None, min_length=1, max_length=256)
+    agree_wechat_bind: bool = False
 
     @model_validator(mode="after")
     def require_account_identifier(self) -> "LoginRequest":
@@ -55,6 +57,10 @@ class RenewAccessTokenResponse(BaseModel):
     access_token: str
     token_type: str = "Bearer"
     expires_in: int
+
+
+class WeChatLoginRequest(BaseModel):
+    code: str = Field(min_length=1, max_length=256)
 
 
 class CurrentUserProfile(BaseModel):
@@ -131,6 +137,7 @@ class AdminUserItem(BaseModel):
     must_change_password: bool
     profile_completed: bool
     last_login_at: datetime | None
+    wechat_bound: bool
     profile: CurrentUserProfile
 
     model_config = ConfigDict(from_attributes=True)
@@ -167,6 +174,12 @@ class AdminResetPasswordRequest(BaseModel):
 class AdminResetPasswordResponse(BaseModel):
     user_id: UUID
     must_change_password: bool
+
+
+class AdminClearWeChatBindingResponse(BaseModel):
+    user_id: UUID
+    wechat_bound: bool
+    token_version: int
 
 
 class AdminUpdateStatusRequest(BaseModel):

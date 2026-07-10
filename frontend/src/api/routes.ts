@@ -43,9 +43,11 @@ export const API_ENDPOINTS = {
   auth: {
     captcha: "/auth/captcha",
     login: "/auth/login",
+    wechatLogin: "/auth/wechat/login",
     renew: "/auth/renew",
     me: "/auth/me",
     password: "/auth/password",
+    wechatBinding: "/auth/wechat-binding",
     logout: "/auth/logout",
   },
   admin: {
@@ -53,6 +55,8 @@ export const API_ENDPOINTS = {
     user: (userId: ApiPathParam) => `/admin/users/${encodePathParam(userId)}`,
     userResetPassword: (userId: ApiPathParam) =>
       `/admin/users/${encodePathParam(userId)}/reset-password`,
+    userWechatBinding: (userId: ApiPathParam) =>
+      `/admin/users/${encodePathParam(userId)}/wechat-binding`,
     medicineCategories: "/admin/medicine-categories",
     medicineCategory: (categoryId: ApiPathParam) =>
       `/admin/medicine-categories/${encodePathParam(categoryId)}`,

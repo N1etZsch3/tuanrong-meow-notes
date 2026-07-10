@@ -52,6 +52,7 @@ export interface AdminUserDto {
   must_change_password: boolean;
   profile_completed: boolean;
   last_login_at: string | null;
+  wechat_bound: boolean;
   profile: AdminUserProfileDto;
   editable?: boolean;
   can_reset_password?: boolean;
@@ -90,6 +91,12 @@ export interface AdminResetPasswordPayload {
 export interface AdminResetPasswordResponse {
   user_id: string;
   must_change_password: boolean;
+}
+
+export interface AdminClearWeChatBindingResponse {
+  user_id: string;
+  wechat_bound: boolean;
+  token_version: number;
 }
 
 export interface AdminDeleteUserResponse {
@@ -155,6 +162,17 @@ export function resetAdminUserPassword(
     url: API_ENDPOINTS.admin.userResetPassword(userId),
     method: "PATCH",
     data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function clearAdminUserWechatBinding(
+  accessToken: string,
+  userId: string,
+): Promise<AdminClearWeChatBindingResponse> {
+  return request<AdminClearWeChatBindingResponse>({
+    url: API_ENDPOINTS.admin.userWechatBinding(userId),
+    method: "DELETE",
     token: accessToken,
   });
 }

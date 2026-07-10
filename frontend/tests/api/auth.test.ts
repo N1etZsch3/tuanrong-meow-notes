@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { changePassword, getCaptcha, login, renewAccessToken } from "@/api/auth";
+import {
+  changePassword,
+  getCaptcha,
+  login,
+  renewAccessToken,
+  unbindWechatBinding,
+  wechatLogin,
+} from "@/api/auth";
 
 describe("auth api", () => {
   it("requests captcha from /auth/captcha", async () => {
@@ -74,6 +81,8 @@ describe("auth api", () => {
       captcha_id: "captcha-1",
       captcha_code: "A7KD",
       agree_terms: true,
+      wechat_code: "wechat-code-1",
+      agree_wechat_bind: true,
     });
 
     expect(result.access_token).toBe("token-1");
@@ -86,7 +95,55 @@ describe("auth api", () => {
         data: expect.objectContaining({
           meow_no: "trmx0001",
           agree_terms: true,
+          wechat_code: "wechat-code-1",
+          agree_wechat_bind: true,
         }),
+      }),
+    );
+  });
+
+  it("posts a WeChat code to /auth/wechat/login", async () => {
+    const requestMock = vi.fn((options: UniNamespace.RequestOptions) => {
+      options.success?.({
+        statusCode: 200,
+        data: {
+          code: 0,
+          message: "login success",
+          data: {
+            access_token: "wechat-token",
+            token_type: "Bearer",
+            expires_in: 604800,
+            must_change_password: false,
+            profile_completed: true,
+            next_action: "enter_app",
+            user: {
+              id: "u1",
+              student_no: "trmx0001",
+              meow_no: "trmx0001",
+              nickname: "小林",
+              avatar_url: null,
+              role: "member",
+              status: "active",
+              profile_completed: true,
+            },
+          },
+          trace_id: "trace-wechat",
+        },
+        header: {},
+        cookies: [],
+      } as UniNamespace.RequestSuccessCallbackResult);
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await expect(wechatLogin("wechat-code-1")).resolves.toMatchObject({
+      access_token: "wechat-token",
+      next_action: "enter_app",
+    });
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        url: expect.stringContaining("/auth/wechat/login"),
+        data: { code: "wechat-code-1" },
       }),
     );
   });
@@ -120,6 +177,44 @@ describe("auth api", () => {
       expect.objectContaining({
         method: "POST",
         url: expect.stringContaining("/auth/renew"),
+        header: expect.objectContaining({
+          Authorization: "Bearer token-1",
+        }),
+      }),
+    );
+  });
+
+  it("deletes the current user's WeChat binding through /auth/wechat-binding", async () => {
+    const requestMock = vi.fn((options: UniNamespace.RequestOptions) => {
+      options.success?.({
+        statusCode: 200,
+        data: {
+          code: 0,
+          message: "微信绑定已清除",
+          data: {
+            user_id: "u1",
+            wechat_bound: false,
+            token_version: 2,
+            token_invalidated: true,
+          },
+          trace_id: "trace-unbind",
+        },
+        header: {},
+        cookies: [],
+      } as UniNamespace.RequestSuccessCallbackResult);
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await expect(unbindWechatBinding("token-1")).resolves.toEqual({
+      user_id: "u1",
+      wechat_bound: false,
+      token_version: 2,
+      token_invalidated: true,
+    });
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        url: expect.stringContaining("/auth/wechat-binding"),
         header: expect.objectContaining({
           Authorization: "Bearer token-1",
         }),

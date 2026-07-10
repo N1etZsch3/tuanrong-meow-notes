@@ -115,6 +115,32 @@ describe("profile center pages", () => {
     expect(profileResetPasswordSource).toContain("重设密码");
   });
 
+  it("uses compact grouped account settings with a confirmed WeChat self-unbind action", () => {
+    const settingsRowRule = extractCssRule(profileSettingsSource, ".settings-row");
+    const rowTitleRule = extractCssRule(profileSettingsSource, ".row-title");
+    const unbindCall = profileSettingsSource.indexOf(
+      "await userStore.unbindCurrentWechat()",
+    );
+    const loginRedirect = profileSettingsSource.indexOf(
+      "uni.reLaunch({ url: LOGIN_ROUTE })",
+      unbindCall,
+    );
+
+    expect(profileSettingsSource).toContain("账号与安全");
+    expect(profileSettingsSource).toContain("重设密码");
+    expect(profileSettingsSource).toContain("微信解绑");
+    expect(profileSettingsSource).toContain("退出登录");
+    expect(profileSettingsSource).toContain("解绑后将立即退出登录");
+    expect(profileSettingsSource).toContain("userStore.unbindCurrentWechat");
+    expect(profileSettingsSource).not.toContain('class="row-desc"');
+    expect(profileSettingsSource).toContain("素材/svg/登录页/修改密码.svg");
+    expect(profileSettingsSource).toContain("素材/svg/用户页/设置.svg");
+    expect(settingsRowRule).toContain("line-height: 1");
+    expect(rowTitleRule).toContain("line-height: 1");
+    expect(unbindCall).toBeGreaterThan(-1);
+    expect(loginRedirect).toBeGreaterThan(unbindCall);
+  });
+
   it("uses role-specific labels and badge classes", () => {
     expect(getRoleLabel("admin")).toBe("猫协管理员");
     expect(getRoleLabel("member")).toBe("猫协成员");

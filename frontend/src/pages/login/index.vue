@@ -156,6 +156,7 @@ import { onMounted, reactive, ref, watch } from "vue";
 
 import { getCaptcha } from "@/api/auth";
 import { CHANGE_PASSWORD_ROUTE, HOME_ROUTE, PROFILE_SETUP_ROUTE } from "@/services/app-startup";
+import { requestWechatLoginCode } from "@/services/wechat-auth";
 import { useUserStore } from "@/stores/user";
 import {
   hasAcceptedAgreementForAccount,
@@ -189,6 +190,7 @@ const form = reactive({
 const passwordHidden = ref(true);
 const captchaImage = ref("");
 const isLoading = ref(false);
+const isConfirmingBinding = ref(false);
 const showModal = ref(false);
 const modalTitle = ref("");
 
@@ -243,19 +245,47 @@ function validateForm(): boolean {
   return true;
 }
 
+function confirmWechatBindingLogin(): Promise<boolean> {
+  return new Promise((resolve) => {
+    uni.showModal({
+      title: "微信账号绑定",
+      content: "登录后，当前微信将自动与该喵喵号绑定，用于后续自动登录和账号保护。如需更换微信，请联系管理员解绑。",
+      confirmText: "确认登录",
+      cancelText: "取消",
+      success: (result) => resolve(Boolean(result.confirm)),
+      fail: () => resolve(false),
+    });
+  });
+}
+
 async function handleLogin() {
-  if (isLoading.value || !validateForm()) {
+  if (isLoading.value || isConfirmingBinding.value || !validateForm()) {
+    return;
+  }
+
+  isConfirmingBinding.value = true;
+  const confirmed = await confirmWechatBindingLogin();
+  isConfirmingBinding.value = false;
+  if (!confirmed) {
     return;
   }
 
   isLoading.value = true;
   try {
+    const wechatCode = await requestWechatLoginCode();
+    if (!wechatCode) {
+      uni.showToast({ title: "暂时无法获取微信登录凭证，请重试", icon: "none" });
+      return;
+    }
+
     const result = await userStore.loginWithPassword({
       meow_no: form.meow_no,
       password: form.password,
       captcha_id: form.captcha_id,
       captcha_code: form.captcha_code,
       agree_terms: form.agreed,
+      wechat_code: wechatCode,
+      agree_wechat_bind: true,
     });
     rememberAgreementAcceptedForAccounts([
       form.meow_no,

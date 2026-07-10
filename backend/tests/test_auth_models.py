@@ -24,5 +24,8 @@ def test_users_table_contains_required_auth_columns():
         "token_version",
         "login_failed_count",
         "locked_until",
+        "wechat_openid",
+        "wechat_bound_at",
+        "last_wechat_login_at",
     ]:
         assert column_name in users.c

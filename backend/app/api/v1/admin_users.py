@@ -131,6 +131,21 @@ def delete_user(
     )
 
 
+@router.delete("/{user_id}/wechat-binding", summary="Clear member WeChat binding")
+def clear_wechat_binding(
+    user_id: UUID,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    user = service.clear_user_wechat_binding(db, admin=admin, user_id=user_id)
+    return api_success(
+        data={"user_id": user.id, "wechat_bound": False, "token_version": user.token_version},
+        trace_id=request.state.trace_id,
+        message="微信绑定已清除",
+    )
+
+
 @router.patch("/{user_id}/status", summary="Update member status")
 def update_status(
     user_id: UUID,

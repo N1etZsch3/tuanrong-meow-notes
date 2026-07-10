@@ -2,7 +2,9 @@ from datetime import UTC, datetime, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings
 from app.core.security import create_access_token, hash_password
+from app.modules.auth import service
 from app.modules.auth.captcha import hash_captcha_code
 from app.modules.auth.models import AuthCaptcha, User, UserProfile
 
@@ -63,6 +65,21 @@ def create_token(user: User) -> str:
 
 def auth_headers(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
+
+
+def set_wechat_auth_mode(monkeypatch, mode: str):
+    monkeypatch.setattr(
+        service,
+        "get_settings",
+        lambda: Settings(_env_file=None, wechat_auth_mode=mode),
+    )
+
+
+def set_wechat_openid(db: Session, user: User, openid: str) -> None:
+    user.wechat_openid = openid
+    user.wechat_bound_at = datetime.now(tz=UTC)
+    db.commit()
+    db.refresh(user)
 
 
 def test_get_captcha_returns_frontend_contract(api_client):
@@ -193,6 +210,310 @@ def test_returning_login_allows_missing_agreement_after_password_changed(api_cli
     assert data["next_action"] == "enter_app"
 
 
+def test_password_login_with_wechat_code_binds_openid(api_client, db_session, monkeypatch):
+    user = create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    captcha = create_captcha(db_session)
+    set_wechat_auth_mode(monkeypatch, "optional")
+    monkeypatch.setattr(
+        service,
+        "exchange_wechat_code_for_openid",
+        lambda code: "openid-member-1",
+        raising=False,
+    )
+
+    response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "meow_no": "trmx0001",
+            "password": "Password123",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": True,
+            "wechat_code": "login-code-1",
+            "agree_wechat_bind": True,
+        },
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(user)
+    assert user.wechat_openid == "openid-member-1"
+    assert user.wechat_bound_at is not None
+    assert user.last_wechat_login_at is not None
+
+
+def test_password_login_rejects_openid_bound_to_another_account(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    existing_user = create_user(
+        db_session,
+        student_no="trmx0002",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    set_wechat_openid(db_session, existing_user, "openid-member-1")
+    captcha = create_captcha(db_session)
+    set_wechat_auth_mode(monkeypatch, "optional")
+    monkeypatch.setattr(
+        service,
+        "exchange_wechat_code_for_openid",
+        lambda code: "openid-member-1",
+        raising=False,
+    )
+
+    response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "meow_no": "trmx0001",
+            "password": "Password123",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": True,
+            "wechat_code": "login-code-1",
+            "agree_wechat_bind": True,
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == 40903
+
+
+def test_password_login_rejects_account_bound_to_different_openid(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    user = create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    set_wechat_openid(db_session, user, "openid-existing")
+    captcha = create_captcha(db_session)
+    set_wechat_auth_mode(monkeypatch, "optional")
+    monkeypatch.setattr(
+        service,
+        "exchange_wechat_code_for_openid",
+        lambda code: "openid-other",
+        raising=False,
+    )
+
+    response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "meow_no": "trmx0001",
+            "password": "Password123",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": True,
+            "wechat_code": "login-code-1",
+            "agree_wechat_bind": True,
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == 40304
+
+
+def test_wechat_auto_login_returns_session_for_bound_account(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    user = create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    set_wechat_openid(db_session, user, "openid-member-1")
+    set_wechat_auth_mode(monkeypatch, "optional")
+    monkeypatch.setattr(
+        service,
+        "exchange_wechat_code_for_openid",
+        lambda code: "openid-member-1",
+        raising=False,
+    )
+
+    response = api_client.post("/api/v1/auth/wechat/login", json={"code": "login-code-1"})
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["access_token"]
+    assert data["next_action"] == "enter_app"
+    assert data["user"]["meow_no"] == "trmx0001"
+    db_session.refresh(user)
+    assert user.last_wechat_login_at is not None
+
+
+def test_wechat_auto_login_rejects_unbound_openid(api_client, db_session, monkeypatch):
+    create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    set_wechat_auth_mode(monkeypatch, "optional")
+    monkeypatch.setattr(
+        service,
+        "exchange_wechat_code_for_openid",
+        lambda code: "openid-unbound",
+        raising=False,
+    )
+
+    response = api_client.post("/api/v1/auth/wechat/login", json={"code": "login-code-1"})
+
+    assert response.status_code == 401
+    assert response.json()["code"] == 40104
+
+
+def test_wechat_auto_login_rejects_disabled_bound_account(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    user = create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        status="blocked",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    set_wechat_openid(db_session, user, "openid-member-1")
+    set_wechat_auth_mode(monkeypatch, "optional")
+    monkeypatch.setattr(
+        service,
+        "exchange_wechat_code_for_openid",
+        lambda code: "openid-member-1",
+        raising=False,
+    )
+
+    response = api_client.post("/api/v1/auth/wechat/login", json={"code": "login-code-1"})
+
+    assert response.status_code == 403
+    assert response.json()["code"] == 40303
+
+
+def test_wechat_auth_off_ignores_binding_fields_for_password_login(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    user = create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    captcha = create_captcha(db_session)
+    set_wechat_auth_mode(monkeypatch, "off")
+    monkeypatch.setattr(
+        service,
+        "exchange_wechat_code_for_openid",
+        lambda code: "openid-member-1",
+        raising=False,
+    )
+
+    response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "meow_no": "trmx0001",
+            "password": "Password123",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": True,
+            "wechat_code": "login-code-1",
+            "agree_wechat_bind": True,
+        },
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(user)
+    assert user.wechat_openid is None
+
+
+def test_wechat_auth_optional_preserves_legacy_password_login(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    captcha = create_captcha(db_session)
+    set_wechat_auth_mode(monkeypatch, "optional")
+
+    response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "meow_no": "trmx0001",
+            "password": "Password123",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["next_action"] == "enter_app"
+
+
+def test_wechat_auth_enforced_rejects_password_login_for_bound_account_without_code(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    user = create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    set_wechat_openid(db_session, user, "openid-member-1")
+    captcha = create_captcha(db_session)
+    set_wechat_auth_mode(monkeypatch, "enforced")
+
+    response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "meow_no": "trmx0001",
+            "password": "Password123",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": True,
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == 40304
+
+
 def test_get_current_user_returns_profile(api_client, db_session):
     user = create_user(db_session)
     token = create_token(user)
@@ -299,3 +620,109 @@ def test_logout_requires_valid_token(api_client, db_session):
     assert response.status_code == 200
     assert response.json()["message"] == "logout success"
     assert response.json()["data"] is None
+
+
+def test_member_can_clear_own_wechat_binding_and_invalidate_token(api_client, db_session):
+    user = create_user(db_session, must_change_password=False)
+    bound_at = datetime.now(tz=UTC)
+    user.wechat_openid = "openid-member-self-unbind"
+    user.wechat_bound_at = bound_at
+    user.last_wechat_login_at = bound_at
+    db_session.commit()
+    db_session.refresh(user)
+    token = create_token(user)
+    original_token_version = user.token_version
+
+    response = api_client.delete(
+        "/api/v1/auth/wechat-binding",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "user_id": str(user.id),
+        "wechat_bound": False,
+        "token_version": original_token_version + 1,
+        "token_invalidated": True,
+    }
+    db_session.refresh(user)
+    assert user.wechat_openid is None
+    assert user.wechat_bound_at is None
+    assert user.last_wechat_login_at is None
+    assert user.token_version == original_token_version + 1
+
+    old_token_response = api_client.get(
+        "/api/v1/auth/me",
+        headers=auth_headers(token),
+    )
+    assert old_token_response.status_code == 401
+
+
+def test_admin_can_clear_own_wechat_binding_and_invalidate_token(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        role="admin",
+        must_change_password=False,
+    )
+    bound_at = datetime.now(tz=UTC)
+    admin.wechat_openid = "openid-admin-self-unbind"
+    admin.wechat_bound_at = bound_at
+    admin.last_wechat_login_at = bound_at
+    db_session.commit()
+    db_session.refresh(admin)
+    token = create_token(admin)
+    original_token_version = admin.token_version
+
+    response = api_client.delete(
+        "/api/v1/auth/wechat-binding",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "user_id": str(admin.id),
+        "wechat_bound": False,
+        "token_version": original_token_version + 1,
+        "token_invalidated": True,
+    }
+    db_session.refresh(admin)
+    assert admin.wechat_openid is None
+    assert admin.wechat_bound_at is None
+    assert admin.last_wechat_login_at is None
+    assert admin.token_version == original_token_version + 1
+
+    old_token_response = api_client.get(
+        "/api/v1/auth/me",
+        headers=auth_headers(token),
+    )
+    assert old_token_response.status_code == 401
+
+
+def test_clear_own_wechat_binding_rejects_unbound_account_without_invalidating_token(
+    api_client,
+    db_session,
+):
+    user = create_user(db_session, must_change_password=False)
+    token = create_token(user)
+    original_token_version = user.token_version
+
+    response = api_client.delete(
+        "/api/v1/auth/wechat-binding",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == 40001
+    assert response.json()["message"] == "当前账号尚未绑定微信"
+    db_session.refresh(user)
+    assert user.wechat_openid is None
+    assert user.wechat_bound_at is None
+    assert user.last_wechat_login_at is None
+    assert user.token_version == original_token_version
+
+    current_user_response = api_client.get(
+        "/api/v1/auth/me",
+        headers=auth_headers(token),
+    )
+    assert current_user_response.status_code == 200

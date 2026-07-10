@@ -23,7 +23,9 @@ from app.modules.auth.schemas import (
     AdminUpdateUserRequest,
     ChangePasswordRequest,
     LoginRequest,
+    WeChatLoginRequest,
 )
+from app.modules.auth.wechat import exchange_wechat_code_for_openid
 
 VALID_ROLES = {"member", "summer_volunteer", "admin"}
 VALID_STATUSES = {"active", "blocked", "left", "deleted"}
@@ -170,6 +172,14 @@ def get_user_by_student_no(db: Session, student_no: str) -> User | None:
     )
 
 
+def get_user_by_wechat_openid(db: Session, openid: str) -> User | None:
+    return db.scalar(
+        select(User)
+        .options(selectinload(User.profile))
+        .where(User.wechat_openid == openid, User.deleted_at.is_(None))
+    )
+
+
 def validate_captcha(db: Session, captcha_id: UUID, captcha_code: str) -> AuthCaptcha:
     captcha = db.get(AuthCaptcha, captcha_id)
     current_time = now_utc()
@@ -190,6 +200,61 @@ def record_login_failure(db: Session, user: User | None) -> None:
     if user.login_failed_count >= settings.auth_lock_failed_attempts:
         user.locked_until = now_utc() + timedelta(minutes=settings.auth_lock_minutes)
     db.commit()
+
+
+def issue_login_response(user: User) -> dict:
+    settings = get_settings()
+    return {
+        "access_token": create_access_token(
+            user_id=user.id,
+            student_no=user.student_no,
+            role=user.role,
+            token_version=user.token_version,
+        ),
+        "token_type": "Bearer",
+        "expires_in": settings.access_token_expire_seconds,
+        "must_change_password": user.must_change_password,
+        "next_action": next_action_for(user),
+        "user": login_user_payload(user),
+    }
+
+
+def apply_wechat_binding(
+    db: Session,
+    *,
+    user: User,
+    openid: str,
+    agree_wechat_bind: bool,
+    current_time: datetime,
+) -> None:
+    existing_user = get_user_by_wechat_openid(db, openid)
+    if existing_user is not None and existing_user.id != user.id:
+        raise APIError(
+            code=ErrorCode.WECHAT_OPENID_ALREADY_BOUND,
+            message="当前微信已绑定其他账号",
+            status_code=409,
+        )
+
+    if user.wechat_openid:
+        if user.wechat_openid != openid:
+            raise APIError(
+                code=ErrorCode.WECHAT_BINDING_MISMATCH,
+                message="当前微信与喵喵号绑定不一致，请联系管理员",
+                status_code=403,
+            )
+        user.last_wechat_login_at = current_time
+        return
+
+    if not agree_wechat_bind:
+        raise APIError(
+            code=ErrorCode.WECHAT_BINDING_MISMATCH,
+            message="请确认微信绑定后再登录",
+            status_code=403,
+        )
+
+    user.wechat_openid = openid
+    user.wechat_bound_at = current_time
+    user.last_wechat_login_at = current_time
 
 
 def login(db: Session, payload: LoginRequest) -> dict:
@@ -225,6 +290,29 @@ def login(db: Session, payload: LoginRequest) -> dict:
         raise APIError(code=ErrorCode.AGREEMENT_REQUIRED, message="未勾选协议", status_code=400)
 
     current_time = now_utc()
+    settings = get_settings()
+    if (
+        settings.wechat_auth_mode == "enforced"
+        and user.wechat_openid
+        and not payload.wechat_code
+    ):
+        db.commit()
+        raise APIError(
+            code=ErrorCode.WECHAT_BINDING_MISMATCH,
+            message="请使用已绑定微信登录",
+            status_code=403,
+        )
+
+    if payload.wechat_code and settings.wechat_auth_mode != "off":
+        openid = exchange_wechat_code_for_openid(payload.wechat_code)
+        apply_wechat_binding(
+            db,
+            user=user,
+            openid=openid,
+            agree_wechat_bind=payload.agree_wechat_bind,
+            current_time=current_time,
+        )
+
     captcha.used_at = current_time
     user.last_login_at = current_time
     user.login_failed_count = 0
@@ -232,20 +320,35 @@ def login(db: Session, payload: LoginRequest) -> dict:
     db.commit()
     db.refresh(user)
 
+    return issue_login_response(user)
+
+
+def login_with_wechat(db: Session, payload: WeChatLoginRequest) -> dict:
     settings = get_settings()
-    return {
-        "access_token": create_access_token(
-            user_id=user.id,
-            student_no=user.student_no,
-            role=user.role,
-            token_version=user.token_version,
-        ),
-        "token_type": "Bearer",
-        "expires_in": settings.access_token_expire_seconds,
-        "must_change_password": user.must_change_password,
-        "next_action": next_action_for(user),
-        "user": login_user_payload(user),
-    }
+    if settings.wechat_auth_mode == "off":
+        raise APIError(
+            code=ErrorCode.SERVER_ERROR,
+            message="微信登录暂未启用",
+            status_code=503,
+        )
+
+    openid = exchange_wechat_code_for_openid(payload.code)
+    user = get_user_by_wechat_openid(db, openid)
+    if user is None:
+        raise APIError(
+            code=ErrorCode.WECHAT_OPENID_UNBOUND,
+            message="当前微信尚未绑定喵喵号",
+            status_code=401,
+        )
+    if user.status != "active":
+        raise APIError(code=ErrorCode.ACCOUNT_DISABLED, message="账号已被禁用", status_code=403)
+
+    current_time = now_utc()
+    user.last_login_at = current_time
+    user.last_wechat_login_at = current_time
+    db.commit()
+    db.refresh(user)
+    return issue_login_response(user)
 
 
 def renew_access_token(user: User) -> dict:
@@ -259,6 +362,28 @@ def renew_access_token(user: User) -> dict:
         ),
         "token_type": "Bearer",
         "expires_in": settings.access_token_expire_seconds,
+    }
+
+
+def clear_current_user_wechat_binding(db: Session, user: User) -> dict:
+    if not user.wechat_openid:
+        raise APIError(
+            code=ErrorCode.PARAM_ERROR,
+            message="当前账号尚未绑定微信",
+            status_code=400,
+        )
+
+    user.wechat_openid = None
+    user.wechat_bound_at = None
+    user.last_wechat_login_at = None
+    user.token_version += 1
+    db.commit()
+    db.refresh(user)
+    return {
+        "user_id": user.id,
+        "wechat_bound": False,
+        "token_version": user.token_version,
+        "token_invalidated": True,
     }
 
 
@@ -337,6 +462,7 @@ def admin_user_payload(user: User) -> dict:
         "must_change_password": user.must_change_password,
         "profile_completed": is_profile_completed(user.profile),
         "last_login_at": user.last_login_at,
+        "wechat_bound": bool(user.wechat_openid),
         "profile": profile_payload(user.profile),
         "editable": not is_admin_account(user),
         "can_reset_password": not is_admin_account(user),
@@ -638,6 +764,38 @@ def update_user_role(
         summary=f"更新成员角色 {user.student_no}",
         before_data=before,
         after_data={"role": user.role},
+    )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def clear_user_wechat_binding(
+    db: Session,
+    *,
+    admin: User,
+    user_id: UUID,
+) -> User:
+    if admin.id == user_id:
+        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
+    user = get_target_user(db, user_id)
+    ensure_target_is_editable(user)
+    before = {
+        "wechat_bound": bool(user.wechat_openid),
+        "token_version": user.token_version,
+    }
+    user.wechat_openid = None
+    user.wechat_bound_at = None
+    user.last_wechat_login_at = None
+    user.token_version += 1
+    log_admin_operation(
+        db,
+        admin=admin,
+        operation_type="user_clear_wechat_binding",
+        target_id=user.id,
+        summary=f"清除成员微信绑定 {user.student_no}",
+        before_data=before,
+        after_data={"wechat_bound": False, "token_version": user.token_version},
     )
     db.commit()
     db.refresh(user)

@@ -100,6 +100,131 @@ describe("user store", () => {
     expect(store.isAdmin).toBe(true);
   });
 
+  it("logs in with WeChat and stores the returned session", async () => {
+    const requestMock = vi.fn((options: UniNamespace.RequestOptions) => {
+      expect(String(options.url)).toContain("/auth/wechat/login");
+      expect(options.data).toEqual({ code: "wechat-code-1" });
+      options.success?.({
+        statusCode: 200,
+        data: {
+          code: 0,
+          message: "login success",
+          data: {
+            access_token: "wechat-token",
+            token_type: "Bearer",
+            expires_in: 7200,
+            must_change_password: false,
+            profile_completed: true,
+            user: {
+              id: "u1",
+              student_no: "trmx0001",
+              meow_no: "trmx0001",
+              nickname: "小林",
+              avatar_url: null,
+              role: "member",
+              status: "active",
+              profile_completed: true,
+            },
+            next_action: "enter_app",
+          },
+          trace_id: "trace-wechat",
+        },
+        header: {},
+        cookies: [],
+      } as UniNamespace.RequestSuccessCallbackResult);
+    });
+    vi.stubGlobal("uni", {
+      getStorageSync: vi.fn(),
+      setStorageSync: vi.fn(),
+      removeStorageSync: vi.fn(),
+      request: requestMock,
+    });
+
+    const store = useUserStore();
+    await store.loginWithWechat("wechat-code-1");
+
+    expect(store.accessToken).toBe("wechat-token");
+    expect(store.currentUser?.student_no).toBe("trmx0001");
+    expect(store.currentUser?.profile_completed).toBe(true);
+  });
+
+  it("clears the local session after the current user unbinds WeChat", async () => {
+    const removeStorageSync = vi.fn();
+    const requestMock = vi.fn((options: UniNamespace.RequestOptions) => {
+      expect(String(options.url)).toContain("/auth/wechat-binding");
+      expect(options.method).toBe("DELETE");
+      expect(options.header).toEqual(
+        expect.objectContaining({ Authorization: "Bearer token-1" }),
+      );
+      options.success?.({
+        statusCode: 200,
+        data: {
+          code: 0,
+          message: "微信绑定已清除",
+          data: {
+            user_id: "u1",
+            wechat_bound: false,
+            token_version: 2,
+            token_invalidated: true,
+          },
+          trace_id: "trace-unbind",
+        },
+        header: {},
+        cookies: [],
+      } as UniNamespace.RequestSuccessCallbackResult);
+    });
+    vi.stubGlobal("uni", {
+      getStorageSync: vi.fn(),
+      setStorageSync: vi.fn(),
+      removeStorageSync,
+      request: requestMock,
+    });
+
+    const store = useUserStore();
+    store.setSession("token-1", user);
+
+    await expect(store.unbindCurrentWechat()).resolves.toMatchObject({
+      wechat_bound: false,
+      token_invalidated: true,
+    });
+    expect(store.accessToken).toBe("");
+    expect(store.currentUser).toBeNull();
+    expect(removeStorageSync).toHaveBeenCalledWith(STORAGE_KEYS.accessToken);
+    expect(removeStorageSync).toHaveBeenCalledWith(STORAGE_KEYS.accessTokenExpiresAt);
+    expect(removeStorageSync).toHaveBeenCalledWith(STORAGE_KEYS.currentUser);
+  });
+
+  it("preserves the local session when WeChat self-unbind fails", async () => {
+    const removeStorageSync = vi.fn();
+    const requestMock = vi.fn((options: UniNamespace.RequestOptions) => {
+      options.success?.({
+        statusCode: 400,
+        data: {
+          code: 40001,
+          message: "当前账号尚未绑定微信",
+          data: null,
+          trace_id: "trace-unbind-error",
+        },
+        header: {},
+        cookies: [],
+      } as UniNamespace.RequestSuccessCallbackResult);
+    });
+    vi.stubGlobal("uni", {
+      getStorageSync: vi.fn(),
+      setStorageSync: vi.fn(),
+      removeStorageSync,
+      request: requestMock,
+    });
+
+    const store = useUserStore();
+    store.setSession("token-1", user);
+
+    await expect(store.unbindCurrentWechat()).rejects.toThrow("当前账号尚未绑定微信");
+    expect(store.accessToken).toBe("token-1");
+    expect(store.currentUser).toEqual(user);
+    expect(removeStorageSync).not.toHaveBeenCalled();
+  });
+
   it("renews near-expired token before refreshing current user", async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-06-24T00:00:00.000Z"));

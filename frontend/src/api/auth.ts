@@ -15,6 +15,8 @@ export interface LoginPayload {
   captcha_id: string;
   captcha_code: string;
   agree_terms: boolean;
+  wechat_code?: string;
+  agree_wechat_bind?: boolean;
 }
 
 export interface LoginUser {
@@ -78,6 +80,13 @@ export interface ChangePasswordResponse {
   next_action: "complete_profile" | "enter_app";
 }
 
+export interface UnbindWeChatBindingResponse {
+  user_id: string;
+  wechat_bound: false;
+  token_version: number;
+  token_invalidated: true;
+}
+
 export function getCaptcha(): Promise<CaptchaResponse> {
   return request<CaptchaResponse>({
     url: API_ENDPOINTS.auth.captcha,
@@ -90,6 +99,14 @@ export function login(payload: LoginPayload): Promise<LoginResponse> {
     url: API_ENDPOINTS.auth.login,
     method: "POST",
     data: { ...payload },
+  });
+}
+
+export function wechatLogin(code: string): Promise<LoginResponse> {
+  return request<LoginResponse, { code: string }>({
+    url: API_ENDPOINTS.auth.wechatLogin,
+    method: "POST",
+    data: { code },
   });
 }
 
@@ -119,6 +136,16 @@ export function changePassword(
     url: API_ENDPOINTS.auth.password,
     method: "PATCH",
     data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function unbindWechatBinding(
+  accessToken: string,
+): Promise<UnbindWeChatBindingResponse> {
+  return request<UnbindWeChatBindingResponse>({
+    url: API_ENDPOINTS.auth.wechatBinding,
+    method: "DELETE",
     token: accessToken,
   });
 }

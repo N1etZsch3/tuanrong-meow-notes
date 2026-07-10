@@ -97,6 +97,23 @@ export interface MapMarkerDisplayModeInput {
   suppressUnselectedLabels?: boolean;
 }
 
+export interface MapViewportBounds {
+  southwest: LngLat;
+  northeast: LngLat;
+}
+
+export interface MarkerBubbleVisibilityInput {
+  zoom: number;
+  stable: boolean;
+  filterReady: boolean;
+  hasActiveMarkerFilter: boolean;
+  visibleMarkerCount: number;
+  previousVisible: boolean;
+}
+
+export const MARKER_BUBBLE_MAX_VISIBLE_COUNT = 6;
+export const MARKER_BUBBLE_HIDE_COUNT = 8;
+
 export interface MapRegionScaleSyncInput {
   type?: string;
   causedBy?: string;
@@ -359,15 +376,41 @@ export function filterMapShellItemsByTaskCompletion(
 export function getMarkerDisplayMode(
   input: MapMarkerDisplayModeInput,
 ): MapMarkerDisplayMode {
-  if (input.selected) {
-    return "label";
+  return input.selected ? "label" : "icon";
+}
+
+export function getMarkerBubbleVisibility(
+  input: MarkerBubbleVisibilityInput,
+): boolean {
+  if (
+    input.zoom < MARKER_LABEL_MIN_VISIBLE_ZOOM ||
+    !input.stable ||
+    !input.filterReady ||
+    !input.hasActiveMarkerFilter
+  ) {
+    return false;
   }
 
-  if (input.suppressUnselectedLabels) {
-    return "icon";
+  const markerCount = Math.max(0, input.visibleMarkerCount);
+  if (markerCount <= MARKER_BUBBLE_MAX_VISIBLE_COUNT) {
+    return true;
   }
+  if (markerCount >= MARKER_BUBBLE_HIDE_COUNT) {
+    return false;
+  }
+  return input.previousVisible;
+}
 
-  return input.zoom >= MARKER_LABEL_MIN_VISIBLE_ZOOM ? "label" : "icon";
+export function isLngLatInsideViewport(
+  point: LngLat,
+  viewport: MapViewportBounds,
+): boolean {
+  return (
+    point.lng >= viewport.southwest.lng &&
+    point.lng <= viewport.northeast.lng &&
+    point.lat >= viewport.southwest.lat &&
+    point.lat <= viewport.northeast.lat
+  );
 }
 
 export function shouldSyncMapScaleFromRegionChange(

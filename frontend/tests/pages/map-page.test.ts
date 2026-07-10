@@ -16,9 +16,11 @@ import {
   filterMapShellItemsByTaskCompletion,
   filterCampusExternalPoiResults,
   getMapPointQueryByFilter,
+  getMarkerBubbleVisibility,
   getMarkerDisplayMode,
   getMapFilterLabel,
   isFiniteLngLat,
+  isLngLatInsideViewport,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
   mapSearchResultToShellItem,
@@ -150,7 +152,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("getMapPointQueryByFilter(activeFilter.value");
   });
 
-  it("selects marker display modes from zoom while keeping the selected marker labeled", () => {
+  it("keeps native marker titles exclusive to the selected marker", () => {
     expect(
       getMarkerDisplayMode({
         zoom: 17.8,
@@ -168,7 +170,7 @@ describe("map page shell behavior", () => {
         labelMinZoom: 16,
         previewMinZoom: 18,
       }),
-    ).toBe("label");
+    ).toBe("icon");
     expect(
       getMarkerDisplayMode({
         zoom: 19,
@@ -177,7 +179,7 @@ describe("map page shell behavior", () => {
         labelMinZoom: 16,
         previewMinZoom: 18,
       }),
-    ).toBe("label");
+    ).toBe("icon");
     expect(
       getMarkerDisplayMode({
         zoom: 17.9,
@@ -206,7 +208,7 @@ describe("map page shell behavior", () => {
         labelMinZoom: 19,
         previewMinZoom: 19,
       }),
-    ).toBe("label");
+    ).toBe("icon");
     expect(
       getMarkerDisplayMode({
         zoom: 19,
@@ -215,7 +217,97 @@ describe("map page shell behavior", () => {
         labelMinZoom: 19,
         previewMinZoom: 19,
       }),
-    ).toBe("label");
+    ).toBe("icon");
+  });
+
+  it("shows marker bubbles only for a stable sparse marker viewport", () => {
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 17.9,
+        stable: true,
+        filterReady: true,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 1,
+        previousVisible: false,
+      }),
+    ).toBe(false);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: false,
+        filterReady: true,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 1,
+        previousVisible: false,
+      }),
+    ).toBe(false);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: true,
+        filterReady: false,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 1,
+        previousVisible: false,
+      }),
+    ).toBe(false);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: true,
+        filterReady: true,
+        hasActiveMarkerFilter: false,
+        visibleMarkerCount: 1,
+        previousVisible: true,
+      }),
+    ).toBe(false);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: true,
+        filterReady: true,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 6,
+        previousVisible: false,
+      }),
+    ).toBe(true);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: true,
+        filterReady: true,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 8,
+        previousVisible: true,
+      }),
+    ).toBe(false);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: true,
+        filterReady: true,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 7,
+        previousVisible: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("uses only the current native map viewport when counting marker bubbles", () => {
+    const viewport = {
+      southwest: { lng: 115.06, lat: 30.22 },
+      northeast: { lng: 115.07, lat: 30.23 },
+    };
+
+    expect(
+      isLngLatInsideViewport({ lng: 115.06, lat: 30.22 }, viewport),
+    ).toBe(true);
+    expect(
+      isLngLatInsideViewport({ lng: 115.0701, lat: 30.23 }, viewport),
+    ).toBe(false);
+    expect(
+      isLngLatInsideViewport({ lng: 115.065, lat: 30.2301 }, viewport),
+    ).toBe(false);
   });
 
   it("keeps drawer state native-map friendly without missing WXS callbacks", () => {

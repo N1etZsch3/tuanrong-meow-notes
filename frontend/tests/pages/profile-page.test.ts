@@ -22,6 +22,7 @@ import {
   createProfileEditSnapshot,
   hasUnsavedProfileChanges,
 } from "../../src/pages/profile/profile-edit-guard";
+import { createPageLeaveGuard } from "../../src/utils/page-leave-guard";
 
 function extractCssRule(source: string, selector: string): string {
   const start = source.lastIndexOf(`${selector} {`);
@@ -134,6 +135,29 @@ describe("profile center pages", () => {
     expect(profileDetailSource).toContain("confirmDiscardProfileChanges");
     expect(profileDetailSource).toContain("修改尚未保存，是否放弃？");
     expect(profileDetailSource).toContain("uni.navigateBack()");
+  });
+
+  it("uses one shared leave guard for explicit back and native WeChat swipe-back", () => {
+    const cleanGuard = createPageLeaveGuard(() => false);
+    expect(cleanGuard.requestLeave()).toBe("leave");
+
+    let hasUnsavedChanges = true;
+    const dirtyGuard = createPageLeaveGuard(() => hasUnsavedChanges);
+    expect(dirtyGuard.requestLeave()).toBe("confirm");
+    expect(dirtyGuard.requestLeave()).toBe("blocked");
+    dirtyGuard.cancelDiscard();
+    expect(dirtyGuard.requestLeave()).toBe("confirm");
+    expect(dirtyGuard.confirmDiscard()).toBe(true);
+    expect(dirtyGuard.requestLeave()).toBe("leave");
+
+    hasUnsavedChanges = false;
+    dirtyGuard.reset();
+    expect(dirtyGuard.requestLeave()).toBe("leave");
+    expect(profileDetailSource).toContain("createPageLeaveGuard");
+    expect(profileDetailSource).toContain("<page-container");
+    expect(profileDetailSource).toContain('@beforeleave="handleNativePageLeave"');
+    expect(profileDetailSource).toContain("function requestPageLeave");
+    expect(profileDetailSource).toContain("function releasePageLeaveGuardAndNavigateBack");
   });
 
   it("uses the public file-content route for newly uploaded avatars", () => {

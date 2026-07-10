@@ -1,4 +1,12 @@
 <template>
+  <!-- #ifdef MP-WEIXIN -->
+  <page-container
+    :show="pageLeaveGuardArmed"
+    :overlay="false"
+    :duration="0"
+    @beforeleave="handleNativePageLeave"
+  >
+  <!-- #endif -->
   <view class="detail-page">
     <scroll-view class="detail-scroll" scroll-y>
       <view class="detail-inner">
@@ -65,10 +73,13 @@
       </view>
     </scroll-view>
   </view>
+  <!-- #ifdef MP-WEIXIN -->
+  </page-container>
+  <!-- #endif -->
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 
 import {
@@ -79,6 +90,7 @@ import {
 import { getMyProfile, updateMyProfile, type MyProfileResponse } from "@/api/profile";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import { createPageLeaveGuard } from "@/utils/page-leave-guard";
 
 import {
   createProfileEditSnapshot,
@@ -97,6 +109,8 @@ const profile = ref<MyProfileResponse | null>(null);
 const avatarUrl = ref<string | null>(null);
 const isSaving = ref(false);
 const savedProfileSnapshot = ref<ProfileEditSnapshot | null>(null);
+const pageLeaveGuardArmed = ref(true);
+let isNavigatingAway = false;
 
 const form = reactive({
   nickname: "",
@@ -116,6 +130,9 @@ const departmentIndex = computed(() => {
   const index = departments.findIndex((department) => department === form.department);
   return index >= 0 ? index : 0;
 });
+const pageLeaveGuard = createPageLeaveGuard(
+  () => !isSaving.value && hasPendingProfileChanges(),
+);
 
 function applyProfile(nextProfile: MyProfileResponse) {
   profile.value = nextProfile;
@@ -129,6 +146,7 @@ function applyProfile(nextProfile: MyProfileResponse) {
     contact_info: form.contact_info,
     avatar_url: avatarUrl.value,
   });
+  pageLeaveGuard.reset();
 }
 
 async function loadProfile() {
@@ -253,12 +271,45 @@ async function saveProfile() {
 }
 
 function goBack() {
-  if (isSaving.value || !hasPendingProfileChanges()) {
-    uni.navigateBack();
+  requestPageLeave();
+}
+
+function requestPageLeave() {
+  const request = pageLeaveGuard.requestLeave();
+  if (request === "leave") {
+    releasePageLeaveGuardAndNavigateBack();
     return;
   }
+  if (request === "confirm") {
+    confirmDiscardProfileChanges();
+  }
+}
 
-  confirmDiscardProfileChanges();
+function handleNativePageLeave() {
+  if (isNavigatingAway) {
+    return;
+  }
+  pageLeaveGuardArmed.value = false;
+  requestPageLeave();
+}
+
+function releasePageLeaveGuardAndNavigateBack() {
+  if (isNavigatingAway) {
+    return;
+  }
+  isNavigatingAway = true;
+  pageLeaveGuardArmed.value = false;
+  nextTick(() => {
+    uni.navigateBack();
+  });
+}
+
+function rearmNativePageLeaveGuard() {
+  isNavigatingAway = false;
+  pageLeaveGuardArmed.value = false;
+  nextTick(() => {
+    pageLeaveGuardArmed.value = true;
+  });
 }
 
 function hasPendingProfileChanges() {
@@ -278,9 +329,12 @@ function confirmDiscardProfileChanges() {
     confirmColor: "#d73546",
     cancelText: "继续编辑",
     success: (result) => {
-      if (result.confirm) {
-        uni.navigateBack();
+      if (result.confirm && pageLeaveGuard.confirmDiscard()) {
+        releasePageLeaveGuardAndNavigateBack();
+        return;
       }
+      pageLeaveGuard.cancelDiscard();
+      rearmNativePageLeaveGuard();
     },
   });
 }

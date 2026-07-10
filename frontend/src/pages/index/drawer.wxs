@@ -9,6 +9,7 @@ var FILTER_LAYER_MIN_TOP_RPX = 176;
 var STABLE_MAP_BOTTOM_RPX = 288;
 var DRAG_PROGRESS_DISTANCE_RPX = 560;
 var MIN_PROGRESS_DELTA = 0.002;
+var DETAIL_DRAWER_PROGRESS = 2;
 var DRAWER_SNAP_TRANSITION = 'all 0.42s cubic-bezier(0.25, 1, 0.5, 1)';
 var MAP_SNAP_TRANSITION = 'none';
 var NATIVE_MAP_SNAP_TRANSITION = 'none';
@@ -160,6 +161,14 @@ function setDrawerResizeInProgress(ownerInstance, active) {
   }
 }
 
+function ensureDetailVisible(newValue, oldValue, ownerInstance) {
+  if (!newValue || newValue === oldValue || isDragging || currentProgress !== 0) return;
+  setDrawerResizeInProgress(ownerInstance, true);
+  currentProgress = DETAIL_DRAWER_PROGRESS;
+  applyFinalProgress(currentProgress, ownerInstance);
+  setDrawerResizeInProgress(ownerInstance, false);
+}
+
 function touchstart(e, ownerInstance) {
   var touch = e.touches[0] || e.changedTouches[0];
   startY = touch.clientY;
@@ -217,6 +226,7 @@ function tap(e, ownerInstance) {
 
 module.exports = {
   init: init,
+  ensureDetailVisible: ensureDetailVisible,
   touchstart: touchstart,
   touchmove: touchmove,
   touchend: touchend,

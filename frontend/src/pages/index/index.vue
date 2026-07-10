@@ -6,6 +6,8 @@
     }"
     :drawerConfig="drawerConfig"
     :change:drawerConfig="drawer.init"
+    :drawerDetailRequest="drawerDetailRequest"
+    :change:drawerDetailRequest="drawer.ensureDetailVisible"
     :filterMenuState="filterMenuState"
     :change:filterMenuState="filterMenu.sync"
   >
@@ -508,6 +510,7 @@ const drawerConfig = ref({
   rpxRatio: sysInfo.windowWidth / 750,
   windowHeight: sysInfo.windowHeight,
 });
+const drawerDetailRequest = ref(0);
 const filterMenuOpen = ref(false);
 const filterOptions = ref<MapFilterOption[]>([NO_MAP_FILTER_OPTION]);
 const activeFilter = ref<MapFilterKey | null>(null);
@@ -3036,6 +3039,12 @@ function locateMe() {
   suppressNativePoiTaps();
   focusMapToPoint(point);
 }
+
+watch(selectedSummary, (summary) => {
+  if (summary) {
+    drawerDetailRequest.value += 1;
+  }
+});
 
 watch(activeFilter, () => {
   selectedSummary.value = null;

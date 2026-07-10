@@ -6,6 +6,7 @@ import appSource from "../../src/App.vue?raw";
 import filterMenuWxsSource from "../../src/pages/index/filter-menu.wxs?raw";
 import indexPageSource from "../../src/pages/index/index.vue?raw";
 import mapPageSource from "../../src/pages/index/map-page.ts?raw";
+import shimeUniSource from "../../src/shime-uni.d.ts?raw";
 import userLocationServiceSource from "../../src/services/user-location.ts?raw";
 import {
   ALL_MAP_FILTER_KEY,
@@ -325,6 +326,31 @@ describe("map page shell behavior", () => {
     expect(drawerWxsSource).not.toContain("callMethod('onDrawerProgressChange'");
     expect(indexPageSource).not.toContain("scheduleMapResizeAfterDrawerChange");
     expect(indexPageSource).not.toContain("amapInstance.resize");
+  });
+
+  it("opens a collapsed drawer to the detail snap point when a point detail is selected", () => {
+    const ensureDetailSource = drawerWxsSource.slice(
+      drawerWxsSource.indexOf("function ensureDetailVisible"),
+      drawerWxsSource.indexOf("function touchstart"),
+    );
+    const clearSource = extractFunctionSource("clearSelectedMapPointState");
+
+    expect(indexPageSource).toContain(':drawerDetailRequest="drawerDetailRequest"');
+    expect(indexPageSource).toContain(
+      ':change:drawerDetailRequest="drawer.ensureDetailVisible"',
+    );
+    expect(indexPageSource).toContain("watch(selectedSummary");
+    expect(indexPageSource).toContain("drawerDetailRequest.value += 1");
+    expect(drawerWxsSource).toContain("var DETAIL_DRAWER_PROGRESS = 2");
+    expect(ensureDetailSource).toContain("currentProgress !== 0");
+    expect(ensureDetailSource).toContain("isDragging");
+    expect(ensureDetailSource).toContain("currentProgress = DETAIL_DRAWER_PROGRESS");
+    expect(ensureDetailSource).toContain(
+      "applyFinalProgress(currentProgress, ownerInstance)",
+    );
+    expect(drawerWxsSource).toContain("ensureDetailVisible: ensureDetailVisible");
+    expect(shimeUniSource).toContain("ensureDetailVisible: (...args: unknown[]) => void");
+    expect(clearSource).not.toContain("drawerDetailRequest");
   });
 
   it("guards native map region changes while the drawer is resizing the viewport", () => {

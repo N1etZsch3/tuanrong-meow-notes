@@ -9,6 +9,7 @@ declare module "@vue/runtime-core" {
   interface ComponentCustomProperties {
     drawer: {
       init: (...args: unknown[]) => void;
+      ensureDetailVisible: (...args: unknown[]) => void;
       tap: (...args: unknown[]) => void;
       touchstart: (...args: unknown[]) => void;
       touchmove: (...args: unknown[]) => void;

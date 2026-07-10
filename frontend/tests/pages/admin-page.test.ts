@@ -7,6 +7,10 @@ import adminLandmarkLocationSource from "../../src/pages/admin/landmarks/locatio
 import adminUsersApiSource from "../../src/api/admin-users.ts?raw";
 import adminUsersDetailSource from "../../src/pages/admin/users/detail.vue?raw";
 import pagesJson from "../../src/pages.json?raw";
+import {
+  createMemberEditSnapshot,
+  hasUnsavedMemberChanges,
+} from "../../src/pages/admin/users/member-edit-guard";
 
 function extractFunctionSource(source: string, functionName: string): string {
   const normalStart = source.indexOf(`function ${functionName}`);
@@ -150,5 +154,32 @@ describe("admin entry pages", () => {
     expect(adminUsersDetailSource).toContain("重置微信绑定");
     expect(adminUsersDetailSource).toContain("当前成员尚未绑定微信");
     expect(adminUsersDetailSource).toContain("解绑后，该成员下次需要使用喵喵号和密码重新登录并绑定微信");
+  });
+
+  it("guards unsaved member fields and avatar for both button and native swipe-back", () => {
+    const saved = createMemberEditSnapshot({
+      nickname: "小林",
+      real_name: "林同学",
+      department: "宣传部",
+      grade: "2025",
+      contact_info: "13800138000",
+      role: "member",
+      status: "active",
+      avatar_url: "https://example.com/avatar-a.jpg",
+    });
+
+    expect(hasUnsavedMemberChanges(saved, { ...saved })).toBe(false);
+    expect(
+      hasUnsavedMemberChanges(saved, { ...saved, role: "summer_volunteer" }),
+    ).toBe(true);
+    expect(
+      hasUnsavedMemberChanges(saved, { ...saved, avatar_url: "https://example.com/avatar-b.jpg" }),
+    ).toBe(true);
+    expect(adminUsersDetailSource).toContain("createMemberEditSnapshot");
+    expect(adminUsersDetailSource).toContain("hasUnsavedMemberChanges");
+    expect(adminUsersDetailSource).toContain("createPageLeaveGuard");
+    expect(adminUsersDetailSource).toContain("<page-container");
+    expect(adminUsersDetailSource).toContain('@beforeleave="handleNativePageLeave"');
+    expect(adminUsersDetailSource).toContain("修改尚未保存，是否放弃？");
   });
 });

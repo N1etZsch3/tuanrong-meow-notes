@@ -424,12 +424,15 @@ describe("map page shell behavior", () => {
   });
 
   it("keeps the filter trigger width stable while the menu expands downward", () => {
+    const filterMenuRule = extractCssRule(indexPageSource, ".filter-menu");
+
     expect(filterMenuWxsSource).toContain("var chipWidth = 224");
     expect(filterMenuWxsSource).toContain("var hitWidth = 244");
     expect(filterMenuWxsSource).toContain("translateY(0px)");
     expect(filterMenuWxsSource).toContain("translateY(' + px(-8) + 'px)");
     expect(filterMenuWxsSource).not.toContain("open ? 336 : 224");
     expect(filterMenuWxsSource).not.toContain("open ? 360 : 244");
+    expect(filterMenuRule).toContain("width: 224rpx");
   });
 
   it("sizes the drawer against screen height and keeps the tab bar clearance", () => {
@@ -600,17 +603,14 @@ describe("map page shell behavior", () => {
     expect(clearSource).not.toContain("clearNativeRoute()");
   });
 
-  it("keeps unselected marker labels suppressed when filter selection clears a selected point", () => {
+  it("resets viewport bubbles instead of carrying selected-marker state across filters", () => {
     const filterSource = extractFunctionSource("selectFilter");
 
-    expect(filterSource).toContain(
-      "const hadSelectedPoint = Boolean(selectedSummary.value || selectedPoiMarker.value);",
-    );
     expect(filterSource).toContain("cancelPointSummaryRequest()");
     expect(filterSource).toContain("selectedSummary.value = null");
     expect(filterSource).toContain("selectedPoiMarker.value = null");
-    expect(filterSource).toContain("suppressUnselectedMarkerLabels.value = hadSelectedPoint");
-    expect(filterSource).not.toContain("suppressUnselectedMarkerLabels.value = false");
+    expect(filterSource).toContain("clearViewportMarkerBubbles()");
+    expect(indexPageSource).not.toContain("suppressUnselectedMarkerLabels");
   });
 
   it("cancels stale point summary loads when a blank map tap clears selection", () => {
@@ -852,13 +852,24 @@ describe("map page shell behavior", () => {
     expect(locateMeSource).toContain("centerMapToPoint(point, { smooth: true })");
   });
 
-  it("uses native marker callouts for title labels without slot custom callout fan-out", () => {
+  it("renders sparse viewport marker bubbles separately from native selected-marker callouts", () => {
     const regionChangeSource = extractFunctionSource("handleMapRegionChange");
     const displayModeSource = extractFunctionSource("getNativeMarkerDisplayMode");
 
     expect(indexPageSource).not.toContain('slot="callout"');
     expect(indexPageSource).not.toContain(":marker-id=\"callout.markerId\"");
     expect(indexPageSource).not.toContain("nativeMarkerCallouts");
+    expect(indexPageSource).toContain('v-for="bubble in viewportMarkerBubbles"');
+    expect(indexPageSource).toContain('class="marker-bubble"');
+    expect(indexPageSource).toContain("function refreshViewportMarkerBubbles");
+    expect(indexPageSource).toContain("mapContext.getRegion");
+    expect(indexPageSource).toContain("mapContext.toScreenLocation");
+    expect(indexPageSource).toContain("getMarkerBubbleVisibility");
+    expect(indexPageSource).toContain("isLngLatInsideViewport");
+    expect(indexPageSource).toContain(
+      "marker.point_id !== selectedSummary.value?.point_id",
+    );
+    expect(indexPageSource).toContain("clearViewportMarkerBubbles()");
     expect(indexPageSource).toContain("getNativeMarkerDisplayMode(marker)");
     expect(indexPageSource).toContain("buildNativeMarkerTitleCallout(marker.name)");
     expect(indexPageSource).not.toContain("customCallout");
@@ -867,7 +878,10 @@ describe("map page shell behavior", () => {
     expect(regionChangeSource).toContain("shouldSyncMapScaleFromRegionChange(detail)");
     expect(regionChangeSource).toContain("recordNativeMapScale(Number(detail.scale))");
     expect(regionChangeSource).toContain("shouldQueryMapScaleFromRegionChange(detail)");
-    expect(regionChangeSource).toContain("syncMapScaleFromContext()");
+    expect(regionChangeSource).toContain(
+      "syncMapScaleFromContext(refreshViewportMarkerBubbles)",
+    );
+    expect(regionChangeSource).toContain("refreshViewportMarkerBubbles()");
     expect(displayModeSource).toContain(
       "const selectedPointId = selectedSummary.value?.point_id;",
     );
@@ -937,7 +951,9 @@ describe("map page shell behavior", () => {
     expect(regionChangeSource).toContain("shouldSyncMapScaleFromRegionChange(detail)");
     expect(regionChangeSource).toContain("recordNativeMapScale(Number(detail.scale))");
     expect(regionChangeSource).toContain("shouldQueryMapScaleFromRegionChange(detail)");
-    expect(regionChangeSource).toContain("syncMapScaleFromContext()");
+    expect(regionChangeSource).toContain(
+      "syncMapScaleFromContext(refreshViewportMarkerBubbles)",
+    );
     expect(regionChangeSource).not.toContain("mapScale.value = detail.scale");
     expect(regionChangeSource).not.toContain("setControlledMapScale(Number(detail.scale))");
     expect(regionChangeSource).not.toContain("syncMapScaleFromNative(Number(detail.scale))");

@@ -293,6 +293,7 @@ def test_admin_can_view_and_update_non_admin_member_detail(api_client, db_sessio
         student_no="trmx0101",
         must_change_password=False,
     )
+    bind_wechat(db_session, member, openid="openid-detail-member")
     token = create_token(admin)
 
     detail_response = api_client.get(
@@ -305,6 +306,7 @@ def test_admin_can_view_and_update_non_admin_member_detail(api_client, db_sessio
     assert detail["meow_no"] == "trmx0101"
     assert detail["editable"] is True
     assert detail["can_reset_password"] is True
+    assert detail["wechat_bound"] is True
 
     update_response = api_client.patch(
         f"/api/v1/admin/users/{member.id}",

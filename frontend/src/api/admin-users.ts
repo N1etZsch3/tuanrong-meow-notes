@@ -52,6 +52,7 @@ export interface AdminUserDto {
   must_change_password: boolean;
   profile_completed: boolean;
   last_login_at: string | null;
+  wechat_bound: boolean;
   profile: AdminUserProfileDto;
   editable?: boolean;
   can_reset_password?: boolean;

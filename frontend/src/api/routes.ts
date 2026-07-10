@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
   auth: {
     captcha: "/auth/captcha",
     login: "/auth/login",
+    wechatLogin: "/auth/wechat/login",
     renew: "/auth/renew",
     me: "/auth/me",
     password: "/auth/password",

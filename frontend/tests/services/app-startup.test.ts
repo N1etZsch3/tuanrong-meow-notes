@@ -8,6 +8,7 @@ import {
   resolveStartupRoute,
   type StartupUserSession,
 } from "@/services/app-startup";
+import { ApiBusinessError } from "@/services/request";
 import type { CurrentUser } from "@/types/user";
 
 const currentUser: CurrentUser = {
@@ -24,11 +25,16 @@ const currentUser: CurrentUser = {
 function createSession(
   accessToken: string,
   refreshCurrentUser = vi.fn<() => Promise<CurrentUser | null>>(),
-): StartupUserSession {
+): StartupUserSession & {
+  loginWithWechat: ReturnType<
+    typeof vi.fn<(code: string) => Promise<unknown>>
+  >;
+} {
   return {
     accessToken,
     refreshCurrentUser,
     clearSession: vi.fn(),
+    loginWithWechat: vi.fn<(code: string) => Promise<unknown>>(),
   };
 }
 
@@ -36,12 +42,64 @@ describe("app startup flow", () => {
   it("routes to login when there is no access token", async () => {
     const session = createSession("");
     const initializeResources = vi.fn();
+    const requestWechatCode = vi.fn().mockResolvedValue(null);
 
     await expect(
-      resolveStartupRoute(session, initializeResources),
+      resolveStartupRoute(session, initializeResources, requestWechatCode),
     ).resolves.toBe(LOGIN_ROUTE);
+    expect(requestWechatCode).toHaveBeenCalledTimes(1);
+    expect(session.loginWithWechat).not.toHaveBeenCalled();
     expect(session.refreshCurrentUser).not.toHaveBeenCalled();
     expect(initializeResources).not.toHaveBeenCalled();
+  });
+
+  it("logs in with WeChat before resolving the authenticated route", async () => {
+    const refreshCurrentUser = vi.fn().mockResolvedValue(currentUser);
+    const session = createSession("", refreshCurrentUser);
+    session.loginWithWechat.mockImplementation(async () => {
+      session.accessToken = "wechat-token";
+    });
+    const initializeResources = vi.fn().mockResolvedValue(undefined);
+    const requestWechatCode = vi.fn().mockResolvedValue("wechat-code-1");
+
+    await expect(
+      resolveStartupRoute(session, initializeResources, requestWechatCode),
+    ).resolves.toBe(HOME_ROUTE);
+    expect(requestWechatCode).toHaveBeenCalledTimes(1);
+    expect(session.loginWithWechat).toHaveBeenCalledWith("wechat-code-1");
+    expect(refreshCurrentUser).toHaveBeenCalledTimes(1);
+    expect(initializeResources).toHaveBeenCalledWith(currentUser);
+  });
+
+  it("clears any stale session when the WeChat OpenID is unbound", async () => {
+    const session = createSession("stale-token");
+    session.loginWithWechat.mockRejectedValue(
+      new ApiBusinessError(40104, "微信账号尚未绑定喵喵号", "trace-unbound", null),
+    );
+    const initializeResources = vi.fn();
+    const requestWechatCode = vi.fn().mockResolvedValue("unbound-code");
+
+    await expect(
+      resolveStartupRoute(session, initializeResources, requestWechatCode),
+    ).resolves.toBe(LOGIN_ROUTE);
+    expect(session.clearSession).toHaveBeenCalledTimes(1);
+    expect(session.refreshCurrentUser).not.toHaveBeenCalled();
+    expect(initializeResources).not.toHaveBeenCalled();
+  });
+
+  it("keeps a valid local session when WeChat auto-login has a transient failure", async () => {
+    const refreshCurrentUser = vi.fn().mockResolvedValue(currentUser);
+    const session = createSession("local-token", refreshCurrentUser);
+    session.loginWithWechat.mockRejectedValue(new Error("network unavailable"));
+    const initializeResources = vi.fn().mockResolvedValue(undefined);
+    const requestWechatCode = vi.fn().mockResolvedValue("wechat-code-1");
+
+    await expect(
+      resolveStartupRoute(session, initializeResources, requestWechatCode),
+    ).resolves.toBe(HOME_ROUTE);
+    expect(session.clearSession).not.toHaveBeenCalled();
+    expect(refreshCurrentUser).toHaveBeenCalledTimes(1);
+    expect(initializeResources).toHaveBeenCalledWith(currentUser);
   });
 
   it("refreshes user and initializes resources before routing home", async () => {
@@ -52,7 +110,11 @@ describe("app startup flow", () => {
     const initializeResources = vi.fn().mockResolvedValue(undefined);
 
     await expect(
-      resolveStartupRoute(session, initializeResources),
+      resolveStartupRoute(
+        session,
+        initializeResources,
+        vi.fn().mockResolvedValue(null),
+      ),
     ).resolves.toBe(HOME_ROUTE);
     expect(session.refreshCurrentUser).toHaveBeenCalledTimes(1);
     expect(initializeResources).toHaveBeenCalledWith(currentUser);
@@ -71,7 +133,11 @@ describe("app startup flow", () => {
     const initializeResources = vi.fn();
 
     await expect(
-      resolveStartupRoute(session, initializeResources),
+      resolveStartupRoute(
+        session,
+        initializeResources,
+        vi.fn().mockResolvedValue(null),
+      ),
     ).resolves.toBe(CHANGE_PASSWORD_ROUTE);
     expect(initializeResources).not.toHaveBeenCalled();
   });
@@ -89,7 +155,11 @@ describe("app startup flow", () => {
     const initializeResources = vi.fn();
 
     await expect(
-      resolveStartupRoute(session, initializeResources),
+      resolveStartupRoute(
+        session,
+        initializeResources,
+        vi.fn().mockResolvedValue(null),
+      ),
     ).resolves.toBe(PROFILE_SETUP_ROUTE);
     expect(initializeResources).not.toHaveBeenCalled();
   });
@@ -102,7 +172,11 @@ describe("app startup flow", () => {
     const initializeResources = vi.fn();
 
     await expect(
-      resolveStartupRoute(session, initializeResources),
+      resolveStartupRoute(
+        session,
+        initializeResources,
+        vi.fn().mockResolvedValue(null),
+      ),
     ).resolves.toBe(LOGIN_ROUTE);
     expect(session.clearSession).toHaveBeenCalledTimes(1);
     expect(initializeResources).not.toHaveBeenCalled();

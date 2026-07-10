@@ -132,6 +132,15 @@
             重置成员密码
           </button>
           <button
+            v-if="!readonlyMode && userDetail?.wechat_bound"
+            class="wechat-unbind-button"
+            :loading="isClearingWechatBinding"
+            hover-class="button-hover"
+            @tap="confirmClearWechatBinding"
+          >
+            清除微信绑定
+          </button>
+          <button
             v-if="!readonlyMode"
             class="exit-button"
             :loading="isDeleting"
@@ -187,6 +196,7 @@ import { computed, reactive, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 
 import {
+  clearAdminUserWechatBinding,
   deleteAdminUser,
   getAdminUserDetail,
   resetAdminUserPassword,
@@ -224,6 +234,7 @@ const isSaving = ref(false);
 const resetVisible = ref(false);
 const resetPassword = ref("");
 const isResetting = ref(false);
+const isClearingWechatBinding = ref(false);
 const isDeleting = ref(false);
 
 const form = reactive({
@@ -395,6 +406,46 @@ async function submitResetPassword() {
   }
 }
 
+function confirmClearWechatBinding() {
+  if (readonlyMode.value || !userDetail.value?.wechat_bound || isClearingWechatBinding.value) {
+    return;
+  }
+  uni.showModal({
+    title: "清除微信绑定",
+    content: "解绑后，该成员下次需要使用喵喵号和密码重新登录并绑定微信。",
+    confirmText: "确认解绑",
+    confirmColor: "#b45309",
+    success: (result) => {
+      if (result.confirm) {
+        void clearWechatBinding();
+      }
+    },
+  });
+}
+
+async function clearWechatBinding() {
+  if (readonlyMode.value || isClearingWechatBinding.value || !userId.value) {
+    return;
+  }
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  isClearingWechatBinding.value = true;
+  try {
+    await clearAdminUserWechatBinding(token, userId.value);
+    if (userDetail.value) {
+      userDetail.value = { ...userDetail.value, wechat_bound: false };
+    }
+    uni.showToast({ title: "微信绑定已清除", icon: "success" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "微信解绑失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    isClearingWechatBinding.value = false;
+  }
+}
+
 function confirmMemberExit() {
   if (readonlyMode.value || isDeleting.value) {
     return;
@@ -484,6 +535,7 @@ onLoad((query) => {
 .back-button,
 .save-button,
 .reset-button,
+.wechat-unbind-button,
 .exit-button,
 .modal-cancel,
 .modal-confirm {
@@ -506,6 +558,7 @@ onLoad((query) => {
 .back-button::after,
 .save-button::after,
 .reset-button::after,
+.wechat-unbind-button::after,
 .exit-button::after,
 .modal-cancel::after,
 .modal-confirm::after {
@@ -647,6 +700,7 @@ onLoad((query) => {
 }
 
 .reset-button,
+.wechat-unbind-button,
 .save-button,
 .exit-button {
   height: 88rpx;
@@ -661,6 +715,12 @@ onLoad((query) => {
   border: 2rpx solid #d14343;
   background: rgba(255, 255, 255, 0.94);
   color: #d14343;
+}
+
+.wechat-unbind-button {
+  border: 2rpx solid #b45309;
+  background: rgba(255, 255, 255, 0.94);
+  color: #9a4b0b;
 }
 
 .exit-button {

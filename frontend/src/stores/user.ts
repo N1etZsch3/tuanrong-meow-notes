@@ -8,6 +8,7 @@ import {
   normalizeLoginUser,
   renewAccessToken,
   changePassword,
+  wechatLogin,
   type ChangePasswordPayload,
   type LoginPayload,
 } from "@/api/auth";
@@ -82,6 +83,15 @@ export const useUserStore = defineStore("user", {
     },
     async loginWithPassword(payload: LoginPayload) {
       const response = await login(payload);
+      this.setSession(
+        response.access_token,
+        normalizeLoginUser(response),
+        response.expires_in,
+      );
+      return response;
+    },
+    async loginWithWechat(code: string) {
+      const response = await wechatLogin(code);
       this.setSession(
         response.access_token,
         normalizeLoginUser(response),

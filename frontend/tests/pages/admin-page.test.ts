@@ -107,4 +107,12 @@ describe("admin entry pages", () => {
     expect(adminUsersDetailSource).toContain('v-if="!readonlyMode"');
     expect(adminUsersDetailSource).toContain("exit-button");
   });
+
+  it("lets admins clear an editable member's WeChat binding", () => {
+    expect(adminUsersDetailSource).toContain("clearAdminUserWechatBinding");
+    expect(adminUsersDetailSource).toContain("confirmClearWechatBinding");
+    expect(adminUsersDetailSource).toContain("userDetail?.wechat_bound");
+    expect(adminUsersDetailSource).toContain("清除微信绑定");
+    expect(adminUsersDetailSource).toContain("解绑后，该成员下次需要使用喵喵号和密码重新登录并绑定微信");
+  });
 });

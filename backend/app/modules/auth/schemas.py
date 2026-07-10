@@ -137,6 +137,7 @@ class AdminUserItem(BaseModel):
     must_change_password: bool
     profile_completed: bool
     last_login_at: datetime | None
+    wechat_bound: bool
     profile: CurrentUserProfile
 
     model_config = ConfigDict(from_attributes=True)

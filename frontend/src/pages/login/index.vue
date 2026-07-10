@@ -106,6 +106,17 @@
             </view>
           </label>
         </checkbox-group>
+        <checkbox-group class="binding-consent" @change="onWechatBindAgreementChange">
+          <label class="checkbox-label">
+            <checkbox
+              value="wechat-bound"
+              :checked="form.wechat_bind_agreed"
+              color="#33823b"
+              style="transform: scale(0.7)"
+            />
+            <text class="binding-consent-text">登录后，当前微信将与该喵喵号绑定，用于后续自动登录和账号保护。如需更换微信，请联系管理员解绑。</text>
+          </label>
+        </checkbox-group>
       </view>
 
       <view class="notice-card">
@@ -156,6 +167,7 @@ import { onMounted, reactive, ref, watch } from "vue";
 
 import { getCaptcha } from "@/api/auth";
 import { CHANGE_PASSWORD_ROUTE, HOME_ROUTE, PROFILE_SETUP_ROUTE } from "@/services/app-startup";
+import { requestWechatLoginCode } from "@/services/wechat-auth";
 import { useUserStore } from "@/stores/user";
 import {
   hasAcceptedAgreementForAccount,
@@ -184,6 +196,7 @@ const form = reactive({
   captcha_code: "",
   captcha_id: "",
   agreed: false,
+  wechat_bind_agreed: false,
 });
 
 const passwordHidden = ref(true);
@@ -203,6 +216,10 @@ const closeModal = () => {
 
 function onAgreementChange(e: any) {
   form.agreed = e.detail.value.length > 0;
+}
+
+function onWechatBindAgreementChange(e: any) {
+  form.wechat_bind_agreed = e.detail.value.length > 0;
 }
 
 function applyRememberedAgreement() {
@@ -250,12 +267,20 @@ async function handleLogin() {
 
   isLoading.value = true;
   try {
+    const wechatCode = await requestWechatLoginCode();
+    if (wechatCode && !form.wechat_bind_agreed) {
+      uni.showToast({ title: "请确认微信与喵喵号绑定", icon: "none" });
+      return;
+    }
+
     const result = await userStore.loginWithPassword({
       meow_no: form.meow_no,
       password: form.password,
       captcha_id: form.captcha_id,
       captcha_code: form.captcha_code,
       agree_terms: form.agreed,
+      wechat_code: wechatCode || undefined,
+      agree_wechat_bind: Boolean(wechatCode && form.wechat_bind_agreed),
     });
     rememberAgreementAcceptedForAccounts([
       form.meow_no,
@@ -293,6 +318,7 @@ watch(
   () => form.meow_no,
   () => {
     applyRememberedAgreement();
+    form.wechat_bind_agreed = false;
   },
 );
 </script>
@@ -578,6 +604,19 @@ watch(
 
 .agreement-link {
   color: #297a2f;
+}
+
+.binding-consent {
+  margin-top: 14rpx;
+  padding-top: 14rpx;
+  border-top: 2rpx solid rgba(133, 169, 125, 0.18);
+}
+
+.binding-consent-text {
+  flex: 1;
+  color: #4f6855;
+  font-size: 21rpx;
+  line-height: 1.55;
 }
 
 .notice-card {

@@ -440,6 +440,7 @@ def admin_user_payload(user: User) -> dict:
         "must_change_password": user.must_change_password,
         "profile_completed": is_profile_completed(user.profile),
         "last_login_at": user.last_login_at,
+        "wechat_bound": bool(user.wechat_openid),
         "profile": profile_payload(user.profile),
         "editable": not is_admin_account(user),
         "can_reset_password": not is_admin_account(user),

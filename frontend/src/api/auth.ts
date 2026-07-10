@@ -15,6 +15,8 @@ export interface LoginPayload {
   captcha_id: string;
   captcha_code: string;
   agree_terms: boolean;
+  wechat_code?: string;
+  agree_wechat_bind?: boolean;
 }
 
 export interface LoginUser {
@@ -90,6 +92,14 @@ export function login(payload: LoginPayload): Promise<LoginResponse> {
     url: API_ENDPOINTS.auth.login,
     method: "POST",
     data: { ...payload },
+  });
+}
+
+export function wechatLogin(code: string): Promise<LoginResponse> {
+  return request<LoginResponse, { code: string }>({
+    url: API_ENDPOINTS.auth.wechatLogin,
+    method: "POST",
+    data: { code },
   });
 }
 

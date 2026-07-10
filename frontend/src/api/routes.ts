@@ -47,6 +47,7 @@ export const API_ENDPOINTS = {
     renew: "/auth/renew",
     me: "/auth/me",
     password: "/auth/password",
+    wechatBinding: "/auth/wechat-binding",
     logout: "/auth/logout",
   },
   admin: {

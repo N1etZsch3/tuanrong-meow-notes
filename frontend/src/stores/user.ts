@@ -8,6 +8,7 @@ import {
   normalizeLoginUser,
   renewAccessToken,
   changePassword,
+  unbindWechatBinding,
   wechatLogin,
   type ChangePasswordPayload,
   type LoginPayload,
@@ -171,6 +172,16 @@ export const useUserStore = defineStore("user", {
       const currentUser = normalizeCurrentUser(response);
       this.setCurrentUser(currentUser);
       return currentUser;
+    },
+    async unbindCurrentWechat() {
+      const accessToken = await this.ensureFreshAccessToken();
+      if (!accessToken) {
+        throw new Error("请先登录");
+      }
+
+      const response = await unbindWechatBinding(accessToken);
+      this.clearSession();
+      return response;
     },
     async logoutFromServer() {
       if (this.accessToken) {

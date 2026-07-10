@@ -5,6 +5,7 @@ import {
   getCaptcha,
   login,
   renewAccessToken,
+  unbindWechatBinding,
   wechatLogin,
 } from "@/api/auth";
 
@@ -176,6 +177,44 @@ describe("auth api", () => {
       expect.objectContaining({
         method: "POST",
         url: expect.stringContaining("/auth/renew"),
+        header: expect.objectContaining({
+          Authorization: "Bearer token-1",
+        }),
+      }),
+    );
+  });
+
+  it("deletes the current user's WeChat binding through /auth/wechat-binding", async () => {
+    const requestMock = vi.fn((options: UniNamespace.RequestOptions) => {
+      options.success?.({
+        statusCode: 200,
+        data: {
+          code: 0,
+          message: "微信绑定已清除",
+          data: {
+            user_id: "u1",
+            wechat_bound: false,
+            token_version: 2,
+            token_invalidated: true,
+          },
+          trace_id: "trace-unbind",
+        },
+        header: {},
+        cookies: [],
+      } as UniNamespace.RequestSuccessCallbackResult);
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await expect(unbindWechatBinding("token-1")).resolves.toEqual({
+      user_id: "u1",
+      wechat_bound: false,
+      token_version: 2,
+      token_invalidated: true,
+    });
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "DELETE",
+        url: expect.stringContaining("/auth/wechat-binding"),
         header: expect.objectContaining({
           Authorization: "Bearer token-1",
         }),

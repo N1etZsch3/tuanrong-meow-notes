@@ -7,13 +7,16 @@ var MAX_DRAWER_TOP_GAP_RATIO = 0.09;
 var DRAWER_BOTTOM_SAFE_RPX = 150;
 var FILTER_LAYER_MIN_TOP_RPX = 176;
 var STABLE_MAP_BOTTOM_RPX = 288;
-var DRAWER_SNAP_TRANSITION = 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
+var DRAG_PROGRESS_DISTANCE_RPX = 560;
+var MIN_PROGRESS_DELTA = 0.002;
+var DRAWER_SNAP_TRANSITION = 'all 0.42s cubic-bezier(0.25, 1, 0.5, 1)';
 var MAP_SNAP_TRANSITION = 'none';
 var NATIVE_MAP_SNAP_TRANSITION = 'none';
 var currentProgress = 1; // 1 = Normal
 var startProgress = 1;
 var startY = 0;
 var isDragging = false;
+var lastAppliedProgress = -1;
 
 function init(newValue, oldValue, ownerInstance, instance) {
   if (newValue) {
@@ -36,8 +39,12 @@ function interpolate(p, p0, p1, v0, v1) {
   return v0 + (v1 - v0) * (p - p0) / (p1 - p0);
 }
 
-function applyProgress(progress, ownerInstance, transition, mapTransition, nativeMapTransition) {
+function applyProgress(progress, ownerInstance, transition, mapTransition, nativeMapTransition, forceApply) {
   progress = clamp(progress, 0, MAX_DRAWER_PROGRESS);
+  if (!forceApply && Math.abs(progress - lastAppliedProgress) < MIN_PROGRESS_DELTA) {
+    return;
+  }
+  lastAppliedProgress = progress;
   var screenHeightRpx = config.windowHeight / config.rpxRatio;
   var maxDrawerTopGap = screenHeightRpx * MAX_DRAWER_TOP_GAP_RATIO;
   var maxDrawerH = screenHeightRpx - maxDrawerTopGap - DRAWER_BOTTOM_SAFE_RPX;
@@ -136,12 +143,14 @@ function applyProgress(progress, ownerInstance, transition, mapTransition, nativ
 }
 
 function applyFinalProgress(progress, ownerInstance) {
+  lastAppliedProgress = -1;
   applyProgress(
     progress,
     ownerInstance,
     DRAWER_SNAP_TRANSITION,
     MAP_SNAP_TRANSITION,
-    NATIVE_MAP_SNAP_TRANSITION
+    NATIVE_MAP_SNAP_TRANSITION,
+    true
   );
 }
 
@@ -156,6 +165,7 @@ function touchstart(e, ownerInstance) {
   startY = touch.clientY;
   startProgress = currentProgress;
   isDragging = true;
+  lastAppliedProgress = currentProgress;
   setDrawerResizeInProgress(ownerInstance, true);
 }
 
@@ -164,9 +174,8 @@ function touchmove(e, ownerInstance) {
   var touch = e.touches[0] || e.changedTouches[0];
   var deltaY = touch.clientY - startY; 
   
-  // Convert px to progress.
-  // Move 184px (approx 368rpx) = 1.0 progress.
-  var deltaProgress = -deltaY / px(368);
+  // Convert px to progress. Move 280px (560rpx) = 1.0 progress.
+  var deltaProgress = -deltaY / px(DRAG_PROGRESS_DISTANCE_RPX);
   
   currentProgress = clamp(startProgress + deltaProgress, 0, MAX_DRAWER_PROGRESS);
   applyProgress(currentProgress, ownerInstance, 'none');

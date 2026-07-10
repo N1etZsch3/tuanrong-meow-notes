@@ -304,11 +304,40 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("const DRAWER_RESIZE_SETTLE_MS = 520");
   });
 
+  it("throttles WXS drawer progress and slows only the drawer snap", () => {
+    const touchMoveSource = drawerWxsSource.slice(
+      drawerWxsSource.indexOf("function touchmove"),
+      drawerWxsSource.indexOf("function touchend"),
+    );
+    const applyProgressSource = drawerWxsSource.slice(
+      drawerWxsSource.indexOf("function applyProgress"),
+      drawerWxsSource.indexOf("function applyFinalProgress"),
+    );
+
+    expect(drawerWxsSource).toContain("var DRAG_PROGRESS_DISTANCE_RPX = 560");
+    expect(drawerWxsSource).toContain("var MIN_PROGRESS_DELTA = 0.002");
+    expect(drawerWxsSource).toContain("var lastAppliedProgress = -1");
+    expect(drawerWxsSource).toContain("all 0.42s cubic-bezier");
+    expect(touchMoveSource).toContain("px(DRAG_PROGRESS_DISTANCE_RPX)");
+    expect(applyProgressSource).toContain("Math.abs(progress - lastAppliedProgress) < MIN_PROGRESS_DELTA");
+    expect(drawerWxsSource).toContain("var MAP_SNAP_TRANSITION = 'none'");
+    expect(drawerWxsSource).toContain("var NATIVE_MAP_SNAP_TRANSITION = 'none'");
+  });
+
   it("does not call missing Vue methods from the filter menu WXS module", () => {
     expect(indexPageSource).toContain('@tap="toggleFilterMenu"');
     expect(indexPageSource).not.toContain('@tap="filterMenu.toggle"');
     expect(filterMenuWxsSource).not.toContain("callMethod");
     expect(filterMenuWxsSource).not.toContain("setFilterMenuOpen");
+  });
+
+  it("keeps the filter trigger width stable while the menu expands downward", () => {
+    expect(filterMenuWxsSource).toContain("var chipWidth = 224");
+    expect(filterMenuWxsSource).toContain("var hitWidth = 244");
+    expect(filterMenuWxsSource).toContain("translateY(0px)");
+    expect(filterMenuWxsSource).toContain("translateY(' + px(-8) + 'px)");
+    expect(filterMenuWxsSource).not.toContain("open ? 336 : 224");
+    expect(filterMenuWxsSource).not.toContain("open ? 360 : 244");
   });
 
   it("sizes the drawer against screen height and keeps the tab bar clearance", () => {

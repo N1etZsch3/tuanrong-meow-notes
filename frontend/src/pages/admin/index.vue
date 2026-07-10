@@ -102,7 +102,7 @@ function goBack() {
 }
 
 .admin-actions {
-  margin-top: 34rpx;
+  margin-top: 28rpx;
   display: flex;
   flex-direction: column;
   gap: 20rpx;
@@ -112,34 +112,39 @@ function goBack() {
 .permission-card {
   box-sizing: border-box;
   width: 100%;
-  border-radius: 30rpx;
+  border-radius: 16rpx;
   background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 16rpx 42rpx rgba(42, 63, 43, 0.1);
+  box-shadow: 0 8rpx 24rpx rgba(42, 63, 43, 0.08);
 }
 
 .admin-action {
-  min-height: 142rpx;
-  padding: 26rpx 30rpx;
+  min-height: 118rpx;
+  padding: 20rpx 24rpx;
   display: flex;
   align-items: center;
-  gap: 24rpx;
+  gap: 20rpx;
   text-align: left;
+  line-height: 1;
 }
 
 .action-icon {
-  width: 72rpx;
-  height: 72rpx;
-  border-radius: 22rpx;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 14rpx;
   background: #2f8037;
   color: #ffffff;
-  font-size: 48rpx;
-  line-height: 66rpx;
+  font-size: 42rpx;
+  line-height: 60rpx;
   text-align: center;
+  flex: 0 0 auto;
 }
 
 .action-copy {
   min-width: 0;
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
 }
 
 .action-title,
@@ -153,18 +158,20 @@ function goBack() {
   color: #20242a;
   font-size: 31rpx;
   font-weight: 900;
+  line-height: 1.1;
 }
 
 .action-subtitle {
-  margin-top: 6rpx;
+  margin-top: 0;
   color: #69727b;
   font-size: 24rpx;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 
 .action-chevron {
   color: #68717a;
-  font-size: 52rpx;
+  font-size: 44rpx;
+  line-height: 1;
 }
 
 .permission-card {

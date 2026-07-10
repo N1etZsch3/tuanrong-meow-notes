@@ -32,6 +32,14 @@ function extractFunctionSource(source: string, functionName: string): string {
   return source.slice(start);
 }
 
+function extractCssRule(source: string, selector: string): string {
+  const start = source.lastIndexOf(`${selector} {`);
+  expect(start).toBeGreaterThanOrEqual(0);
+  const end = source.indexOf("}", start);
+  expect(end).toBeGreaterThan(start);
+  return source.slice(start, end + 1);
+}
+
 describe("admin entry pages", () => {
   it("registers admin entry, personnel, create user, and landmark routes", () => {
     expect(pagesJson).toContain("pages/admin/index");
@@ -51,6 +59,20 @@ describe("admin entry pages", () => {
     expect(adminIndexSource).not.toContain("/pages/admin/supplies/create");
     expect(adminIndexSource).not.toContain("新建地标点");
     expect(adminIndexSource).not.toContain("/pages/admin/landmarks/create");
+  });
+
+  it("keeps the personnel entry card compact with explicit text spacing", () => {
+    const actionRule = extractCssRule(adminIndexSource, ".admin-action");
+    const copyRule = extractCssRule(adminIndexSource, ".action-copy");
+    const titleRule = extractCssRule(adminIndexSource, ".action-title");
+    const subtitleRule = extractCssRule(adminIndexSource, ".action-subtitle");
+
+    expect(actionRule).toContain("min-height: 118rpx");
+    expect(actionRule).toContain("line-height: 1");
+    expect(copyRule).toContain("gap: 6rpx");
+    expect(titleRule).toContain("line-height: 1.1");
+    expect(subtitleRule).toContain("margin-top: 0");
+    expect(subtitleRule).toContain("line-height: 1.25");
   });
 
   it("creates member accounts through the admin users api", () => {

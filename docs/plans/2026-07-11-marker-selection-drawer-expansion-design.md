@@ -14,7 +14,7 @@
 ## 方案
 
 1. 页面新增递增的“详情抽屉可见请求”令牌，并通过 WXS change-prop 绑定到 `drawer.wxs`。令牌只表达一次“确保详情档可见”，不把实时抽屉进度同步回 Vue。
-2. 监听 `selectedSummary`：从无详情变为有效详情时递增令牌，覆盖业务 Marker、搜索结果、待处理导航和解析成功的腾讯 POI。
+2. 监听 `selectedSummary`：每次写入有效详情时递增令牌，覆盖业务 Marker、搜索结果、待处理导航和解析成功的腾讯 POI。是否需要移动仍由 WXS 根据真实档位决定。
    - 详情变为空时不修改令牌，因此清除选中态不会触发抽屉回退。
 3. WXS 收到新令牌后检查自己的真实 `currentProgress`：
    - 仅当 `currentProgress === 0` 时设置为 `2`，使用现有 `applyFinalProgress` 动画展开到约 `654rpx`。

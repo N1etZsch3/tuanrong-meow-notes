@@ -18,6 +18,7 @@ import {
   getMapPointQueryByFilter,
   getMarkerBubbleVisibility,
   getMarkerDisplayMode,
+  getMapFocusTargetScale,
   getMapFilterLabel,
   isFiniteLngLat,
   isLngLatInsideViewport,
@@ -32,6 +33,14 @@ import {
   type MapTaskCompletionFilter,
   type MapShellItem,
 } from "@/pages/index/map-page";
+
+describe("map focus scale", () => {
+  it("only raises the map focus scale when it is below the minimum", () => {
+    expect(getMapFocusTargetScale(16, 18)).toBe(18);
+    expect(getMapFocusTargetScale(18, 18)).toBe(18);
+    expect(getMapFocusTargetScale(19.5, 18)).toBe(19.5);
+  });
+});
 
 const shellItems: MapShellItem[] = [
   {

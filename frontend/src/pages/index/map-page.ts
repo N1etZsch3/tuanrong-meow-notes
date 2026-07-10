@@ -174,6 +174,16 @@ export function toNativeMapPoint(
     : null;
 }
 
+export function getMapFocusTargetScale(
+  currentScale: number,
+  minimumScale: number,
+): number {
+  if (!Number.isFinite(currentScale)) {
+    return minimumScale;
+  }
+  return Math.max(currentScale, minimumScale);
+}
+
 export function expandLngLatBounds(
   bounds: LngLatBounds,
   paddingRatio: number,

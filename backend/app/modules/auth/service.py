@@ -365,6 +365,28 @@ def renew_access_token(user: User) -> dict:
     }
 
 
+def clear_current_user_wechat_binding(db: Session, user: User) -> dict:
+    if not user.wechat_openid:
+        raise APIError(
+            code=ErrorCode.WECHAT_OPENID_UNBOUND,
+            message="当前账号尚未绑定微信",
+            status_code=400,
+        )
+
+    user.wechat_openid = None
+    user.wechat_bound_at = None
+    user.last_wechat_login_at = None
+    user.token_version += 1
+    db.commit()
+    db.refresh(user)
+    return {
+        "user_id": user.id,
+        "wechat_bound": False,
+        "token_version": user.token_version,
+        "token_invalidated": True,
+    }
+
+
 def change_password(db: Session, user: User, payload: ChangePasswordRequest) -> dict:
     if payload.new_password != payload.confirm_password:
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)

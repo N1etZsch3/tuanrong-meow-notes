@@ -620,3 +620,107 @@ def test_logout_requires_valid_token(api_client, db_session):
     assert response.status_code == 200
     assert response.json()["message"] == "logout success"
     assert response.json()["data"] is None
+
+
+def test_member_can_clear_own_wechat_binding_and_invalidate_token(api_client, db_session):
+    user = create_user(db_session, must_change_password=False)
+    bound_at = datetime.now(tz=UTC)
+    user.wechat_openid = "openid-member-self-unbind"
+    user.wechat_bound_at = bound_at
+    user.last_wechat_login_at = bound_at
+    db_session.commit()
+    db_session.refresh(user)
+    token = create_token(user)
+    original_token_version = user.token_version
+
+    response = api_client.delete(
+        "/api/v1/auth/wechat-binding",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "user_id": str(user.id),
+        "wechat_bound": False,
+        "token_version": original_token_version + 1,
+        "token_invalidated": True,
+    }
+    db_session.refresh(user)
+    assert user.wechat_openid is None
+    assert user.wechat_bound_at is None
+    assert user.last_wechat_login_at is None
+    assert user.token_version == original_token_version + 1
+
+    old_token_response = api_client.get(
+        "/api/v1/auth/me",
+        headers=auth_headers(token),
+    )
+    assert old_token_response.status_code == 401
+
+
+def test_admin_can_clear_own_wechat_binding_and_invalidate_token(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        role="admin",
+        must_change_password=False,
+    )
+    bound_at = datetime.now(tz=UTC)
+    admin.wechat_openid = "openid-admin-self-unbind"
+    admin.wechat_bound_at = bound_at
+    admin.last_wechat_login_at = bound_at
+    db_session.commit()
+    db_session.refresh(admin)
+    token = create_token(admin)
+    original_token_version = admin.token_version
+
+    response = api_client.delete(
+        "/api/v1/auth/wechat-binding",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "user_id": str(admin.id),
+        "wechat_bound": False,
+        "token_version": original_token_version + 1,
+        "token_invalidated": True,
+    }
+    db_session.refresh(admin)
+    assert admin.wechat_openid is None
+    assert admin.wechat_bound_at is None
+    assert admin.last_wechat_login_at is None
+    assert admin.token_version == original_token_version + 1
+
+    old_token_response = api_client.get(
+        "/api/v1/auth/me",
+        headers=auth_headers(token),
+    )
+    assert old_token_response.status_code == 401
+
+
+def test_clear_own_wechat_binding_rejects_unbound_account_without_invalidating_token(
+    api_client,
+    db_session,
+):
+    user = create_user(db_session, must_change_password=False)
+    token = create_token(user)
+    original_token_version = user.token_version
+
+    response = api_client.delete(
+        "/api/v1/auth/wechat-binding",
+        headers=auth_headers(token),
+    )
+
+    assert response.status_code == 400
+    db_session.refresh(user)
+    assert user.wechat_openid is None
+    assert user.wechat_bound_at is None
+    assert user.last_wechat_login_at is None
+    assert user.token_version == original_token_version
+
+    current_user_response = api_client.get(
+        "/api/v1/auth/me",
+        headers=auth_headers(token),
+    )
+    assert current_user_response.status_code == 200

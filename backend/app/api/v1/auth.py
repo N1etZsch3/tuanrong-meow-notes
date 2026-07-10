@@ -68,6 +68,20 @@ def change_password(
     )
 
 
+@router.delete("/wechat-binding", summary="Clear current user's WeChat binding")
+def clear_wechat_binding(
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    data = service.clear_current_user_wechat_binding(db, current_user)
+    return api_success(
+        data=data,
+        trace_id=request.state.trace_id,
+        message="微信绑定已清除",
+    )
+
+
 @router.post("/logout", summary="Logout")
 def logout(request: Request, current_user: User = Depends(get_current_user)):
     return api_success(data=None, trace_id=request.state.trace_id, message="logout success")

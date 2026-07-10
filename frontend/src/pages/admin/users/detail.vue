@@ -123,41 +123,25 @@
             </view>
           </view>
 
-          <button
-            v-if="canResetPassword"
-            class="reset-button"
-            hover-class="button-hover"
-            @tap="openResetModal"
-          >
-            重置成员密码
-          </button>
-          <button
-            v-if="!readonlyMode && userDetail?.wechat_bound"
-            class="wechat-unbind-button"
-            :loading="isClearingWechatBinding"
-            hover-class="button-hover"
-            @tap="confirmClearWechatBinding"
-          >
-            清除微信绑定
-          </button>
-          <button
-            v-if="!readonlyMode"
-            class="exit-button"
-            :loading="isDeleting"
-            hover-class="button-hover"
-            @tap="confirmMemberExit"
-          >
-            成员退出
-          </button>
-          <button
-            v-if="!readonlyMode"
-            class="save-button"
-            :loading="isSaving"
-            hover-class="button-hover"
-            @tap="saveMember"
-          >
-            保存资料
-          </button>
+          <view v-if="!readonlyMode" class="detail-actions">
+            <button
+              class="account-actions-button"
+              :disabled="isAccountActionPending"
+              hover-class="button-hover"
+              @tap="openAccountActions"
+            >
+              账号操作
+            </button>
+            <button
+              class="save-button"
+              :disabled="isAccountActionPending"
+              :loading="isSaving"
+              hover-class="button-hover"
+              @tap="saveMember"
+            >
+              保存资料
+            </button>
+          </view>
         </view>
       </view>
     </scroll-view>
@@ -212,6 +196,7 @@ import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 type PickerChangeEvent = { detail: { value: string | number } };
 
 const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024;
+const ACCOUNT_ACTIONS = ["重置密码", "重置微信绑定", "删除账号"] as const;
 const departments = ["生存保障部", "活动部", "宣传部", "秘书部", "养护部"];
 const roleOptions = [
   { label: "成员", value: "member" },
@@ -249,6 +234,13 @@ const form = reactive({
 
 const readonlyMode = computed(() => !userDetail.value?.editable);
 const canResetPassword = computed(() => Boolean(userDetail.value?.can_reset_password));
+const isAccountActionPending = computed(
+  () =>
+    isSaving.value ||
+    isResetting.value ||
+    isClearingWechatBinding.value ||
+    isDeleting.value,
+);
 const avatarPreview = computed(() => avatarUrl.value || userDetail.value?.profile.avatar_url || defaultAvatar);
 const departmentIndex = computed(() => Math.max(0, departments.findIndex((item) => item === form.department)));
 const roleIndex = computed(() => Math.max(0, roleOptions.findIndex((item) => item.value === form.role)));
@@ -380,6 +372,32 @@ function closeResetModal() {
   }
 }
 
+function openAccountActions() {
+  if (readonlyMode.value || isAccountActionPending.value) {
+    return;
+  }
+  uni.showActionSheet({
+    itemList: [...ACCOUNT_ACTIONS],
+    success: (result) => {
+      if (result.tapIndex === 0 && canResetPassword.value) {
+        openResetModal();
+        return;
+      }
+      if (result.tapIndex === 1) {
+        if (!userDetail.value?.wechat_bound) {
+          uni.showToast({ title: "当前成员尚未绑定微信", icon: "none" });
+          return;
+        }
+        confirmClearWechatBinding();
+        return;
+      }
+      if (result.tapIndex === 2) {
+        confirmDeleteAccount();
+      }
+    },
+  });
+}
+
 async function submitResetPassword() {
   if (resetPassword.value.length < 8) {
     uni.showToast({ title: "密码至少 8 位", icon: "none" });
@@ -411,7 +429,7 @@ function confirmClearWechatBinding() {
     return;
   }
   uni.showModal({
-    title: "清除微信绑定",
+    title: "重置微信绑定",
     content: "解绑后，该成员下次需要使用喵喵号和密码重新登录并绑定微信。",
     confirmText: "确认解绑",
     confirmColor: "#b45309",
@@ -437,7 +455,7 @@ async function clearWechatBinding() {
     if (userDetail.value) {
       userDetail.value = { ...userDetail.value, wechat_bound: false };
     }
-    uni.showToast({ title: "微信绑定已清除", icon: "success" });
+    uni.showToast({ title: "微信绑定已重置", icon: "success" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "微信解绑失败";
     uni.showToast({ title: message, icon: "none" });
@@ -446,24 +464,24 @@ async function clearWechatBinding() {
   }
 }
 
-function confirmMemberExit() {
+function confirmDeleteAccount() {
   if (readonlyMode.value || isDeleting.value) {
     return;
   }
   uni.showModal({
-    title: "成员退出",
-    content: "成员退出后将从人员列表移除，账号不能继续登录。",
-    confirmText: "成员退出",
+    title: "删除账号",
+    content: "删除后该账号将从人员列表移除，且不能继续登录。请确认是否继续。",
+    confirmText: "确认删除",
     confirmColor: "#d14343",
     success: (result) => {
       if (result.confirm) {
-        void deleteMember();
+        void deleteAccount();
       }
     },
   });
 }
 
-async function deleteMember() {
+async function deleteAccount() {
   if (readonlyMode.value || isDeleting.value || !userId.value) {
     return;
   }
@@ -474,12 +492,12 @@ async function deleteMember() {
   isDeleting.value = true;
   try {
     await deleteAdminUser(token, userId.value);
-    uni.showToast({ title: "成员已退出", icon: "success" });
+    uni.showToast({ title: "账号已删除", icon: "success" });
     setTimeout(() => {
       uni.redirectTo({ url: "/pages/admin/users/index" });
     }, 350);
   } catch (error) {
-    const message = error instanceof Error ? error.message : "成员退出失败";
+    const message = error instanceof Error ? error.message : "删除账号失败";
     uni.showToast({ title: message, icon: "none" });
   } finally {
     isDeleting.value = false;
@@ -534,9 +552,7 @@ onLoad((query) => {
 
 .back-button,
 .save-button,
-.reset-button,
-.wechat-unbind-button,
-.exit-button,
+.account-actions-button,
 .modal-cancel,
 .modal-confirm {
   margin: 0;
@@ -557,9 +573,7 @@ onLoad((query) => {
 
 .back-button::after,
 .save-button::after,
-.reset-button::after,
-.wechat-unbind-button::after,
-.exit-button::after,
+.account-actions-button::after,
 .modal-cancel::after,
 .modal-confirm::after {
   border: 0;
@@ -699,33 +713,27 @@ onLoad((query) => {
   font-size: 34rpx;
 }
 
-.reset-button,
-.wechat-unbind-button,
-.save-button,
-.exit-button {
-  height: 88rpx;
+.detail-actions {
   margin-top: 28rpx;
-  border-radius: 28rpx;
-  font-size: 30rpx;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 18rpx;
+}
+
+.account-actions-button,
+.save-button {
+  width: 100%;
+  height: 88rpx;
+  border-radius: 16rpx;
+  font-size: 28rpx;
   font-weight: 900;
   line-height: 88rpx;
 }
 
-.reset-button {
-  border: 2rpx solid #d14343;
+.account-actions-button {
+  border: 2rpx solid #2f8037;
   background: rgba(255, 255, 255, 0.94);
-  color: #d14343;
-}
-
-.wechat-unbind-button {
-  border: 2rpx solid #b45309;
-  background: rgba(255, 255, 255, 0.94);
-  color: #9a4b0b;
-}
-
-.exit-button {
-  background: #d14343;
-  color: #ffffff;
+  color: #287c31;
 }
 
 .save-button {

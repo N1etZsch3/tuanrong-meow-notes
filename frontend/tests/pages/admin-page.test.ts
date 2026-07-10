@@ -99,20 +99,34 @@ describe("admin entry pages", () => {
     expect(resetSource).not.toContain("HBNU_DEFAULT_LANDMARK_LOCATION");
   });
 
-  it("lets admins soft delete editable members from member detail", () => {
+  it("groups editable member account operations beside the save action", () => {
     expect(adminUsersApiSource).toContain("deleteAdminUser");
     expect(adminUsersApiSource).toContain('method: "DELETE"');
     expect(adminUsersDetailSource).toContain("deleteAdminUser");
-    expect(adminUsersDetailSource).toContain("confirmMemberExit");
+    expect(adminUsersDetailSource).toContain("openAccountActions");
+    expect(adminUsersDetailSource).toContain("uni.showActionSheet");
+    expect(adminUsersDetailSource).toContain(
+      '["重置密码", "重置微信绑定", "删除账号"]',
+    );
+    expect(adminUsersDetailSource).toContain("confirmDeleteAccount");
     expect(adminUsersDetailSource).toContain('v-if="!readonlyMode"');
-    expect(adminUsersDetailSource).toContain("exit-button");
+    expect(adminUsersDetailSource).toContain('class="detail-actions"');
+    expect(adminUsersDetailSource).toContain('class="account-actions-button"');
+    expect(adminUsersDetailSource).toContain("账号操作");
+    expect(adminUsersDetailSource).toContain("保存资料");
+    expect(adminUsersDetailSource).toContain("删除账号");
+    expect(adminUsersDetailSource).not.toContain("成员退出");
+    expect(adminUsersDetailSource).not.toContain('class="reset-button"');
+    expect(adminUsersDetailSource).not.toContain('class="wechat-unbind-button"');
+    expect(adminUsersDetailSource).not.toContain('class="exit-button"');
   });
 
-  it("lets admins clear an editable member's WeChat binding", () => {
+  it("keeps member WeChat reset discoverable and reports an unbound account", () => {
     expect(adminUsersDetailSource).toContain("clearAdminUserWechatBinding");
     expect(adminUsersDetailSource).toContain("confirmClearWechatBinding");
-    expect(adminUsersDetailSource).toContain("userDetail?.wechat_bound");
-    expect(adminUsersDetailSource).toContain("清除微信绑定");
+    expect(adminUsersDetailSource).toContain("userDetail.value?.wechat_bound");
+    expect(adminUsersDetailSource).toContain("重置微信绑定");
+    expect(adminUsersDetailSource).toContain("当前成员尚未绑定微信");
     expect(adminUsersDetailSource).toContain("解绑后，该成员下次需要使用喵喵号和密码重新登录并绑定微信");
   });
 });

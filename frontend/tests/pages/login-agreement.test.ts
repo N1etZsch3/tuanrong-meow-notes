@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import loadingPageSource from "../../src/pages/loading/index.vue?raw";
 import loginPageSource from "../../src/pages/login/index.vue?raw";
 
 describe("login agreement memory", () => {
@@ -41,30 +42,43 @@ describe("login agreement memory", () => {
     expect(loginPageSource).not.toContain("请先勾选协议");
   });
 
-  it("clearly tells the user that WeChat will be bound to the meow account", () => {
+  it("uses a login confirmation modal instead of a WeChat binding checkbox", () => {
     expect(loginPageSource).toContain(
-      "登录后，当前微信将与该喵喵号绑定，用于后续自动登录和账号保护。如需更换微信，请联系管理员解绑。",
+      "登录后，当前微信将自动与该喵喵号绑定，用于后续自动登录和账号保护。如需更换微信，请联系管理员解绑。",
     );
-    expect(loginPageSource).toContain("wechat_bind_agreed");
-    expect(loginPageSource).toContain("onWechatBindAgreementChange");
+    expect(loginPageSource).toContain("confirmWechatBindingLogin");
+    expect(loginPageSource).toContain("uni.showModal");
+    expect(loginPageSource).not.toContain('class="binding-consent"');
+    expect(loginPageSource).not.toContain("wechat_bind_agreed");
+    expect(loginPageSource).not.toContain("onWechatBindAgreementChange");
   });
 
-  it("blocks binding before password login until the user acknowledges it", () => {
-    const consentCheck = loginPageSource.indexOf(
-      "if (wechatCode && !form.wechat_bind_agreed)",
+  it("confirms binding before requesting a code and submitting password login", () => {
+    const bindingPrompt = loginPageSource.indexOf(
+      "await confirmWechatBindingLogin()",
     );
+    const requestCode = loginPageSource.indexOf("await requestWechatLoginCode()");
     const passwordLogin = loginPageSource.indexOf("userStore.loginWithPassword");
 
-    expect(consentCheck).toBeGreaterThan(-1);
-    expect(passwordLogin).toBeGreaterThan(consentCheck);
-    expect(loginPageSource).toContain("请确认微信与喵喵号绑定");
+    expect(bindingPrompt).toBeGreaterThan(-1);
+    expect(requestCode).toBeGreaterThan(bindingPrompt);
+    expect(passwordLogin).toBeGreaterThan(requestCode);
+    expect(loginPageSource).toContain('confirmText: "确认登录"');
+    expect(loginPageSource).toContain('cancelText: "取消"');
   });
 
-  it("only sends binding consent when a WeChat login code is available", () => {
+  it("requires a WeChat code and sends explicit binding consent after confirmation", () => {
     expect(loginPageSource).toContain("requestWechatLoginCode");
-    expect(loginPageSource).toContain("wechat_code: wechatCode || undefined");
-    expect(loginPageSource).toContain(
-      "agree_wechat_bind: Boolean(wechatCode && form.wechat_bind_agreed)",
-    );
+    expect(loginPageSource).toContain("暂时无法获取微信登录凭证，请重试");
+    expect(loginPageSource).toContain("wechat_code: wechatCode");
+    expect(loginPageSource).toContain("agree_wechat_bind: true");
+    expect(loginPageSource).not.toContain("wechat_code: wechatCode || undefined");
+  });
+
+  it("keeps startup WeChat auto-login silent", () => {
+    expect(loadingPageSource).toContain("resolveStartupRoute(userStore)");
+    expect(loadingPageSource).not.toContain("uni.showModal");
+    expect(loadingPageSource).not.toContain("uni.showToast");
+    expect(loadingPageSource).not.toContain("微信绑定");
   });
 });

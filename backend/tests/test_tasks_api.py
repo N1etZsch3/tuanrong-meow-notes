@@ -6,9 +6,32 @@ from sqlalchemy.orm import Session
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
 from app.modules.files.models import FileAsset, FileAssetVariant
+from app.modules.map import service as map_service
 from app.modules.map.models import Campus, MapMarkerConfig, MapPoint
 from app.modules.tasks import service as task_service
 from app.modules.tasks.models import Task, TaskCheckinPhoto, TaskPhoto
+
+
+def freeze_task_clock(monkeypatch, day: date) -> None:
+    class FrozenDate(date):
+        @classmethod
+        def today(cls):
+            return day
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            value = datetime.combine(day, time.min, tzinfo=UTC)
+            return value.astimezone(tz) if tz is not None else value.replace(tzinfo=None)
+
+    monkeypatch.setattr(task_service, "_today", lambda: day)
+    monkeypatch.setattr(
+        task_service,
+        "_now",
+        lambda: datetime.combine(day, time.min, tzinfo=UTC),
+    )
+    monkeypatch.setattr(map_service, "date", FrozenDate)
+    monkeypatch.setattr(map_service, "datetime", FrozenDateTime)
 
 
 def create_user(
@@ -212,7 +235,9 @@ def publish_task(api_client, admin: User, campus: Campus) -> dict:
 def test_admin_can_publish_summer_feeding_task_and_map_marker_is_visible(
     api_client,
     db_session,
+    monkeypatch,
 ):
+    freeze_task_clock(monkeypatch, date(2026, 7, 3))
     admin = create_user(db_session, role="admin", nickname="管理员")
     member = create_user(db_session)
     campus = seed_campus(db_session)
@@ -531,7 +556,9 @@ def test_task_detail_normalizes_legacy_localhost_photo_urls_from_file_asset(
 def test_member_list_and_detail_include_dates_photos_location_materials_and_activities(
     api_client,
     db_session,
+    monkeypatch,
 ):
+    freeze_task_clock(monkeypatch, date(2026, 7, 3))
     admin = create_user(db_session, role="admin", nickname="管理员")
     member = create_user(db_session, nickname="Nietzsche")
     campus = seed_campus(db_session)

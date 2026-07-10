@@ -779,8 +779,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain(':scale="mapScale"');
     expect(indexPageSource).toContain(':show-location="Boolean(userLocation)"');
     expect(locateMeSource).toContain("getCachedUserLocation()");
-    expect(locateMeSource).toContain("setControlledMapScale(getUserLocationFocusScale())");
-    expect(locateMeSource).toContain("centerMapToPoint(point, { smooth: true })");
+    expect(locateMeSource).toContain("focusMapToPoint(point)");
     expect(locateMeSource).not.toContain("getLocationWithFallback");
     expect(locateMeSource).not.toContain("getWechatMiniProgramLocation");
     expect(locateMeSource).not.toContain("requestUserLocation");
@@ -858,7 +857,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("lastResolvedPoiTapKey.value = null");
     expect(locateMeSource).toContain("clearNativePoiSelection()");
     expect(locateMeSource).toContain("suppressNativePoiTaps()");
-    expect(locateMeSource).toContain("centerMapToPoint(point, { smooth: true })");
+    expect(locateMeSource).toContain("focusMapToPoint(point)");
   });
 
   it("renders sparse viewport marker bubbles separately from native selected-marker callouts", () => {
@@ -899,17 +898,24 @@ describe("map page shell behavior", () => {
     );
   });
 
-  it("uses animated focused map movement for poi and marker recentering", () => {
+  it("uses one native movement for marker poi and location focus", () => {
+    const nativeMoveSource = extractFunctionSource("moveNativeMapToPoint");
+    const focusSource = extractFunctionSource("focusMapToPoint");
     const poiTapSource = extractFunctionSource("handleNativePoiTap");
     const markerTapSource = extractFunctionSource("handleNativeMarkerTap");
+    const locateMeSource = extractFunctionSource("locateMe");
 
     expect(indexPageSource).toContain("const MAP_POINT_FOCUS_SCALE");
-    expect(indexPageSource).toContain("function animateMapCenterToPoint");
-    expect(indexPageSource).toContain("function focusMapToPoint");
-    expect(indexPageSource).toContain("setControlledMapScale(getMapPointFocusScale())");
+    expect(nativeMoveSource).toContain("mapContext.moveToLocation");
+    expect(nativeMoveSource).toContain("longitude: nextCenter.lng");
+    expect(nativeMoveSource).toContain("latitude: nextCenter.lat");
+    expect(nativeMoveSource).toContain("requestId !== mapCenterMoveRequestId");
+    expect(focusSource).toContain("getMapFocusTargetScale");
     expect(poiTapSource).toContain("focusMapToPoint({ lng: summary.lng, lat: summary.lat })");
     expect(markerTapSource).toContain("focusMapToPoint({ lng: marker.lng, lat: marker.lat })");
-    expect(indexPageSource).not.toContain("moveToLocation({");
+    expect(locateMeSource).toContain("focusMapToPoint(point)");
+    expect(indexPageSource).not.toContain("MAP_CENTER_ANIMATION_STEPS");
+    expect(indexPageSource).not.toContain("animateMapCenterToPoint");
   });
 
   it("looks up native marker taps from the rendered marker id snapshot", () => {
@@ -931,9 +937,9 @@ describe("map page shell behavior", () => {
     const regionChangeSource = extractFunctionSource("handleMapRegionChange");
     const locateMeSource = extractFunctionSource("locateMe");
 
-    expect(regionChangeSource).toContain("stopMapCenterAnimation()");
+    expect(regionChangeSource).toContain("invalidateMapCenterMovement()");
     expect(regionChangeSource).toContain("syncMapCenterFromNative(nextCenter)");
-    expect(locateMeSource).toContain("centerMapToPoint(point, { smooth: true })");
+    expect(locateMeSource).toContain("focusMapToPoint(point)");
     expect(indexPageSource).toContain(
       "const point = userLocation.value || getCachedUserLocation()",
     );

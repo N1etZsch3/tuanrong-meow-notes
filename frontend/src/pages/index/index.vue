@@ -387,6 +387,7 @@ import {
   formatDistance,
   getMarkerBubbleVisibility,
   getMarkerDisplayMode,
+  getMapFocusTargetScale,
   getMapFilterLabel,
   getMapPointQueryByFilter,
   isFiniteLngLat,
@@ -467,6 +468,12 @@ interface NativeMapMarker {
 }
 
 type NativeMapContext = {
+  moveToLocation?: (options: {
+    longitude: number;
+    latitude: number;
+    success?: () => void;
+    fail?: () => void;
+  }) => void;
   includePoints?: (options: {
     points: NativeRoutePoint[];
     padding?: number[];
@@ -553,21 +560,19 @@ const MARKER_LONG_PRESS_HIT_METERS = 60;
 const NATIVE_MARKER_HIT_SIZE = 34;
 const MAP_BLANK_TAP_GUARD_MS = 250;
 const DRAWER_RESIZE_SETTLE_MS = 520;
-const MAP_CENTER_ANIMATION_DURATION_MS = 320;
-const MAP_CENTER_ANIMATION_STEPS = 12;
+const MAP_FOCUS_SETTLE_MS = 720;
 const MAP_CENTER_SYNC_EPSILON_METERS = 0.75;
 const MAP_SCALE_SYNC_EPSILON = 0.01;
 const MAP_POINT_FOCUS_SCALE = 18;
-const USER_LOCATION_FOCUS_SCALE = 18;
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let mapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
-let mapCenterAnimationTimer: ReturnType<typeof setTimeout> | null = null;
 let drawerResizeResumeTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeUserLocation: (() => void) | null = null;
 let pointSummaryRequestSeq = 0;
 let poiResolveRequestSeq = 0;
 let viewportMarkerBubbleRequestSeq = 0;
+let mapCenterMoveRequestId = 0;
 let viewportMarkerBubblesVisible = false;
 
 const isPageVisible = ref(true);
@@ -1024,7 +1029,7 @@ function shouldSkipPoiResolve(
   );
 }
 
-function suppressNativePoiTaps(durationMs = MAP_CENTER_ANIMATION_DURATION_MS + 400) {
+function suppressNativePoiTaps(durationMs = MAP_FOCUS_SETTLE_MS) {
   nativePoiTapSuppressedUntil.value = Date.now() + durationMs;
 }
 
@@ -1709,58 +1714,45 @@ function handleMapError(error: unknown, fallbackMessage: string) {
   contentErrorMessage.value = fallbackMessage;
 }
 
-function stopMapCenterAnimation() {
-  if (!mapCenterAnimationTimer) {
-    return;
-  }
-  clearTimeout(mapCenterAnimationTimer);
-  mapCenterAnimationTimer = null;
+function getNativeMapContext(): NativeMapContext {
+  return uni.createMapContext("campus-map") as unknown as NativeMapContext;
 }
 
-function animateMapCenterToPoint(nextCenter: LngLat) {
-  stopMapCenterAnimation();
+function invalidateMapCenterMovement() {
+  mapCenterMoveRequestId += 1;
+}
 
-  const startCenter = { ...mapCenter.value };
-  const deltaLng = nextCenter.lng - startCenter.lng;
-  const deltaLat = nextCenter.lat - startCenter.lat;
-  if (Math.abs(deltaLng) < 0.000001 && Math.abs(deltaLat) < 0.000001) {
-    mapCenter.value = nextCenter;
+function moveNativeMapToPoint(nextCenter: LngLat) {
+  const requestId = ++mapCenterMoveRequestId;
+  const mapContext = getNativeMapContext();
+  const syncLatestCenter = () => {
+    if (requestId !== mapCenterMoveRequestId) {
+      return;
+    }
+    syncMapCenterFromNative(nextCenter);
+  };
+
+  if (typeof mapContext.moveToLocation !== "function") {
+    syncLatestCenter();
     return;
   }
 
-  let step = 0;
-  const tick = () => {
-    step += 1;
-    const progress = Math.min(step / MAP_CENTER_ANIMATION_STEPS, 1);
-    const easedProgress = 1 - (1 - progress) ** 3;
-    mapCenter.value = {
-      lng: startCenter.lng + deltaLng * easedProgress,
-      lat: startCenter.lat + deltaLat * easedProgress,
-    };
-
-    if (progress >= 1) {
-      mapCenter.value = nextCenter;
-      mapCenterAnimationTimer = null;
-      return;
-    }
-
-    mapCenterAnimationTimer = setTimeout(
-      tick,
-      MAP_CENTER_ANIMATION_DURATION_MS / MAP_CENTER_ANIMATION_STEPS,
-    );
-  };
-
-  tick();
+  mapContext.moveToLocation({
+    longitude: nextCenter.lng,
+    latitude: nextCenter.lat,
+    success: syncLatestCenter,
+    fail: syncLatestCenter,
+  });
 }
 
 function centerMapToPoint(point: LngLat, options: { smooth?: boolean } = {}) {
   const nextCenter = clampLngLatToBounds(point, campusMapConfig.value.limit_bounds);
   if (options.smooth) {
-    animateMapCenterToPoint(nextCenter);
+    moveNativeMapToPoint(nextCenter);
     return;
   }
-  stopMapCenterAnimation();
-  mapCenter.value = nextCenter;
+  invalidateMapCenterMovement();
+  syncMapCenterFromNative(nextCenter);
 }
 
 function centerMapToCampus() {
@@ -1772,7 +1764,15 @@ function syncUserLocation(point: LngLat | null) {
 }
 
 function focusMapToPoint(point: LngLat) {
-  setControlledMapScale(getMapPointFocusScale());
+  const targetScale = getClampedMapScale(
+    getMapFocusTargetScale(observedMapScale.value, MAP_POINT_FOCUS_SCALE),
+  );
+  if (
+    !Number.isFinite(observedMapScale.value) ||
+    targetScale > observedMapScale.value + MAP_SCALE_SYNC_EPSILON
+  ) {
+    setControlledMapScale(targetScale);
+  }
   centerMapToPoint(point, { smooth: true });
 }
 
@@ -1830,14 +1830,6 @@ function getClampedMapScale(targetScale: number): number {
   const minScale = campusMapConfig.value.min_zoom;
   const maxScale = campusMapConfig.value.max_zoom;
   return Math.min(Math.max(targetScale, minScale), maxScale);
-}
-
-function getMapPointFocusScale(): number {
-  return getClampedMapScale(MAP_POINT_FOCUS_SCALE);
-}
-
-function getUserLocationFocusScale(): number {
-  return getClampedMapScale(USER_LOCATION_FOCUS_SCALE);
 }
 
 async function getCurrentLocationForNavigation(): Promise<LngLat | null> {
@@ -2812,7 +2804,7 @@ function handleMapRegionChange(event: Event) {
   if (detail?.type && detail.type !== "end") {
     clearViewportMarkerBubbles(false);
     if (detail.causedBy === "drag") {
-      stopMapCenterAnimation();
+      invalidateMapCenterMovement();
     }
     return;
   }
@@ -2836,7 +2828,7 @@ function handleMapRegionChange(event: Event) {
     }
   } else if (detail.causedBy === "update") {
     // Programmatic center changes already flow through mapCenter; echoing them here can retrigger native map movement.
-  } else if (!mapCenterAnimationTimer) {
+  } else {
     syncMapCenterFromNative(nextCenter);
   }
 
@@ -3042,8 +3034,7 @@ function locateMe() {
   }
   clearNativePoiSelection();
   suppressNativePoiTaps();
-  setControlledMapScale(getUserLocationFocusScale());
-  centerMapToPoint(point, { smooth: true });
+  focusMapToPoint(point);
 }
 
 watch(activeFilter, () => {
@@ -3108,7 +3099,7 @@ onHide(() => {
 onBeforeUnmount(() => {
   unsubscribeUserLocation?.();
   unsubscribeUserLocation = null;
-  stopMapCenterAnimation();
+  invalidateMapCenterMovement();
 
   if (searchTimer) {
     clearTimeout(searchTimer);

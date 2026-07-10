@@ -203,64 +203,6 @@
             <text v-else class="empty-line">暂无任务动态</text>
           </view>
 
-          <view class="section-card">
-            <view class="section-head">
-              <text class="section-title">完成照片</text>
-            </view>
-            <view v-if="isExecutionDetail && displayCheckinPhotos.length" class="photo-strip">
-              <view
-                v-for="photo in displayCheckinPhotos"
-                :key="photo.key"
-                class="checkin-photo-cell"
-              >
-                <image
-                  class="checkin-photo"
-                  :src="photo.thumbnail_url || photo.file_url"
-                  mode="aspectFill"
-                  @tap="openCheckinPhotoPreview(photo)"
-                />
-                <button
-                  v-if="photo.can_delete"
-                  class="photo-delete-button"
-                  hover-class="button-hover"
-                  @tap.stop="confirmDeleteCheckinPhoto(photo)"
-                >
-                  删除
-                </button>
-              </view>
-            </view>
-            <view v-else-if="!isExecutionDetail && photoExecutionGroups.length" class="execution-groups">
-              <view
-                v-for="group in photoExecutionGroups"
-                :key="`photos-${group.execution.execution_date_id}`"
-                class="execution-group-card"
-              >
-                <view class="execution-group-head">
-                  <text class="execution-group-date">{{ formatTaskDate(group.execution.execute_date) }}</text>
-                  <text class="execution-group-status" :class="getExecutionDisplayClass(group.execution)">
-                    {{ getExecutionDisplayLabel(group.execution) }}
-                  </text>
-                </view>
-                <view class="photo-strip">
-                  <view
-                    v-for="photo in group.checkin_photos"
-                    :key="photo.photo_id"
-                    class="checkin-photo-cell"
-                  >
-                    <image
-                      class="checkin-photo"
-                      :src="photo.thumbnail_url || photo.file_url"
-                      mode="aspectFill"
-                      @tap="openGroupedCheckinPhotoPreview(group.checkin_photos, photo)"
-                    />
-                  </view>
-                </view>
-              </view>
-            </view>
-            <text v-else class="empty-line">
-              {{ isExecutionDetail ? "完成记录后现场照片会展示在这里" : "暂无完成照片" }}
-            </text>
-          </view>
         </view>
       </view>
     </scroll-view>
@@ -378,7 +320,6 @@ import { computed, ref } from "vue";
 import { deleteImageAsset, uploadImage } from "@/api/files";
 import {
   checkinTask,
-  deleteTaskCheckinPhoto,
   getTaskDetail,
   type TaskActivityDto,
   type TaskCheckinPhotoDto,
@@ -407,15 +348,6 @@ import taskIcon from "../../../素材/png/地图点/日常任务.png";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
 type LoadState = "idle" | "loading" | "ready" | "error";
-interface CheckinPhotoDisplay {
-  key: string;
-  photo_id: string | null;
-  file_id: string | null;
-  file_url: string;
-  thumbnail_url?: string | null;
-  can_delete: boolean;
-  is_pending: boolean;
-}
 
 const userStore = useUserStore();
 const taskId = ref("");
@@ -463,9 +395,6 @@ const executionGroups = computed<TaskExecutionGroupDto[]>(() => task.value?.exec
 const activityExecutionGroups = computed(() =>
   executionGroups.value.filter((group) => group.activities.length),
 );
-const photoExecutionGroups = computed(() =>
-  executionGroups.value.filter((group) => group.checkin_photos.length),
-);
 const groupedActivityCount = computed(() =>
   activityExecutionGroups.value.reduce((total, group) => total + group.activities.length, 0),
 );
@@ -492,32 +421,6 @@ const canAdminEditTask = computed(() =>
   Boolean(userStore.isAdmin && task.value?.actions.can_admin_edit),
 );
 const taskPhotoPreviewUrls = computed(() => heroPhotos.value.map((photo) => photo.url));
-const persistedCheckinPhotos = computed(() => task.value?.checkin_photos || []);
-const displayCheckinPhotos = computed<CheckinPhotoDisplay[]>(() => [
-  ...persistedCheckinPhotos.value.map((photo) => ({
-    key: `persisted-${photo.photo_id}`,
-    photo_id: photo.photo_id,
-    file_id: photo.file_id,
-    file_url: photo.file_url,
-    thumbnail_url: photo.thumbnail_url,
-    can_delete: photo.can_delete,
-    is_pending: false,
-  })),
-  ...pendingCheckinPhotos.value.map((photo, index) => ({
-    key: `pending-${photo.file_id || photo.file_url}-${index}`,
-    photo_id: null,
-    file_id: photo.file_id,
-    file_url: photo.file_url,
-    thumbnail_url: photo.thumbnail_url,
-    can_delete: true,
-    is_pending: true,
-  })),
-]);
-const checkinPhotoPreviewUrls = computed(() =>
-  displayCheckinPhotos.value
-    .map((photo) => photo.file_url || photo.thumbnail_url || "")
-    .filter((url) => url),
-);
 const checkinRecords = computed<TaskCheckinRecordDto[]>(() => task.value?.checkins || []);
 const viewingRecordMeta = computed(() => {
   if (!viewingRecord.value) {
@@ -624,22 +527,6 @@ function openTaskPhotoPreview(photoId: string) {
     return;
   }
   openImagePreview(taskPhotoPreviewUrls.value, photo.url);
-}
-
-function openCheckinPhotoPreview(photo: CheckinPhotoDisplay) {
-  const current = photo.file_url || photo.thumbnail_url || "";
-  openImagePreview(checkinPhotoPreviewUrls.value, current);
-}
-
-function openGroupedCheckinPhotoPreview(
-  photos: TaskCheckinPhotoDto[],
-  photo: TaskCheckinPhotoDto,
-) {
-  const urls = photos
-    .map((item) => item.file_url || item.thumbnail_url || "")
-    .filter((url) => url);
-  const current = photo.file_url || photo.thumbnail_url || "";
-  openImagePreview(urls, current);
 }
 
 function wait(milliseconds: number): Promise<void> {
@@ -750,13 +637,6 @@ async function uploadCheckinPhotos(paths: string[]) {
   }
 }
 
-function removePendingCheckinPhotoLocally(photo: CheckinPhotoDisplay) {
-  pendingCheckinPhotos.value = pendingCheckinPhotos.value.filter((item, index) => {
-    const key = `pending-${item.file_id || item.file_url}-${index}`;
-    return key !== photo.key;
-  });
-}
-
 function openPendingRecordPhotoPreview(photo: UploadedFileRef) {
   const urls = pendingCheckinPhotos.value
     .map((item) => item.file_url || item.thumbnail_url || "")
@@ -775,75 +655,6 @@ async function removeRecordPhoto(photo: UploadedFileRef) {
       await deleteImageAsset(token, photo.file_id);
     }
     pendingCheckinPhotos.value = pendingCheckinPhotos.value.filter((item) => item !== photo);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "删除失败";
-    uni.showToast({ title: message, icon: "none" });
-  }
-}
-
-async function deletePendingCheckinPhoto(photo: CheckinPhotoDisplay) {
-  const token = await getAccessToken();
-  if (!token) {
-    return;
-  }
-
-  try {
-    if (photo.file_id) {
-      await deleteImageAsset(token, photo.file_id);
-    }
-    removePendingCheckinPhotoLocally(photo);
-    uni.showToast({ title: "照片已删除", icon: "success" });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "删除失败";
-    uni.showToast({ title: message, icon: "none" });
-  }
-}
-
-function confirmDeleteCheckinPhoto(photo: CheckinPhotoDisplay) {
-  if (!photo.can_delete) {
-    return;
-  }
-
-  uni.showModal({
-    title: "删除照片",
-    content: "删除后其他成员将不再在任务详情页看到这张完成照片。",
-    confirmText: "删除",
-    confirmColor: "#d73546",
-    cancelText: "取消",
-    success: (result) => {
-      if (!result.confirm) {
-        return;
-      }
-      if (photo.is_pending) {
-        void deletePendingCheckinPhoto(photo);
-        return;
-      }
-      if (photo.photo_id) {
-        void deletePersistedCheckinPhoto(photo.photo_id);
-      }
-    },
-  });
-}
-
-async function deletePersistedCheckinPhoto(photoId: string) {
-  const token = await getAccessToken();
-  if (!token || !task.value) {
-    return;
-  }
-
-  try {
-    await deleteTaskCheckinPhoto(token, task.value.task_id, photoId);
-    task.value = {
-      ...task.value,
-      checkin_photos: task.value.checkin_photos.filter(
-        (photo: TaskCheckinPhotoDto) => photo.photo_id !== photoId,
-      ),
-      execution_groups: (task.value.execution_groups || []).map((group) => ({
-        ...group,
-        checkin_photos: group.checkin_photos.filter((photo) => photo.photo_id !== photoId),
-      })),
-    };
-    uni.showToast({ title: "照片已删除", icon: "success" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "删除失败";
     uni.showToast({ title: message, icon: "none" });

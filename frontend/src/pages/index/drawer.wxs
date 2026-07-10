@@ -3,7 +3,8 @@ var config = {
   windowHeight: 800
 };
 var MAX_DRAWER_PROGRESS = 3;
-var MAX_DRAWER_TOP_GAP_RPX = 210;
+var MAX_DRAWER_TOP_GAP_RATIO = 0.09;
+var DRAWER_BOTTOM_SAFE_RPX = 150;
 var FILTER_LAYER_MIN_TOP_RPX = 176;
 var STABLE_MAP_BOTTOM_RPX = 288;
 var DRAWER_SNAP_TRANSITION = 'all 0.3s cubic-bezier(0.25, 1, 0.5, 1)';
@@ -37,7 +38,9 @@ function interpolate(p, p0, p1, v0, v1) {
 
 function applyProgress(progress, ownerInstance, transition, mapTransition, nativeMapTransition) {
   progress = clamp(progress, 0, MAX_DRAWER_PROGRESS);
-  var maxDrawerH = config.windowHeight / config.rpxRatio - MAX_DRAWER_TOP_GAP_RPX;
+  var screenHeightRpx = config.windowHeight / config.rpxRatio;
+  var maxDrawerTopGap = screenHeightRpx * MAX_DRAWER_TOP_GAP_RATIO;
+  var maxDrawerH = screenHeightRpx - maxDrawerTopGap - DRAWER_BOTTOM_SAFE_RPX;
   var drawerH, mapB, mapT, titleOp, titleTrans, mapOp;
   var mapL, mapRad, drawerL, drawerRad, drawerBottom;
   
@@ -49,7 +52,7 @@ function applyProgress(progress, ownerInstance, transition, mapTransition, nativ
     mapRad = interpolate(progress, 0, 1, 0, 28);
     drawerL = 24;
     drawerRad = 34;
-    drawerBottom = 150;
+    drawerBottom = DRAWER_BOTTOM_SAFE_RPX;
     titleOp = interpolate(progress, 0, 1, 0, 1);
     titleTrans = interpolate(progress, 0, 1, -28, 0);
     mapOp = 1;
@@ -61,19 +64,19 @@ function applyProgress(progress, ownerInstance, transition, mapTransition, nativ
     mapRad = 28;
     drawerL = interpolate(progress, 1, 2, 24, 0);
     drawerRad = interpolate(progress, 1, 2, 34, 0);
-    drawerBottom = 150;
+    drawerBottom = DRAWER_BOTTOM_SAFE_RPX;
     titleOp = interpolate(progress, 1, 2, 1, 0);
     titleTrans = interpolate(progress, 1, 2, 0, -28);
     mapOp = 1;
   } else {
     drawerH = interpolate(progress, 2, 3, 654, maxDrawerH);
-    mapB = interpolate(progress, 2, 3, 800, maxDrawerH + MAX_DRAWER_TOP_GAP_RPX);
-    mapT = interpolate(progress, 2, 3, 40, MAX_DRAWER_TOP_GAP_RPX);
+    mapB = interpolate(progress, 2, 3, 800, maxDrawerH + maxDrawerTopGap);
+    mapT = interpolate(progress, 2, 3, 40, maxDrawerTopGap);
     mapL = 24;
     mapRad = 28;
     drawerL = 0;
     drawerRad = 0;
-    drawerBottom = interpolate(progress, 2, 3, 150, 0);
+    drawerBottom = DRAWER_BOTTOM_SAFE_RPX;
     mapOp = interpolate(progress, 2.5, 3, 1, 0);
     titleOp = 0;
     titleTrans = -28;

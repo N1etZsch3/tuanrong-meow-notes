@@ -128,6 +128,7 @@ import { computed, ref } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 
 import { listAdminUsers, type AdminUserDto } from "@/api/admin-users";
+import { resolveUserAvatarContentUrl } from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
@@ -172,7 +173,7 @@ function memberAvatar(user: AdminUserDto): string {
   if (!avatarUrl || failedAvatarUserIds.value.has(user.id)) {
     return defaultAvatar;
   }
-  return avatarUrl;
+  return resolveUserAvatarContentUrl(avatarUrl) || defaultAvatar;
 }
 
 function markAvatarFailed(id: string) {

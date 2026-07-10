@@ -247,6 +247,88 @@ def test_password_login_with_wechat_code_binds_openid(api_client, db_session, mo
     assert user.last_wechat_login_at is not None
 
 
+def test_password_login_requires_confirmation_before_binding_wechat(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    user = create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    captcha = create_captcha(db_session)
+    set_wechat_auth_mode(monkeypatch, "optional")
+    monkeypatch.setattr(
+        service,
+        "exchange_wechat_code_for_openid",
+        lambda code: "openid-member-1",
+        raising=False,
+    )
+
+    response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "meow_no": "trmx0001",
+            "password": "Password123",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": True,
+            "wechat_code": "login-code-1",
+            "agree_wechat_bind": False,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == 40006
+    db_session.refresh(user)
+    db_session.refresh(captcha)
+    assert user.wechat_openid is None
+    assert captcha.used_at is None
+
+
+def test_password_login_with_matching_bound_wechat_skips_binding_confirmation(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    user = create_user(
+        db_session,
+        student_no="trmx0001",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    set_wechat_openid(db_session, user, "openid-member-1")
+    captcha = create_captcha(db_session)
+    set_wechat_auth_mode(monkeypatch, "optional")
+    monkeypatch.setattr(
+        service,
+        "exchange_wechat_code_for_openid",
+        lambda code: "openid-member-1",
+        raising=False,
+    )
+
+    response = api_client.post(
+        "/api/v1/auth/login",
+        json={
+            "meow_no": "trmx0001",
+            "password": "Password123",
+            "captcha_id": str(captcha.id),
+            "captcha_code": "A7KD",
+            "agree_terms": True,
+            "wechat_code": "login-code-1",
+            "agree_wechat_bind": False,
+        },
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(user)
+    assert user.wechat_openid == "openid-member-1"
+
+
 def test_password_login_rejects_openid_bound_to_another_account(
     api_client,
     db_session,

@@ -71,11 +71,20 @@
 import { computed, reactive, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 
-import { uploadUserAvatar } from "@/api/files";
+import {
+  buildUserAvatarContentUrl,
+  resolveUserAvatarContentUrl,
+  uploadUserAvatar,
+} from "@/api/files";
 import { getMyProfile, updateMyProfile, type MyProfileResponse } from "@/api/profile";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
+import {
+  createProfileEditSnapshot,
+  hasUnsavedProfileChanges,
+  type ProfileEditSnapshot,
+} from "./profile-edit-guard";
 import { getRoleLabel } from "./profile-page";
 import defaultAvatar from "../../../素材/svg/萌猫/橘猫.svg";
 
@@ -87,6 +96,7 @@ const userStore = useUserStore();
 const profile = ref<MyProfileResponse | null>(null);
 const avatarUrl = ref<string | null>(null);
 const isSaving = ref(false);
+const savedProfileSnapshot = ref<ProfileEditSnapshot | null>(null);
 
 const form = reactive({
   nickname: "",
@@ -109,10 +119,16 @@ const departmentIndex = computed(() => {
 
 function applyProfile(nextProfile: MyProfileResponse) {
   profile.value = nextProfile;
-  avatarUrl.value = nextProfile.avatar_url;
+  avatarUrl.value = resolveUserAvatarContentUrl(nextProfile.avatar_url);
   form.nickname = nextProfile.nickname;
   form.department = nextProfile.department || "";
   form.contact_info = nextProfile.contact_info || "";
+  savedProfileSnapshot.value = createProfileEditSnapshot({
+    nickname: form.nickname,
+    department: form.department,
+    contact_info: form.contact_info,
+    avatar_url: avatarUrl.value,
+  });
 }
 
 async function loadProfile() {
@@ -165,7 +181,7 @@ async function uploadAvatar(tempPath: string) {
   uni.showLoading({ title: "头像上传中", mask: true });
   try {
     const asset = await uploadUserAvatar(accessToken, tempPath, userStore.currentUser?.id);
-    avatarUrl.value = asset.default_url;
+    avatarUrl.value = buildUserAvatarContentUrl(asset.asset_id);
     uni.hideLoading();
   } catch (error) {
     uni.hideLoading();
@@ -237,7 +253,36 @@ async function saveProfile() {
 }
 
 function goBack() {
-  uni.navigateBack();
+  if (isSaving.value || !hasPendingProfileChanges()) {
+    uni.navigateBack();
+    return;
+  }
+
+  confirmDiscardProfileChanges();
+}
+
+function hasPendingProfileChanges() {
+  return hasUnsavedProfileChanges(savedProfileSnapshot.value, {
+    nickname: form.nickname,
+    department: form.department,
+    contact_info: form.contact_info,
+    avatar_url: avatarUrl.value,
+  });
+}
+
+function confirmDiscardProfileChanges() {
+  uni.showModal({
+    title: "放弃修改",
+    content: "修改尚未保存，是否放弃？",
+    confirmText: "放弃",
+    confirmColor: "#d73546",
+    cancelText: "继续编辑",
+    success: (result) => {
+      if (result.confirm) {
+        uni.navigateBack();
+      }
+    },
+  });
 }
 
 onShow(() => {

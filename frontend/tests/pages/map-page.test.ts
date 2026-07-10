@@ -13,6 +13,7 @@ import {
   NO_MAP_FILTER_KEY,
   clampLngLatToBounds,
   expandLngLatBounds,
+  filterMapShellItemsByTaskCompletion,
   filterCampusExternalPoiResults,
   getMapPointQueryByFilter,
   getMarkerDisplayMode,
@@ -26,6 +27,7 @@ import {
   shouldSyncMapScaleFromRegionChange,
   shouldQueryMapScaleFromRegionChange,
   toNativeMapPoint,
+  type MapTaskCompletionFilter,
   type MapShellItem,
 } from "@/pages/index/map-page";
 
@@ -309,10 +311,15 @@ describe("map page shell behavior", () => {
     expect(filterMenuWxsSource).not.toContain("setFilterMenuOpen");
   });
 
-  it("lets the drawer expand near full screen while keeping a top gap", () => {
+  it("sizes the drawer against screen height and keeps the tab bar clearance", () => {
     expect(drawerWxsSource).toContain("MAX_DRAWER_PROGRESS");
-    expect(drawerWxsSource).toContain("MAX_DRAWER_TOP_GAP_RPX");
-    expect(drawerWxsSource).toContain("config.windowHeight / config.rpxRatio - MAX_DRAWER_TOP_GAP_RPX");
+    expect(drawerWxsSource).toContain("MAX_DRAWER_TOP_GAP_RATIO");
+    expect(drawerWxsSource).toContain("DRAWER_BOTTOM_SAFE_RPX");
+    expect(drawerWxsSource).toContain("var screenHeightRpx = config.windowHeight / config.rpxRatio;");
+    expect(drawerWxsSource).toContain(
+      "var maxDrawerH = screenHeightRpx - maxDrawerTopGap - DRAWER_BOTTOM_SAFE_RPX;",
+    );
+    expect(drawerWxsSource).toContain("drawerBottom = DRAWER_BOTTOM_SAFE_RPX;");
     expect(drawerWxsSource).toContain("clamp(progress, 0, MAX_DRAWER_PROGRESS)");
   });
 
@@ -1098,25 +1105,48 @@ describe("map page shell behavior", () => {
   it("keeps a readable label for each map filter", () => {
     expect(getMapFilterLabel(ALL_MAP_FILTER_KEY)).toBe("全部标记");
     expect(getMapFilterLabel("none")).toBe("无标记");
+    expect(getMapFilterLabel("task")).toBe("任务");
     expect(getMapFilterLabel("cat")).toBe("猫咪点");
     expect(getMapFilterLabel("unknown")).toBe("全部标记");
   });
 
-  it("adds all marker filter when two or more marker categories exist", () => {
+  it("uses the requested short map title", () => {
+    expect(indexPageSource).toContain("喵图");
+    expect(indexPageSource).not.toContain("猫协地图");
+  });
+
+  it("aggregates completed and unfinished feeding options into one task filter", () => {
     const twoOptions = normalizeMapFilterOptions([
-      { key: "feeding_pending", label: "未完成任务", point_types: ["task"] },
-      { key: "feeding_completed", label: "完成任务", point_types: ["task"] },
+      {
+        key: "feeding_pending",
+        label: "未完成任务",
+        description: "尚未完成的暑假投喂点",
+        point_types: ["task"],
+        business_types: ["feeding"],
+      },
+      {
+        key: "feeding_completed",
+        label: "完成任务",
+        description: "已完成投喂的任务点",
+        point_types: ["task"],
+        business_types: ["feeding"],
+      },
     ]);
 
     expect(twoOptions.map((option) => option.key)).toEqual([
       NO_MAP_FILTER_KEY,
-      ALL_MAP_FILTER_KEY,
-      "feeding_pending",
-      "feeding_completed",
+      "task",
     ]);
+    expect(twoOptions[1]).toMatchObject({
+      label: "任务",
+      description: "",
+      point_types: ["task"],
+      business_types: ["feeding"],
+    });
 
     const threeOptions = normalizeMapFilterOptions([
-      { key: "task", label: "任务", point_types: ["task"] },
+      { key: "feeding_pending", label: "未完成任务", point_types: ["task"] },
+      { key: "feeding_completed", label: "完成任务", point_types: ["task"] },
       { key: "cat", label: "猫咪点", point_types: ["cat"] },
       { key: "supply", label: "物资点", point_types: ["supply"] },
     ]);
@@ -1127,6 +1157,45 @@ describe("map page shell behavior", () => {
       "task",
       "cat",
       "supply",
+    ]);
+  });
+
+  it("filters one cached task collection by a single selected completion state", () => {
+    const taskItems: MapShellItem[] = [
+      {
+        id: "task-not-started",
+        type: "daily_task",
+        title: "待投喂",
+        subtitle: null,
+        description: null,
+        distance_meters: null,
+        status_key: "not_started",
+      },
+      {
+        id: "task-in-progress",
+        type: "daily_task",
+        title: "进行中",
+        subtitle: null,
+        description: null,
+        distance_meters: null,
+        status_key: "in_progress",
+      },
+      {
+        id: "task-completed",
+        type: "daily_task",
+        title: "已完成",
+        subtitle: null,
+        description: null,
+        distance_meters: null,
+        status_key: "completed",
+      },
+    ];
+
+    const filters: MapTaskCompletionFilter[] = ["all", "completed", "unfinished"];
+    expect(filters.map((filter) => filterMapShellItemsByTaskCompletion(taskItems, filter))).toEqual([
+      taskItems,
+      [taskItems[2]],
+      [taskItems[0], taskItems[1]],
     ]);
   });
 
@@ -1322,6 +1391,20 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("return activeFilterLabel.value");
   });
 
+  it("uses one cached task response for the map, drawer list, and task-status selection", () => {
+    const statusSelectionSource = extractFunctionSource("selectTaskCompletionFilter");
+
+    expect(indexPageSource).toContain("const taskCompletionFilter = ref<MapTaskCompletionFilter>(");
+    expect(indexPageSource).toContain("DEFAULT_MAP_TASK_COMPLETION_FILTER");
+    expect(indexPageSource).toContain("filterMapShellItemsByTaskCompletion");
+    expect(indexPageSource).toContain("filteredTaskMapPointMarkers");
+    expect(indexPageSource).toContain("uni.showActionSheet");
+    expect(indexPageSource).toContain('@tap="selectTaskCompletionFilter"');
+    expect(indexPageSource).not.toContain('class="filter-option-desc"');
+    expect(statusSelectionSource).not.toContain("refreshMapPoints");
+    expect(statusSelectionSource).toContain("taskCompletionFilter.value");
+  });
+
   it("builds backend point filters from frontend filter keys", () => {
     expect(getMapPointQueryByFilter("emergency_task")).toEqual({
       point_types: "task",
@@ -1340,6 +1423,10 @@ describe("map page shell behavior", () => {
       point_types: "task",
       business_types: "feeding",
       filter_key: "feeding_completed",
+    });
+    expect(getMapPointQueryByFilter("task")).toEqual({
+      point_types: "task",
+      business_types: "feeding",
     });
     expect(getMapPointQueryByFilter("cat")).toEqual({ point_types: "cat" });
     expect(getMapPointQueryByFilter("all")).toEqual({});

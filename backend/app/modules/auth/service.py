@@ -247,9 +247,9 @@ def apply_wechat_binding(
 
     if not agree_wechat_bind:
         raise APIError(
-            code=ErrorCode.WECHAT_BINDING_MISMATCH,
+            code=ErrorCode.WECHAT_BINDING_CONFIRMATION_REQUIRED,
             message="请确认微信绑定后再登录",
-            status_code=403,
+            status_code=400,
         )
 
     user.wechat_openid = openid

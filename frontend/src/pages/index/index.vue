@@ -13,7 +13,7 @@
 
     <view class="map-title">
       <view class="title-row">
-        <text class="title-text">猫协地图</text>
+        <text class="title-text">喵图</text>
         <image class="title-paw" :src="pawIcon" mode="aspectFit" />
       </view>
       <text class="title-subtitle">探索校园 · 守护猫咪</text>
@@ -110,7 +110,6 @@
             />
             <cover-view class="filter-option-copy">
               <cover-view class="filter-option-title">{{ option.label }}</cover-view>
-              <cover-view class="filter-option-desc">{{ option.description }}</cover-view>
             </cover-view>
           </cover-view>
         </cover-view>
@@ -158,7 +157,15 @@
 
       <scroll-view class="drawer-body" scroll-y :show-scrollbar="false">
         <view class="section-head">
-          <text class="section-title">{{ contentSectionTitle }}</text>
+          <view
+            v-if="activeFilter === TASK_MAP_FILTER_KEY && !isSearchMode"
+            class="section-title-trigger"
+            @tap="selectTaskCompletionFilter"
+          >
+            <text class="section-title">{{ contentSectionTitle }}</text>
+            <text class="section-title-arrow">∨</text>
+          </view>
+          <text v-else class="section-title">{{ contentSectionTitle }}</text>
           <text class="section-action">{{ contentSectionAction }}</text>
         </view>
 
@@ -358,6 +365,7 @@ import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 import {
   ALL_MAP_FILTER_KEY,
+  DEFAULT_MAP_TASK_COMPLETION_FILTER,
   HBNU_CAMPUS,
   HBNU_CAMPUS_CORE_BOUNDS,
   MAP_PENDING_NAVIGATION_STORAGE_KEY,
@@ -366,6 +374,7 @@ import {
   NO_MAP_FILTER_OPTION,
   clampLngLatToBounds,
   expandLngLatBounds,
+  filterMapShellItemsByTaskCompletion,
   formatDistance,
   getMarkerDisplayMode,
   getMapFilterLabel,
@@ -380,6 +389,7 @@ import {
   normalizeMapFilterOptions,
   shouldQueryMapScaleFromRegionChange,
   shouldSyncMapScaleFromRegionChange,
+  TASK_MAP_FILTER_KEY,
   type MapFilterOption,
   resolveMapShellItemType,
   type MapFilterKey,
@@ -388,6 +398,7 @@ import {
   type LngLat,
   type MapShellItem,
   type MapShellItemType,
+  type MapTaskCompletionFilter,
   toNativeMapPoint,
 } from "./map-page";
 
@@ -460,6 +471,7 @@ const drawerConfig = ref({
 const filterMenuOpen = ref(false);
 const filterOptions = ref<MapFilterOption[]>([NO_MAP_FILTER_OPTION]);
 const activeFilter = ref<MapFilterKey | null>(null);
+const taskCompletionFilter = ref<MapTaskCompletionFilter>(DEFAULT_MAP_TASK_COMPLETION_FILTER);
 const searchKeyword = ref("");
 const mapLoadState = ref<MapLoadState>("idle");
 const contentLoadState = ref<ContentLoadState>("idle");
@@ -500,6 +512,7 @@ const MAP_FILTER_ICON_SRC: Record<string, string> = {
   landmark: landmarkPointIcon,
   feeding_pending: dailyTaskPendingPointIcon,
   feeding_completed: dailyTaskPointIcon,
+  task: dailyTaskPendingPointIcon,
   filter_none: filterDefaultIcon,
 };
 const MARKER_LONG_PRESS_HIT_METERS = 60;
@@ -523,6 +536,15 @@ let poiResolveRequestSeq = 0;
 
 const isPageVisible = ref(true);
 const isSearchMode = computed(() => searchKeyword.value.trim().length > 0);
+const taskCompletionFilterLabel = computed(() => {
+  if (taskCompletionFilter.value === "all") {
+    return "全部任务";
+  }
+  if (taskCompletionFilter.value === "completed") {
+    return "已完成任务";
+  }
+  return "未完成任务";
+});
 const activeFilterOption = computed(() =>
   activeFilter.value
     ? filterOptions.value.find((option) => option.key === activeFilter.value) || null
@@ -541,12 +563,29 @@ const filterMenuState = computed(() => ({
   open: filterMenuOpen.value,
   rpxRatio: drawerConfig.value.rpxRatio,
 }));
+const filteredTaskMapPointMarkers = computed(() => {
+  if (activeFilter.value !== TASK_MAP_FILTER_KEY || isSearchMode.value) {
+    return mapPointMarkers.value;
+  }
+
+  return mapPointMarkers.value.filter(
+    (marker) =>
+      filterMapShellItemsByTaskCompletion(
+        [mapMarkerToShellItem(marker)],
+        taskCompletionFilter.value,
+      ).length > 0,
+  );
+});
 const visibleItems = computed(() => {
   const items = isSearchMode.value
     ? searchResultItems.value
     : bottomContentItems.value;
+  const taskCompletionItems =
+    activeFilter.value === TASK_MAP_FILTER_KEY && !isSearchMode.value
+      ? filterMapShellItemsByTaskCompletion(items, taskCompletionFilter.value)
+      : items;
 
-  return items.filter((item) => {
+  return taskCompletionItems.filter((item) => {
     return (
       !activeFilter.value ||
       activeFilter.value === ALL_MAP_FILTER_KEY ||
@@ -849,6 +888,9 @@ const contentSectionTitle = computed(() => {
   }
 
   if (activeFilter.value) {
+    if (activeFilter.value === TASK_MAP_FILTER_KEY) {
+      return taskCompletionFilterLabel.value;
+    }
     return activeFilterLabel.value;
   }
 
@@ -1073,7 +1115,7 @@ function getNativeMarkerDisplayMode(marker: MapPointMarkerDto): MapMarkerDisplay
 }
 
 const nativeMarkerSourceMarkers = computed(() => {
-  const markers = mapPointMarkers.value.filter((marker) =>
+  const markers = filteredTaskMapPointMarkers.value.filter((marker) =>
     isFiniteLngLat({ lng: marker.lng, lat: marker.lat }),
   );
   const selectedPoi = selectedPoiMarker.value;
@@ -1209,7 +1251,35 @@ function selectFilter(option: MapFilterOption) {
   selectedSummary.value = null;
   selectedPoiMarker.value = null;
   suppressUnselectedMarkerLabels.value = hadSelectedPoint;
-  activeFilter.value = option.key === NO_MAP_FILTER_KEY ? null : option.key;
+  const nextFilter = option.key === NO_MAP_FILTER_KEY ? null : option.key;
+  if (nextFilter === TASK_MAP_FILTER_KEY) {
+    taskCompletionFilter.value = DEFAULT_MAP_TASK_COMPLETION_FILTER;
+  }
+  activeFilter.value = nextFilter;
+}
+
+function selectTaskCompletionFilter() {
+  if (activeFilter.value !== TASK_MAP_FILTER_KEY || isSearchMode.value) {
+    return;
+  }
+
+  const options: Array<{ label: string; value: MapTaskCompletionFilter }> = [
+    { label: "全部任务", value: "all" },
+    { label: "已完成任务", value: "completed" },
+    { label: "未完成任务", value: "unfinished" },
+  ];
+  uni.showActionSheet({
+    itemList: options.map((option) => option.label),
+    success: ({ tapIndex }) => {
+      const option = options[tapIndex];
+      if (!option) {
+        return;
+      }
+      taskCompletionFilter.value = option.value;
+      selectedSummary.value = null;
+      selectedPoiMarker.value = null;
+    },
+  });
 }
 
 function toggleFilterMenu() {
@@ -3325,6 +3395,18 @@ onBeforeUnmount(() => {
 .section-title {
   color: #111827;
   font-size: 30rpx;
+  font-weight: 900;
+}
+
+.section-title-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.section-title-arrow {
+  color: #6b7280;
+  font-size: 22rpx;
   font-weight: 900;
 }
 

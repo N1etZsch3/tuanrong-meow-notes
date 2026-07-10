@@ -192,7 +192,11 @@ import {
   updateAdminUser,
   type AdminUserDto,
 } from "@/api/admin-users";
-import { uploadUserAvatar } from "@/api/files";
+import {
+  buildUserAvatarContentUrl,
+  resolveUserAvatarContentUrl,
+  uploadUserAvatar,
+} from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
@@ -262,7 +266,7 @@ const currentStatusLabel = computed(() => statusOptions[statusIndex.value]?.labe
 
 function applyUser(user: AdminUserDto) {
   userDetail.value = user;
-  avatarUrl.value = user.profile.avatar_url;
+  avatarUrl.value = resolveUserAvatarContentUrl(user.profile.avatar_url);
   form.nickname = user.profile.nickname || "";
   form.real_name = user.profile.real_name || "";
   form.department = user.profile.department || "";
@@ -341,7 +345,7 @@ async function uploadAvatar(tempPath: string) {
   uni.showLoading({ title: "头像上传中", mask: true });
   try {
     const asset = await uploadUserAvatar(token, tempPath, userId.value || undefined);
-    avatarUrl.value = asset.default_url;
+    avatarUrl.value = buildUserAvatarContentUrl(asset.asset_id);
     uni.hideLoading();
   } catch (error) {
     uni.hideLoading();

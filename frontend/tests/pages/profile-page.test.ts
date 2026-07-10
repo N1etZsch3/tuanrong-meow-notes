@@ -2,16 +2,26 @@ import { describe, expect, it } from "vitest";
 
 import pagesJson from "../../src/pages.json?raw";
 import profileDetailSource from "../../src/pages/profile/detail.vue?raw";
+import profileCompleteSource from "../../src/pages/profile/complete.vue?raw";
 import profileIndexSource from "../../src/pages/profile/index.vue?raw";
 import profileRecordsSource from "../../src/pages/profile/records.vue?raw";
 import profileResetPasswordSource from "../../src/pages/profile/reset-password.vue?raw";
 import profileSettingsSource from "../../src/pages/profile/settings.vue?raw";
+import adminUserDetailSource from "../../src/pages/admin/users/detail.vue?raw";
+import {
+  buildUserAvatarContentUrl,
+  resolveUserAvatarContentUrl,
+} from "../../src/api/files";
 import {
   PROFILE_RECORD_TYPES,
   PROFILE_STAT_ENTRIES,
   getRoleLabel,
   getRolePillClass,
 } from "../../src/pages/profile/profile-page";
+import {
+  createProfileEditSnapshot,
+  hasUnsavedProfileChanges,
+} from "../../src/pages/profile/profile-edit-guard";
 
 function extractCssRule(source: string, selector: string): string {
   const start = source.lastIndexOf(`${selector} {`);
@@ -102,6 +112,54 @@ describe("profile center pages", () => {
     expect(profileDetailSource).toContain("getMyProfile");
     expect(profileDetailSource).toContain("updateMyProfile");
     expect(profileDetailSource).toContain("联系方式");
+  });
+
+  it("requires confirmation before discarding changed profile fields or avatar", () => {
+    const saved = createProfileEditSnapshot({
+      nickname: "小林",
+      department: "宣传部",
+      contact_info: "13800138000",
+      avatar_url: "https://cos.example/avatar-a.jpg",
+    });
+
+    expect(hasUnsavedProfileChanges(saved, { ...saved })).toBe(false);
+    expect(
+      hasUnsavedProfileChanges(saved, { ...saved, nickname: "小林同学" }),
+    ).toBe(true);
+    expect(
+      hasUnsavedProfileChanges(saved, { ...saved, avatar_url: "https://cos.example/avatar-b.jpg" }),
+    ).toBe(true);
+    expect(profileDetailSource).toContain("createProfileEditSnapshot");
+    expect(profileDetailSource).toContain("hasUnsavedProfileChanges");
+    expect(profileDetailSource).toContain("confirmDiscardProfileChanges");
+    expect(profileDetailSource).toContain("修改尚未保存，是否放弃？");
+    expect(profileDetailSource).toContain("uni.navigateBack()");
+  });
+
+  it("uses the public file-content route for newly uploaded avatars", () => {
+    const avatarUrl = buildUserAvatarContentUrl("avatar-asset-1");
+
+    expect(avatarUrl).toContain("/files/assets/avatar-asset-1/content");
+    expect(avatarUrl).toContain("scene=avatar_profile");
+    for (const source of [profileDetailSource, profileCompleteSource, adminUserDetailSource]) {
+      expect(source).toContain("buildUserAvatarContentUrl");
+      expect(source).not.toContain("avatarUrl.value = asset.default_url");
+    }
+  });
+
+  it("routes legacy COS avatar asset URLs through the content endpoint", () => {
+    const assetId = "7e2a085d-9dc9-46e9-aa61-d18ddcd55c15";
+    const legacyCosUrl = `https://cos.example/catmap/dev/user/member/${assetId}/avatar_lg.jpg`;
+
+    expect(resolveUserAvatarContentUrl(legacyCosUrl)).toBe(
+      buildUserAvatarContentUrl(assetId),
+    );
+    expect(resolveUserAvatarContentUrl("/uploads/legacy-avatar.jpg")).toBe(
+      "/uploads/legacy-avatar.jpg",
+    );
+    for (const source of [profileDetailSource, profileIndexSource, adminUserDetailSource]) {
+      expect(source).toContain("resolveUserAvatarContentUrl");
+    }
   });
 
   it("routes account settings to a dedicated settings page with logout and reset password actions", () => {

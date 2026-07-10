@@ -77,10 +77,12 @@
 
 **Files:**
 - Modify: `backend/tests/test_files_api.py` 或 `backend/tests/test_admin_users_api.py`
+- Modify: `frontend/src/api/files.ts`、三个头像上传入口
+- Test: `frontend/tests/pages/profile-page.test.ts`
 
-1. 写失败的端到端契约测试：成员上传 `user_avatar` 并保存 `avatar_url` 后，另一具管理员身份读取成员资料时得到同一持久 URL。
-2. 运行该测试，确认当前实现通过或明确暴露断点；只有失败时才在对应生产代码做最小修复。
-3. 运行文件与管理员资料的相关测试，确认通过。
+1. 写失败的端到端契约测试：成员上传 `user_avatar` 并保存内容路由 `avatar_url` 后，另一具管理员身份读取成员资料并能加载图片内容。
+2. 验证裸 COS URL 在私有读策略下不能作为跨账号展示地址后，新增统一内容路由构造函数，并让资料编辑、资料初始化、管理员成员编辑三处入口保存该 URL；展示层同时将可识别的旧 COS 用户头像 URL 转换为该路由。
+3. 运行文件、管理员资料与前端头像入口的相关测试，确认通过。
 
 ### Task 7: 文档、完整验证和进度记录
 

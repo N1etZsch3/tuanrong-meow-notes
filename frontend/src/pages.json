@@ -32,7 +32,7 @@
 			"path": "pages/index/index",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTitleText": "猫协地图"
+				"navigationBarTitleText": "喵图"
 			}
 		},
 		{
@@ -109,7 +109,7 @@
 			"path": "pages/profile/index",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTitleText": "我的"
+				"navigationBarTitleText": "喵的"
 			}
 		},
 		{
@@ -234,7 +234,7 @@
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
-		"navigationBarTitleText": "猫协地图",
+		"navigationBarTitleText": "喵图",
 		"navigationBarBackgroundColor": "#F6FAF0",
 		"backgroundColor": "#F6FAF0"
 	},
@@ -246,7 +246,7 @@
 		"list": [
 			{
 				"pagePath": "pages/index/index",
-				"text": "地图"
+				"text": "喵图"
 			},
 			{
 				"pagePath": "pages/cats/index",
@@ -258,7 +258,7 @@
 			},
 			{
 				"pagePath": "pages/profile/index",
-				"text": "我的"
+				"text": "喵的"
 			}
 		]
 	}

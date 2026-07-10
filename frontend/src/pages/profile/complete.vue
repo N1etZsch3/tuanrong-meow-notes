@@ -104,7 +104,11 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 
-import { uploadUserAvatar } from "@/api/files";
+import {
+  buildUserAvatarContentUrl,
+  resolveUserAvatarContentUrl,
+  uploadUserAvatar,
+} from "@/api/files";
 import { HOME_ROUTE, LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
@@ -139,7 +143,9 @@ const departmentIndex = computed(() => {
   return index >= 0 ? index : 0;
 });
 const avatarLoadFailed = ref(false);
-const avatarPreview = computed(() => avatarUrl.value || userStore.currentUser?.avatar_url || defaultAvatar);
+const avatarPreview = computed(
+  () => resolveUserAvatarContentUrl(avatarUrl.value || userStore.currentUser?.avatar_url) || defaultAvatar,
+);
 const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : avatarPreview.value));
 
 watch(avatarPreview, () => {
@@ -180,7 +186,7 @@ async function uploadAvatar(tempPath: string) {
   uni.showLoading({ title: "头像上传中", mask: true });
   try {
     const asset = await uploadUserAvatar(userStore.accessToken, tempPath, userStore.currentUser?.id);
-    avatarUrl.value = asset.default_url;
+    avatarUrl.value = buildUserAvatarContentUrl(asset.asset_id);
     uni.hideLoading();
   } catch (error) {
     uni.hideLoading();

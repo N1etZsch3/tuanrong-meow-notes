@@ -196,6 +196,63 @@ def test_upload_user_avatar_allows_incomplete_profile_and_creates_variants(api_c
     assert {variant.variant_key for variant in variants} == {"avatar_sm", "avatar_md", "avatar_lg"}
 
 
+def test_saved_user_avatar_content_is_available_to_other_users(api_client, db_session):
+    storage = install_fake_storage(api_client)
+    member = create_user(
+        db_session,
+        student_no="trmx-avatar-member",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    admin = create_user(
+        db_session,
+        student_no="trmx-avatar-admin",
+        password="Password123",
+        role="admin",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    member_token = create_token(member)
+    admin_token = create_token(admin)
+
+    upload_response = api_client.post(
+        "/api/v1/files/images",
+        headers=auth_headers(member_token),
+        data={
+            "usage_type": "user_avatar",
+            "owner_type": "user",
+            "owner_id": str(member.id),
+            "visibility": "public",
+        },
+        files={"file": ("avatar.png", image_bytes(fmt="PNG"), "image/png")},
+    )
+
+    assert upload_response.status_code == 200
+    asset_id = upload_response.json()["data"]["asset_id"]
+    avatar_content_url = f"/api/v1/files/assets/{asset_id}/content?scene=avatar_profile"
+
+    save_response = api_client.patch(
+        "/api/v1/profile/me",
+        headers=auth_headers(member_token),
+        json={"avatar_url": avatar_content_url},
+    )
+    assert save_response.status_code == 200
+
+    admin_response = api_client.get(
+        f"/api/v1/admin/users/{member.id}",
+        headers=auth_headers(admin_token),
+    )
+    assert admin_response.status_code == 200
+    assert admin_response.json()["data"]["profile"]["avatar_url"] == avatar_content_url
+
+    content_response = api_client.get(avatar_content_url)
+    assert content_response.status_code == 200
+    assert content_response.headers["content-type"].startswith("image/jpeg")
+    assert content_response.content
+    assert storage.objects
+
+
 def test_upload_business_image_requires_completed_profile(api_client, db_session):
     install_fake_storage(api_client)
     user = create_user(

@@ -46,6 +46,22 @@ export function buildFileAssetContentUrl(
   return buildRequestUrl(appEnv.apiBaseUrl, path);
 }
 
+export function buildUserAvatarContentUrl(assetId: string): string {
+  return buildFileAssetContentUrl(assetId, "avatar_profile");
+}
+
+const LEGACY_USER_AVATAR_ASSET_ID_PATTERN =
+  /\/catmap\/[^/]+\/user\/[^/]+\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i;
+
+export function resolveUserAvatarContentUrl(avatarUrl: string | null | undefined): string | null {
+  if (!avatarUrl) {
+    return null;
+  }
+
+  const assetId = avatarUrl.match(LEGACY_USER_AVATAR_ASSET_ID_PATTERN)?.[1];
+  return assetId ? buildUserAvatarContentUrl(assetId) : avatarUrl;
+}
+
 function compactFormData(data: UploadImageOptions): Record<string, string> {
   return Object.fromEntries(
     Object.entries(data).filter(([, value]) => value !== undefined && value !== ""),

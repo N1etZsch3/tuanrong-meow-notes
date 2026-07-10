@@ -6,6 +6,7 @@ import appSource from "../../src/App.vue?raw";
 import filterMenuWxsSource from "../../src/pages/index/filter-menu.wxs?raw";
 import indexPageSource from "../../src/pages/index/index.vue?raw";
 import mapPageSource from "../../src/pages/index/map-page.ts?raw";
+import shimeUniSource from "../../src/shime-uni.d.ts?raw";
 import userLocationServiceSource from "../../src/services/user-location.ts?raw";
 import {
   ALL_MAP_FILTER_KEY,
@@ -13,11 +14,15 @@ import {
   NO_MAP_FILTER_KEY,
   clampLngLatToBounds,
   expandLngLatBounds,
+  filterMapShellItemsByTaskCompletion,
   filterCampusExternalPoiResults,
   getMapPointQueryByFilter,
+  getMarkerBubbleVisibility,
   getMarkerDisplayMode,
+  getMapFocusTargetScale,
   getMapFilterLabel,
   isFiniteLngLat,
+  isLngLatInsideViewport,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
   mapSearchResultToShellItem,
@@ -26,8 +31,17 @@ import {
   shouldSyncMapScaleFromRegionChange,
   shouldQueryMapScaleFromRegionChange,
   toNativeMapPoint,
+  type MapTaskCompletionFilter,
   type MapShellItem,
 } from "@/pages/index/map-page";
+
+describe("map focus scale", () => {
+  it("only raises the map focus scale when it is below the minimum", () => {
+    expect(getMapFocusTargetScale(16, 18)).toBe(18);
+    expect(getMapFocusTargetScale(18, 18)).toBe(18);
+    expect(getMapFocusTargetScale(19.5, 18)).toBe(19.5);
+  });
+});
 
 const shellItems: MapShellItem[] = [
   {
@@ -148,7 +162,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("getMapPointQueryByFilter(activeFilter.value");
   });
 
-  it("selects marker display modes from zoom while keeping the selected marker labeled", () => {
+  it("keeps native marker titles exclusive to the selected marker", () => {
     expect(
       getMarkerDisplayMode({
         zoom: 17.8,
@@ -166,7 +180,7 @@ describe("map page shell behavior", () => {
         labelMinZoom: 16,
         previewMinZoom: 18,
       }),
-    ).toBe("label");
+    ).toBe("icon");
     expect(
       getMarkerDisplayMode({
         zoom: 19,
@@ -175,7 +189,7 @@ describe("map page shell behavior", () => {
         labelMinZoom: 16,
         previewMinZoom: 18,
       }),
-    ).toBe("label");
+    ).toBe("icon");
     expect(
       getMarkerDisplayMode({
         zoom: 17.9,
@@ -204,7 +218,7 @@ describe("map page shell behavior", () => {
         labelMinZoom: 19,
         previewMinZoom: 19,
       }),
-    ).toBe("label");
+    ).toBe("icon");
     expect(
       getMarkerDisplayMode({
         zoom: 19,
@@ -213,7 +227,97 @@ describe("map page shell behavior", () => {
         labelMinZoom: 19,
         previewMinZoom: 19,
       }),
-    ).toBe("label");
+    ).toBe("icon");
+  });
+
+  it("shows marker bubbles only for a stable sparse marker viewport", () => {
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 17.9,
+        stable: true,
+        filterReady: true,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 1,
+        previousVisible: false,
+      }),
+    ).toBe(false);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: false,
+        filterReady: true,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 1,
+        previousVisible: false,
+      }),
+    ).toBe(false);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: true,
+        filterReady: false,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 1,
+        previousVisible: false,
+      }),
+    ).toBe(false);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: true,
+        filterReady: true,
+        hasActiveMarkerFilter: false,
+        visibleMarkerCount: 1,
+        previousVisible: true,
+      }),
+    ).toBe(false);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: true,
+        filterReady: true,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 6,
+        previousVisible: false,
+      }),
+    ).toBe(true);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: true,
+        filterReady: true,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 8,
+        previousVisible: true,
+      }),
+    ).toBe(false);
+    expect(
+      getMarkerBubbleVisibility({
+        zoom: 18,
+        stable: true,
+        filterReady: true,
+        hasActiveMarkerFilter: true,
+        visibleMarkerCount: 7,
+        previousVisible: true,
+      }),
+    ).toBe(true);
+  });
+
+  it("uses only the current native map viewport when counting marker bubbles", () => {
+    const viewport = {
+      southwest: { lng: 115.06, lat: 30.22 },
+      northeast: { lng: 115.07, lat: 30.23 },
+    };
+
+    expect(
+      isLngLatInsideViewport({ lng: 115.06, lat: 30.22 }, viewport),
+    ).toBe(true);
+    expect(
+      isLngLatInsideViewport({ lng: 115.0701, lat: 30.23 }, viewport),
+    ).toBe(false);
+    expect(
+      isLngLatInsideViewport({ lng: 115.065, lat: 30.2301 }, viewport),
+    ).toBe(false);
   });
 
   it("keeps drawer state native-map friendly without missing WXS callbacks", () => {
@@ -222,6 +326,31 @@ describe("map page shell behavior", () => {
     expect(drawerWxsSource).not.toContain("callMethod('onDrawerProgressChange'");
     expect(indexPageSource).not.toContain("scheduleMapResizeAfterDrawerChange");
     expect(indexPageSource).not.toContain("amapInstance.resize");
+  });
+
+  it("opens a collapsed drawer to the detail snap point when a point detail is selected", () => {
+    const ensureDetailSource = drawerWxsSource.slice(
+      drawerWxsSource.indexOf("function ensureDetailVisible"),
+      drawerWxsSource.indexOf("function touchstart"),
+    );
+    const clearSource = extractFunctionSource("clearSelectedMapPointState");
+
+    expect(indexPageSource).toContain(':drawerDetailRequest="drawerDetailRequest"');
+    expect(indexPageSource).toContain(
+      ':change:drawerDetailRequest="drawer.ensureDetailVisible"',
+    );
+    expect(indexPageSource).toContain("watch(selectedSummary");
+    expect(indexPageSource).toContain("drawerDetailRequest.value += 1");
+    expect(drawerWxsSource).toContain("var DETAIL_DRAWER_PROGRESS = 2");
+    expect(ensureDetailSource).toContain("currentProgress !== 0");
+    expect(ensureDetailSource).toContain("isDragging");
+    expect(ensureDetailSource).toContain("currentProgress = DETAIL_DRAWER_PROGRESS");
+    expect(ensureDetailSource).toContain(
+      "applyFinalProgress(currentProgress, ownerInstance)",
+    );
+    expect(drawerWxsSource).toContain("ensureDetailVisible: ensureDetailVisible");
+    expect(shimeUniSource).toContain("ensureDetailVisible: (...args: unknown[]) => void");
+    expect(clearSource).not.toContain("drawerDetailRequest");
   });
 
   it("guards native map region changes while the drawer is resizing the viewport", () => {
@@ -302,6 +431,26 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("const DRAWER_RESIZE_SETTLE_MS = 520");
   });
 
+  it("throttles WXS drawer progress and slows only the drawer snap", () => {
+    const touchMoveSource = drawerWxsSource.slice(
+      drawerWxsSource.indexOf("function touchmove"),
+      drawerWxsSource.indexOf("function touchend"),
+    );
+    const applyProgressSource = drawerWxsSource.slice(
+      drawerWxsSource.indexOf("function applyProgress"),
+      drawerWxsSource.indexOf("function applyFinalProgress"),
+    );
+
+    expect(drawerWxsSource).toContain("var DRAG_PROGRESS_DISTANCE_RPX = 560");
+    expect(drawerWxsSource).toContain("var MIN_PROGRESS_DELTA = 0.002");
+    expect(drawerWxsSource).toContain("var lastAppliedProgress = -1");
+    expect(drawerWxsSource).toContain("all 0.42s cubic-bezier");
+    expect(touchMoveSource).toContain("px(DRAG_PROGRESS_DISTANCE_RPX)");
+    expect(applyProgressSource).toContain("Math.abs(progress - lastAppliedProgress) < MIN_PROGRESS_DELTA");
+    expect(drawerWxsSource).toContain("var MAP_SNAP_TRANSITION = 'none'");
+    expect(drawerWxsSource).toContain("var NATIVE_MAP_SNAP_TRANSITION = 'none'");
+  });
+
   it("does not call missing Vue methods from the filter menu WXS module", () => {
     expect(indexPageSource).toContain('@tap="toggleFilterMenu"');
     expect(indexPageSource).not.toContain('@tap="filterMenu.toggle"');
@@ -309,10 +458,27 @@ describe("map page shell behavior", () => {
     expect(filterMenuWxsSource).not.toContain("setFilterMenuOpen");
   });
 
-  it("lets the drawer expand near full screen while keeping a top gap", () => {
+  it("keeps the filter trigger width stable while the menu expands downward", () => {
+    const filterMenuRule = extractCssRule(indexPageSource, ".filter-menu");
+
+    expect(filterMenuWxsSource).toContain("var chipWidth = 224");
+    expect(filterMenuWxsSource).toContain("var hitWidth = 244");
+    expect(filterMenuWxsSource).toContain("translateY(0px)");
+    expect(filterMenuWxsSource).toContain("translateY(' + px(-8) + 'px)");
+    expect(filterMenuWxsSource).not.toContain("open ? 336 : 224");
+    expect(filterMenuWxsSource).not.toContain("open ? 360 : 244");
+    expect(filterMenuRule).toContain("width: 224rpx");
+  });
+
+  it("sizes the drawer against screen height and keeps the tab bar clearance", () => {
     expect(drawerWxsSource).toContain("MAX_DRAWER_PROGRESS");
-    expect(drawerWxsSource).toContain("MAX_DRAWER_TOP_GAP_RPX");
-    expect(drawerWxsSource).toContain("config.windowHeight / config.rpxRatio - MAX_DRAWER_TOP_GAP_RPX");
+    expect(drawerWxsSource).toContain("MAX_DRAWER_TOP_GAP_RATIO");
+    expect(drawerWxsSource).toContain("DRAWER_BOTTOM_SAFE_RPX");
+    expect(drawerWxsSource).toContain("var screenHeightRpx = config.windowHeight / config.rpxRatio;");
+    expect(drawerWxsSource).toContain(
+      "var maxDrawerH = screenHeightRpx - maxDrawerTopGap - DRAWER_BOTTOM_SAFE_RPX;",
+    );
+    expect(drawerWxsSource).toContain("drawerBottom = DRAWER_BOTTOM_SAFE_RPX;");
     expect(drawerWxsSource).toContain("clamp(progress, 0, MAX_DRAWER_PROGRESS)");
   });
 
@@ -472,17 +638,14 @@ describe("map page shell behavior", () => {
     expect(clearSource).not.toContain("clearNativeRoute()");
   });
 
-  it("keeps unselected marker labels suppressed when filter selection clears a selected point", () => {
+  it("resets viewport bubbles instead of carrying selected-marker state across filters", () => {
     const filterSource = extractFunctionSource("selectFilter");
 
-    expect(filterSource).toContain(
-      "const hadSelectedPoint = Boolean(selectedSummary.value || selectedPoiMarker.value);",
-    );
     expect(filterSource).toContain("cancelPointSummaryRequest()");
     expect(filterSource).toContain("selectedSummary.value = null");
     expect(filterSource).toContain("selectedPoiMarker.value = null");
-    expect(filterSource).toContain("suppressUnselectedMarkerLabels.value = hadSelectedPoint");
-    expect(filterSource).not.toContain("suppressUnselectedMarkerLabels.value = false");
+    expect(filterSource).toContain("clearViewportMarkerBubbles()");
+    expect(indexPageSource).not.toContain("suppressUnselectedMarkerLabels");
   });
 
   it("cancels stale point summary loads when a blank map tap clears selection", () => {
@@ -642,8 +805,7 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain(':scale="mapScale"');
     expect(indexPageSource).toContain(':show-location="Boolean(userLocation)"');
     expect(locateMeSource).toContain("getCachedUserLocation()");
-    expect(locateMeSource).toContain("setControlledMapScale(getUserLocationFocusScale())");
-    expect(locateMeSource).toContain("centerMapToPoint(point, { smooth: true })");
+    expect(locateMeSource).toContain("focusMapToPoint(point)");
     expect(locateMeSource).not.toContain("getLocationWithFallback");
     expect(locateMeSource).not.toContain("getWechatMiniProgramLocation");
     expect(locateMeSource).not.toContain("requestUserLocation");
@@ -721,16 +883,27 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("lastResolvedPoiTapKey.value = null");
     expect(locateMeSource).toContain("clearNativePoiSelection()");
     expect(locateMeSource).toContain("suppressNativePoiTaps()");
-    expect(locateMeSource).toContain("centerMapToPoint(point, { smooth: true })");
+    expect(locateMeSource).toContain("focusMapToPoint(point)");
   });
 
-  it("uses native marker callouts for title labels without slot custom callout fan-out", () => {
+  it("renders sparse viewport marker bubbles separately from native selected-marker callouts", () => {
     const regionChangeSource = extractFunctionSource("handleMapRegionChange");
     const displayModeSource = extractFunctionSource("getNativeMarkerDisplayMode");
 
     expect(indexPageSource).not.toContain('slot="callout"');
     expect(indexPageSource).not.toContain(":marker-id=\"callout.markerId\"");
     expect(indexPageSource).not.toContain("nativeMarkerCallouts");
+    expect(indexPageSource).toContain('v-for="bubble in viewportMarkerBubbles"');
+    expect(indexPageSource).toContain('class="marker-bubble"');
+    expect(indexPageSource).toContain("function refreshViewportMarkerBubbles");
+    expect(indexPageSource).toContain("mapContext.getRegion");
+    expect(indexPageSource).toContain("mapContext.toScreenLocation");
+    expect(indexPageSource).toContain("getMarkerBubbleVisibility");
+    expect(indexPageSource).toContain("isLngLatInsideViewport");
+    expect(indexPageSource).toContain(
+      "marker.point_id !== selectedSummary.value?.point_id",
+    );
+    expect(indexPageSource).toContain("clearViewportMarkerBubbles()");
     expect(indexPageSource).toContain("getNativeMarkerDisplayMode(marker)");
     expect(indexPageSource).toContain("buildNativeMarkerTitleCallout(marker.name)");
     expect(indexPageSource).not.toContain("customCallout");
@@ -739,7 +912,10 @@ describe("map page shell behavior", () => {
     expect(regionChangeSource).toContain("shouldSyncMapScaleFromRegionChange(detail)");
     expect(regionChangeSource).toContain("recordNativeMapScale(Number(detail.scale))");
     expect(regionChangeSource).toContain("shouldQueryMapScaleFromRegionChange(detail)");
-    expect(regionChangeSource).toContain("syncMapScaleFromContext()");
+    expect(regionChangeSource).toContain(
+      "syncMapScaleFromContext(refreshViewportMarkerBubbles)",
+    );
+    expect(regionChangeSource).toContain("refreshViewportMarkerBubbles()");
     expect(displayModeSource).toContain(
       "const selectedPointId = selectedSummary.value?.point_id;",
     );
@@ -748,17 +924,24 @@ describe("map page shell behavior", () => {
     );
   });
 
-  it("uses animated focused map movement for poi and marker recentering", () => {
+  it("uses one native movement for marker poi and location focus", () => {
+    const nativeMoveSource = extractFunctionSource("moveNativeMapToPoint");
+    const focusSource = extractFunctionSource("focusMapToPoint");
     const poiTapSource = extractFunctionSource("handleNativePoiTap");
     const markerTapSource = extractFunctionSource("handleNativeMarkerTap");
+    const locateMeSource = extractFunctionSource("locateMe");
 
     expect(indexPageSource).toContain("const MAP_POINT_FOCUS_SCALE");
-    expect(indexPageSource).toContain("function animateMapCenterToPoint");
-    expect(indexPageSource).toContain("function focusMapToPoint");
-    expect(indexPageSource).toContain("setControlledMapScale(getMapPointFocusScale())");
+    expect(nativeMoveSource).toContain("mapContext.moveToLocation");
+    expect(nativeMoveSource).toContain("longitude: nextCenter.lng");
+    expect(nativeMoveSource).toContain("latitude: nextCenter.lat");
+    expect(nativeMoveSource).toContain("requestId !== mapCenterMoveRequestId");
+    expect(focusSource).toContain("getMapFocusTargetScale");
     expect(poiTapSource).toContain("focusMapToPoint({ lng: summary.lng, lat: summary.lat })");
     expect(markerTapSource).toContain("focusMapToPoint({ lng: marker.lng, lat: marker.lat })");
-    expect(indexPageSource).not.toContain("moveToLocation({");
+    expect(locateMeSource).toContain("focusMapToPoint(point)");
+    expect(indexPageSource).not.toContain("MAP_CENTER_ANIMATION_STEPS");
+    expect(indexPageSource).not.toContain("animateMapCenterToPoint");
   });
 
   it("looks up native marker taps from the rendered marker id snapshot", () => {
@@ -780,9 +963,9 @@ describe("map page shell behavior", () => {
     const regionChangeSource = extractFunctionSource("handleMapRegionChange");
     const locateMeSource = extractFunctionSource("locateMe");
 
-    expect(regionChangeSource).toContain("stopMapCenterAnimation()");
+    expect(regionChangeSource).toContain("invalidateMapCenterMovement()");
     expect(regionChangeSource).toContain("syncMapCenterFromNative(nextCenter)");
-    expect(locateMeSource).toContain("centerMapToPoint(point, { smooth: true })");
+    expect(locateMeSource).toContain("focusMapToPoint(point)");
     expect(indexPageSource).toContain(
       "const point = userLocation.value || getCachedUserLocation()",
     );
@@ -809,7 +992,9 @@ describe("map page shell behavior", () => {
     expect(regionChangeSource).toContain("shouldSyncMapScaleFromRegionChange(detail)");
     expect(regionChangeSource).toContain("recordNativeMapScale(Number(detail.scale))");
     expect(regionChangeSource).toContain("shouldQueryMapScaleFromRegionChange(detail)");
-    expect(regionChangeSource).toContain("syncMapScaleFromContext()");
+    expect(regionChangeSource).toContain(
+      "syncMapScaleFromContext(refreshViewportMarkerBubbles)",
+    );
     expect(regionChangeSource).not.toContain("mapScale.value = detail.scale");
     expect(regionChangeSource).not.toContain("setControlledMapScale(Number(detail.scale))");
     expect(regionChangeSource).not.toContain("syncMapScaleFromNative(Number(detail.scale))");
@@ -1098,25 +1283,48 @@ describe("map page shell behavior", () => {
   it("keeps a readable label for each map filter", () => {
     expect(getMapFilterLabel(ALL_MAP_FILTER_KEY)).toBe("全部标记");
     expect(getMapFilterLabel("none")).toBe("无标记");
+    expect(getMapFilterLabel("task")).toBe("任务");
     expect(getMapFilterLabel("cat")).toBe("猫咪点");
     expect(getMapFilterLabel("unknown")).toBe("全部标记");
   });
 
-  it("adds all marker filter when two or more marker categories exist", () => {
+  it("uses the requested short map title", () => {
+    expect(indexPageSource).toContain("喵图");
+    expect(indexPageSource).not.toContain("猫协地图");
+  });
+
+  it("aggregates completed and unfinished feeding options into one task filter", () => {
     const twoOptions = normalizeMapFilterOptions([
-      { key: "feeding_pending", label: "未完成任务", point_types: ["task"] },
-      { key: "feeding_completed", label: "完成任务", point_types: ["task"] },
+      {
+        key: "feeding_pending",
+        label: "未完成任务",
+        description: "尚未完成的暑假投喂点",
+        point_types: ["task"],
+        business_types: ["feeding"],
+      },
+      {
+        key: "feeding_completed",
+        label: "完成任务",
+        description: "已完成投喂的任务点",
+        point_types: ["task"],
+        business_types: ["feeding"],
+      },
     ]);
 
     expect(twoOptions.map((option) => option.key)).toEqual([
       NO_MAP_FILTER_KEY,
-      ALL_MAP_FILTER_KEY,
-      "feeding_pending",
-      "feeding_completed",
+      "task",
     ]);
+    expect(twoOptions[1]).toMatchObject({
+      label: "任务",
+      description: "",
+      point_types: ["task"],
+      business_types: ["feeding"],
+    });
 
     const threeOptions = normalizeMapFilterOptions([
-      { key: "task", label: "任务", point_types: ["task"] },
+      { key: "feeding_pending", label: "未完成任务", point_types: ["task"] },
+      { key: "feeding_completed", label: "完成任务", point_types: ["task"] },
       { key: "cat", label: "猫咪点", point_types: ["cat"] },
       { key: "supply", label: "物资点", point_types: ["supply"] },
     ]);
@@ -1127,6 +1335,45 @@ describe("map page shell behavior", () => {
       "task",
       "cat",
       "supply",
+    ]);
+  });
+
+  it("filters one cached task collection by a single selected completion state", () => {
+    const taskItems: MapShellItem[] = [
+      {
+        id: "task-not-started",
+        type: "daily_task",
+        title: "待投喂",
+        subtitle: null,
+        description: null,
+        distance_meters: null,
+        status_key: "not_started",
+      },
+      {
+        id: "task-in-progress",
+        type: "daily_task",
+        title: "进行中",
+        subtitle: null,
+        description: null,
+        distance_meters: null,
+        status_key: "in_progress",
+      },
+      {
+        id: "task-completed",
+        type: "daily_task",
+        title: "已完成",
+        subtitle: null,
+        description: null,
+        distance_meters: null,
+        status_key: "completed",
+      },
+    ];
+
+    const filters: MapTaskCompletionFilter[] = ["all", "completed", "unfinished"];
+    expect(filters.map((filter) => filterMapShellItemsByTaskCompletion(taskItems, filter))).toEqual([
+      taskItems,
+      [taskItems[2]],
+      [taskItems[0], taskItems[1]],
     ]);
   });
 
@@ -1322,6 +1569,20 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).toContain("return activeFilterLabel.value");
   });
 
+  it("uses one cached task response for the map, drawer list, and task-status selection", () => {
+    const statusSelectionSource = extractFunctionSource("selectTaskCompletionFilter");
+
+    expect(indexPageSource).toContain("const taskCompletionFilter = ref<MapTaskCompletionFilter>(");
+    expect(indexPageSource).toContain("DEFAULT_MAP_TASK_COMPLETION_FILTER");
+    expect(indexPageSource).toContain("filterMapShellItemsByTaskCompletion");
+    expect(indexPageSource).toContain("filteredTaskMapPointMarkers");
+    expect(indexPageSource).toContain("uni.showActionSheet");
+    expect(indexPageSource).toContain('@tap="selectTaskCompletionFilter"');
+    expect(indexPageSource).not.toContain('class="filter-option-desc"');
+    expect(statusSelectionSource).not.toContain("refreshMapPoints");
+    expect(statusSelectionSource).toContain("taskCompletionFilter.value");
+  });
+
   it("builds backend point filters from frontend filter keys", () => {
     expect(getMapPointQueryByFilter("emergency_task")).toEqual({
       point_types: "task",
@@ -1340,6 +1601,10 @@ describe("map page shell behavior", () => {
       point_types: "task",
       business_types: "feeding",
       filter_key: "feeding_completed",
+    });
+    expect(getMapPointQueryByFilter("task")).toEqual({
+      point_types: "task",
+      business_types: "feeding",
     });
     expect(getMapPointQueryByFilter("cat")).toEqual({ point_types: "cat" });
     expect(getMapPointQueryByFilter("all")).toEqual({});

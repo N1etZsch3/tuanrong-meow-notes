@@ -16,7 +16,7 @@ export interface AppTabItem {
 export const APP_TAB_ITEMS: readonly AppTabItem[] = [
   {
     key: "map",
-    label: "地图",
+    label: "喵图",
     route: "/pages/index/index",
     icon: mapIcon,
     preserveActiveIconColor: true,
@@ -35,7 +35,7 @@ export const APP_TAB_ITEMS: readonly AppTabItem[] = [
   },
   {
     key: "profile",
-    label: "我的",
+    label: "喵的",
     route: "/pages/profile/index",
     icon: profileIcon,
   },

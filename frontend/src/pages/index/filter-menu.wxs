@@ -20,8 +20,8 @@ var MENU_TRANSITION = 'opacity 0.18s ease, transform 0.18s ease';
 var ARROW_TRANSITION = 'transform 0.18s ease';
 
 function apply(open, ownerInstance) {
-  var chipWidth = open ? 336 : 224;
-  var hitWidth = open ? 360 : 244;
+  var chipWidth = 224;
+  var hitWidth = 244;
   var menuOpacity = open ? 1 : 0;
   var menuTransform = open ? 'translateY(0px)' : 'translateY(' + px(-8) + 'px)';
   var arrowTransform = open ? 'rotate(0deg)' : 'rotate(180deg)';

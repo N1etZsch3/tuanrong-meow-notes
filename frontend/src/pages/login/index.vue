@@ -154,8 +154,9 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref, watch } from "vue";
 
-import { getCaptcha } from "@/api/auth";
+import { getCaptcha, type LoginResponse } from "@/api/auth";
 import { CHANGE_PASSWORD_ROUTE, HOME_ROUTE, PROFILE_SETUP_ROUTE } from "@/services/app-startup";
+import { ApiBusinessError } from "@/services/request";
 import { requestWechatLoginCode } from "@/services/wechat-auth";
 import { useUserStore } from "@/stores/user";
 import {
@@ -191,6 +192,7 @@ const passwordHidden = ref(true);
 const captchaImage = ref("");
 const isLoading = ref(false);
 const isConfirmingBinding = ref(false);
+const WECHAT_BINDING_CONFIRMATION_REQUIRED = 40006;
 const showModal = ref(false);
 const modalTitle = ref("");
 
@@ -258,59 +260,92 @@ function confirmWechatBindingLogin(): Promise<boolean> {
   });
 }
 
+async function attemptPasswordLogin(bindWechat: boolean): Promise<LoginResponse | null> {
+  const wechatCode = await requestWechatLoginCode();
+  if (!wechatCode) {
+    uni.showToast({ title: "暂时无法获取微信登录凭证，请重试", icon: "none" });
+    return null;
+  }
+
+  return userStore.loginWithPassword({
+    meow_no: form.meow_no,
+    password: form.password,
+    captcha_id: form.captcha_id,
+    captcha_code: form.captcha_code,
+    agree_terms: form.agreed,
+    wechat_code: wechatCode,
+    agree_wechat_bind: bindWechat,
+  });
+}
+
+function completePasswordLogin(result: LoginResponse) {
+  rememberAgreementAcceptedForAccounts([
+    form.meow_no,
+    result.user.meow_no,
+    result.user.student_no,
+  ]);
+
+  if (result.next_action === "change_password" || result.must_change_password) {
+    uni.showToast({ title: "请先修改初始密码", icon: "none" });
+    uni.redirectTo({ url: CHANGE_PASSWORD_ROUTE });
+    return;
+  }
+
+  if (result.next_action === "complete_profile") {
+    uni.redirectTo({ url: PROFILE_SETUP_ROUTE });
+    return;
+  }
+
+  uni.reLaunch({ url: HOME_ROUTE });
+}
+
+async function handleLoginFailure(error: unknown) {
+  const message = error instanceof Error ? error.message : "登录失败";
+  uni.showToast({ title: message, icon: "none" });
+  await loadCaptcha();
+}
+
 async function handleLogin() {
   if (isLoading.value || isConfirmingBinding.value || !validateForm()) {
     return;
   }
 
-  isConfirmingBinding.value = true;
-  const confirmed = await confirmWechatBindingLogin();
-  isConfirmingBinding.value = false;
-  if (!confirmed) {
-    return;
-  }
-
   isLoading.value = true;
   try {
-    const wechatCode = await requestWechatLoginCode();
-    if (!wechatCode) {
-      uni.showToast({ title: "暂时无法获取微信登录凭证，请重试", icon: "none" });
-      return;
+    let result: LoginResponse | null;
+    try {
+      result = await attemptPasswordLogin(false);
+    } catch (error) {
+      if (
+        !(error instanceof ApiBusinessError && error.code === WECHAT_BINDING_CONFIRMATION_REQUIRED)
+      ) {
+        await handleLoginFailure(error);
+        return;
+      }
+
+      isLoading.value = false;
+      isConfirmingBinding.value = true;
+      const confirmed = await confirmWechatBindingLogin();
+      isConfirmingBinding.value = false;
+      if (!confirmed) {
+        return;
+      }
+
+      isLoading.value = true;
+      try {
+        result = await attemptPasswordLogin(true);
+      } catch (retryError) {
+        await handleLoginFailure(retryError);
+        return;
+      }
     }
 
-    const result = await userStore.loginWithPassword({
-      meow_no: form.meow_no,
-      password: form.password,
-      captcha_id: form.captcha_id,
-      captcha_code: form.captcha_code,
-      agree_terms: form.agreed,
-      wechat_code: wechatCode,
-      agree_wechat_bind: true,
-    });
-    rememberAgreementAcceptedForAccounts([
-      form.meow_no,
-      result.user.meow_no,
-      result.user.student_no,
-    ]);
-
-    if (result.next_action === "change_password" || result.must_change_password) {
-      uni.showToast({ title: "请先修改初始密码", icon: "none" });
-      uni.redirectTo({ url: CHANGE_PASSWORD_ROUTE });
-      return;
+    if (result) {
+      completePasswordLogin(result);
     }
-
-    if (result.next_action === "complete_profile") {
-      uni.redirectTo({ url: PROFILE_SETUP_ROUTE });
-      return;
-    }
-
-    uni.reLaunch({ url: HOME_ROUTE });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "登录失败";
-    uni.showToast({ title: message, icon: "none" });
-    await loadCaptcha();
   } finally {
     isLoading.value = false;
+    isConfirmingBinding.value = false;
   }
 }
 

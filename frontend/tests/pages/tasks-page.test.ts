@@ -242,26 +242,24 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain(":visible=\"imagePreviewVisible\"");
     expect(taskDetailSource).toContain("@close=\"closeImagePreview\"");
     expect(taskDetailSource).toContain("@tap=\"openTaskPhotoPreview(photo.photo_id)\"");
-    expect(taskDetailSource).toContain("@tap=\"openCheckinPhotoPreview(photo)\"");
+    expect(taskDetailSource).toContain("@tap=\"openRecordDetailPhotoPreview(photo)\"");
     expect(taskDetailSource).toContain("openImagePreview");
     expect(taskDetailSource).not.toContain("uni.previewImage");
   });
 
-  it("uploads record photos inside the record modal and renders persisted checkin photos", () => {
+  it("uploads record photos inside the record modal and renders them in the dynamic record detail", () => {
     expect(taskDetailSource).toContain("chooseCheckinPhoto");
     expect(taskDetailSource).toContain("pendingCheckinPhotos.length < 3");
-    expect(taskDetailSource).toContain("task.value?.checkin_photos");
-    expect(taskDetailSource).toContain("displayCheckinPhotos");
-    expect(taskDetailSource).toContain("photo.can_delete");
+    expect(taskDetailSource).toContain("viewingRecord.photos");
+    expect(taskDetailSource).not.toContain("displayCheckinPhotos");
     expect(taskDetailSource).not.toContain("confirmUploadCheckinPhotos");
   });
 
-  it("lets the uploader or admin delete persisted checkin photos from task detail", () => {
-    expect(taskDetailSource).toContain("deleteTaskCheckinPhoto");
+  it("keeps removal controls inside the unsubmitted record form", () => {
     expect(taskDetailSource).toContain("deleteImageAsset");
-    expect(taskDetailSource).toContain("confirmDeleteCheckinPhoto");
-    expect(taskDetailSource).toContain("删除照片");
-    expect(taskDetailSource).toContain("@tap.stop=\"confirmDeleteCheckinPhoto(photo)\"");
+    expect(taskDetailSource).toContain("removeRecordPhoto");
+    expect(taskDetailSource).not.toContain("deleteTaskCheckinPhoto");
+    expect(taskDetailSource).not.toContain("confirmDeleteCheckinPhoto");
   });
 
   it("uses a mini-program-safe png arrow in task list filters", () => {
@@ -344,9 +342,7 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain("isExecutionDetail");
     expect(taskDetailSource).toContain("execution_groups");
     expect(taskDetailSource).toContain("activityExecutionGroups");
-    expect(taskDetailSource).toContain("photoExecutionGroups");
     expect(taskDetailSource).toContain('v-for="group in activityExecutionGroups"');
-    expect(taskDetailSource).toContain('v-for="group in photoExecutionGroups"');
     expect(taskDetailSource).not.toContain('v-for="group in task.execution_groups"');
     expect(taskDetailSource).toContain('class="task-info-panel"');
     expect(taskDetailSource).toContain('class="task-info-section date-section"');
@@ -559,6 +555,13 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain("section-line-value");
     expect(taskDetailSource).toContain('class="section-line-label">物资');
     expect(taskDetailSource).not.toContain("物资：{{ task.required_items }}");
+  });
+
+  it("keeps completion photos inside dynamic record details instead of a duplicate task-detail card", () => {
+    expect(taskDetailSource).not.toContain('<text class="section-title">完成照片</text>');
+    expect(taskDetailSource).not.toContain("displayCheckinPhotos");
+    expect(taskDetailSource).toContain("viewingRecord.photos");
+    expect(taskDetailSource).toContain("openRecordDetail");
   });
 
   it("fills selected task point detail with the associated POI name before its address", () => {

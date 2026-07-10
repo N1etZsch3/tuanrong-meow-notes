@@ -16,6 +16,7 @@ export type MapShellItemType =
   | "landmark";
 
 export type MapFilterKey = string;
+export type MapTaskCompletionFilter = "all" | "completed" | "unfinished";
 
 export interface LngLat {
   lng: number;
@@ -96,6 +97,23 @@ export interface MapMarkerDisplayModeInput {
   suppressUnselectedLabels?: boolean;
 }
 
+export interface MapViewportBounds {
+  southwest: LngLat;
+  northeast: LngLat;
+}
+
+export interface MarkerBubbleVisibilityInput {
+  zoom: number;
+  stable: boolean;
+  filterReady: boolean;
+  hasActiveMarkerFilter: boolean;
+  visibleMarkerCount: number;
+  previousVisible: boolean;
+}
+
+export const MARKER_BUBBLE_MAX_VISIBLE_COUNT = 6;
+export const MARKER_BUBBLE_HIDE_COUNT = 8;
+
 export interface MapRegionScaleSyncInput {
   type?: string;
   causedBy?: string;
@@ -104,6 +122,8 @@ export interface MapRegionScaleSyncInput {
 
 export const ALL_MAP_FILTER_KEY: MapFilterKey = "all";
 export const NO_MAP_FILTER_KEY: MapFilterKey = "none";
+export const TASK_MAP_FILTER_KEY: MapFilterKey = "task";
+export const DEFAULT_MAP_TASK_COMPLETION_FILTER: MapTaskCompletionFilter = "unfinished";
 export const MAP_PENDING_NAVIGATION_STORAGE_KEY = "catmap_pending_navigation";
 export const NO_MAP_FILTER_LABEL = "无标记";
 
@@ -152,6 +172,16 @@ export function toNativeMapPoint(
         latitude: point.lat,
       }
     : null;
+}
+
+export function getMapFocusTargetScale(
+  currentScale: number,
+  minimumScale: number,
+): number {
+  if (!Number.isFinite(currentScale)) {
+    return minimumScale;
+  }
+  return Math.max(currentScale, minimumScale);
 }
 
 export function expandLngLatBounds(
@@ -227,18 +257,10 @@ export const MAP_FILTER_OPTIONS: MapFilterOption[] = [
     description: "校门、图书馆、食堂等位置",
   },
   {
-    key: "feeding_pending",
-    label: "未完成任务",
-    description: "尚未完成的暑假投喂点",
-    icon_key: "feeding_pending",
-    point_types: ["task"],
-    business_types: ["feeding"],
-  },
-  {
-    key: "feeding_completed",
-    label: "完成任务",
-    description: "已完成投喂的任务点",
-    icon_key: "feeding_completed",
+    key: TASK_MAP_FILTER_KEY,
+    label: "任务",
+    description: "",
+    icon_key: "daily_task",
     point_types: ["task"],
     business_types: ["feeding"],
   },
@@ -273,9 +295,31 @@ export function normalizeMapFilterOptions(
     }
   }
 
-  const markerOptions = [...optionByKey.values()].filter(
-    (option) => option.key !== NO_MAP_FILTER_KEY && option.key !== ALL_MAP_FILTER_KEY,
+  const feedingTaskOptions = normalized.filter(
+    (option) => option.key === "feeding_pending" || option.key === "feeding_completed",
   );
+  const taskOption = optionByKey.get(TASK_MAP_FILTER_KEY) ||
+    (feedingTaskOptions.length
+      ? {
+          key: TASK_MAP_FILTER_KEY,
+          label: "任务",
+          description: "",
+          icon_key: "daily_task",
+          point_types: ["task"],
+          business_types: ["feeding"],
+        }
+      : undefined);
+  const markerOptions = [
+    ...(taskOption ? [taskOption] : []),
+    ...[...optionByKey.values()].filter(
+      (option) =>
+        option.key !== NO_MAP_FILTER_KEY &&
+        option.key !== ALL_MAP_FILTER_KEY &&
+        option.key !== TASK_MAP_FILTER_KEY &&
+        option.key !== "feeding_pending" &&
+        option.key !== "feeding_completed",
+    ),
+  ];
   const staticAllMarkerOption = MAP_FILTER_OPTIONS.find(
     (option) => option.key === ALL_MAP_FILTER_KEY,
   );
@@ -322,18 +366,61 @@ export function isMapShellItemVisibleByFilter(
   return filterKey === ALL_MAP_FILTER_KEY || item.type === filterKey;
 }
 
+export function filterMapShellItemsByTaskCompletion(
+  items: MapShellItem[],
+  completionFilter: MapTaskCompletionFilter,
+): MapShellItem[] {
+  if (completionFilter === "all") {
+    return items;
+  }
+
+  return items.filter((item) => {
+    if (completionFilter === "completed") {
+      return item.status_key === "completed";
+    }
+
+    return item.status_key === "not_started" || item.status_key === "in_progress";
+  });
+}
+
 export function getMarkerDisplayMode(
   input: MapMarkerDisplayModeInput,
 ): MapMarkerDisplayMode {
-  if (input.selected) {
-    return "label";
+  return input.selected ? "label" : "icon";
+}
+
+export function getMarkerBubbleVisibility(
+  input: MarkerBubbleVisibilityInput,
+): boolean {
+  if (
+    input.zoom < MARKER_LABEL_MIN_VISIBLE_ZOOM ||
+    !input.stable ||
+    !input.filterReady ||
+    !input.hasActiveMarkerFilter
+  ) {
+    return false;
   }
 
-  if (input.suppressUnselectedLabels) {
-    return "icon";
+  const markerCount = Math.max(0, input.visibleMarkerCount);
+  if (markerCount <= MARKER_BUBBLE_MAX_VISIBLE_COUNT) {
+    return true;
   }
+  if (markerCount >= MARKER_BUBBLE_HIDE_COUNT) {
+    return false;
+  }
+  return input.previousVisible;
+}
 
-  return input.zoom >= MARKER_LABEL_MIN_VISIBLE_ZOOM ? "label" : "icon";
+export function isLngLatInsideViewport(
+  point: LngLat,
+  viewport: MapViewportBounds,
+): boolean {
+  return (
+    point.lng >= viewport.southwest.lng &&
+    point.lng <= viewport.northeast.lng &&
+    point.lat >= viewport.southwest.lat &&
+    point.lat <= viewport.northeast.lat
+  );
 }
 
 export function shouldSyncMapScaleFromRegionChange(
@@ -665,6 +752,10 @@ export function getMapPointQueryByFilter(
       business_types: "feeding",
       filter_key: filterKey,
     };
+  }
+
+  if (filterKey === TASK_MAP_FILTER_KEY) {
+    return { point_types: "task", business_types: "feeding" };
   }
 
   if (filterKey === NO_MAP_FILTER_KEY) {

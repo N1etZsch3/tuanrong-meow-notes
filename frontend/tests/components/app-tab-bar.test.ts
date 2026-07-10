@@ -11,10 +11,10 @@ import {
 describe("app tab bar navigation", () => {
   it("keeps the four primary tabs in product order", () => {
     expect(APP_TAB_ITEMS.map((item) => item.label)).toEqual([
-      "地图",
+      "喵图",
       "猫咪库",
       "喵记",
-      "我的",
+      "喵的",
     ]);
     expect(APP_TAB_ITEMS.map((item) => item.route)).toEqual([
       "/pages/index/index",

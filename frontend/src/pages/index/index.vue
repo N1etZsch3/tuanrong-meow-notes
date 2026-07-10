@@ -6,6 +6,8 @@
     }"
     :drawerConfig="drawerConfig"
     :change:drawerConfig="drawer.init"
+    :drawerDetailRequest="drawerDetailRequest"
+    :change:drawerDetailRequest="drawer.ensureDetailVisible"
     :filterMenuState="filterMenuState"
     :change:filterMenuState="filterMenu.sync"
   >
@@ -13,7 +15,7 @@
 
     <view class="map-title">
       <view class="title-row">
-        <text class="title-text">猫协地图</text>
+        <text class="title-text">喵图</text>
         <image class="title-paw" :src="pawIcon" mode="aspectFit" />
       </view>
       <text class="title-subtitle">探索校园 · 守护猫咪</text>
@@ -41,6 +43,15 @@
         @longpress="handleMarkerLongPress"
         @regionchange="handleMapRegionChange"
       />
+
+      <cover-view
+        v-for="bubble in viewportMarkerBubbles"
+        :key="bubble.key"
+        class="marker-bubble"
+        :style="bubble.style"
+      >
+        {{ bubble.title }}
+      </cover-view>
 
       <view v-if="mapLoadState !== 'ready'" class="map-placeholder">
         <text class="placeholder-title">
@@ -110,7 +121,6 @@
             />
             <cover-view class="filter-option-copy">
               <cover-view class="filter-option-title">{{ option.label }}</cover-view>
-              <cover-view class="filter-option-desc">{{ option.description }}</cover-view>
             </cover-view>
           </cover-view>
         </cover-view>
@@ -158,7 +168,15 @@
 
       <scroll-view class="drawer-body" scroll-y :show-scrollbar="false">
         <view class="section-head">
-          <text class="section-title">{{ contentSectionTitle }}</text>
+          <view
+            v-if="activeFilter === TASK_MAP_FILTER_KEY && !isSearchMode"
+            class="section-title-trigger"
+            @tap="selectTaskCompletionFilter"
+          >
+            <text class="section-title">{{ contentSectionTitle }}</text>
+            <text class="section-title-arrow">∨</text>
+          </view>
+          <text v-else class="section-title">{{ contentSectionTitle }}</text>
           <text class="section-action">{{ contentSectionAction }}</text>
         </view>
 
@@ -358,6 +376,7 @@ import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 import {
   ALL_MAP_FILTER_KEY,
+  DEFAULT_MAP_TASK_COMPLETION_FILTER,
   HBNU_CAMPUS,
   HBNU_CAMPUS_CORE_BOUNDS,
   MAP_PENDING_NAVIGATION_STORAGE_KEY,
@@ -366,13 +385,17 @@ import {
   NO_MAP_FILTER_OPTION,
   clampLngLatToBounds,
   expandLngLatBounds,
+  filterMapShellItemsByTaskCompletion,
   formatDistance,
+  getMarkerBubbleVisibility,
   getMarkerDisplayMode,
+  getMapFocusTargetScale,
   getMapFilterLabel,
   getMapPointQueryByFilter,
   isFiniteLngLat,
   isFiniteLngLatBounds,
   isLngLatInsideBounds,
+  isLngLatInsideViewport,
   isMapShellItemVisibleByFilter,
   mapBottomContentItemToShellItem,
   mapMarkerToShellItem,
@@ -380,14 +403,17 @@ import {
   normalizeMapFilterOptions,
   shouldQueryMapScaleFromRegionChange,
   shouldSyncMapScaleFromRegionChange,
+  TASK_MAP_FILTER_KEY,
   type MapFilterOption,
   resolveMapShellItemType,
   type MapFilterKey,
   type MapMarkerDisplayMode,
   type CampusMapConfig,
   type LngLat,
+  type MapViewportBounds,
   type MapShellItem,
   type MapShellItemType,
+  type MapTaskCompletionFilter,
   toNativeMapPoint,
 } from "./map-page";
 
@@ -417,6 +443,12 @@ type NativeRegionChangeDetail = {
   centerLocation?: { longitude?: number; latitude?: number };
 };
 
+interface ViewportMarkerBubble {
+  key: string;
+  title: string;
+  style: string;
+}
+
 interface NativeMapMarker {
   id: number;
   longitude: number;
@@ -438,6 +470,12 @@ interface NativeMapMarker {
 }
 
 type NativeMapContext = {
+  moveToLocation?: (options: {
+    longitude: number;
+    latitude: number;
+    success?: () => void;
+    fail?: () => void;
+  }) => void;
   includePoints?: (options: {
     points: NativeRoutePoint[];
     padding?: number[];
@@ -449,6 +487,21 @@ type NativeMapContext = {
     fail?: () => void;
     complete?: () => void;
   }) => void;
+  getRegion?: (options: {
+    success?: (result: {
+      southwest?: { longitude?: number; latitude?: number };
+      northeast?: { longitude?: number; latitude?: number };
+    }) => void;
+    fail?: () => void;
+    complete?: () => void;
+  }) => void;
+  toScreenLocation?: (options: {
+    longitude: number;
+    latitude: number;
+    success?: (result: { x?: number; y?: number }) => void;
+    fail?: () => void;
+    complete?: () => void;
+  }) => void;
 };
 
 const userStore = useUserStore();
@@ -457,9 +510,11 @@ const drawerConfig = ref({
   rpxRatio: sysInfo.windowWidth / 750,
   windowHeight: sysInfo.windowHeight,
 });
+const drawerDetailRequest = ref(0);
 const filterMenuOpen = ref(false);
 const filterOptions = ref<MapFilterOption[]>([NO_MAP_FILTER_OPTION]);
 const activeFilter = ref<MapFilterKey | null>(null);
+const taskCompletionFilter = ref<MapTaskCompletionFilter>(DEFAULT_MAP_TASK_COMPLETION_FILTER);
 const searchKeyword = ref("");
 const mapLoadState = ref<MapLoadState>("idle");
 const contentLoadState = ref<ContentLoadState>("idle");
@@ -485,7 +540,8 @@ const pendingPoiResolveKey = ref<string | null>(null);
 const lastResolvedPoiTapKey = ref<string | null>(null);
 const nativePoiTapSuppressedUntil = ref(0);
 const lastPointTapAt = ref(0);
-const suppressUnselectedMarkerLabels = ref(false);
+const mapPointFilterReady = ref(false);
+const viewportMarkerBubbles = ref<ViewportMarkerBubble[]>([]);
 const drawerResizeInProgress = ref(false);
 const mapPointEditMode = ref(false);
 const editedPointLocation = ref<LngLat | null>(null);
@@ -500,29 +556,39 @@ const MAP_FILTER_ICON_SRC: Record<string, string> = {
   landmark: landmarkPointIcon,
   feeding_pending: dailyTaskPendingPointIcon,
   feeding_completed: dailyTaskPointIcon,
+  task: dailyTaskPendingPointIcon,
   filter_none: filterDefaultIcon,
 };
 const MARKER_LONG_PRESS_HIT_METERS = 60;
 const NATIVE_MARKER_HIT_SIZE = 34;
 const MAP_BLANK_TAP_GUARD_MS = 250;
 const DRAWER_RESIZE_SETTLE_MS = 520;
-const MAP_CENTER_ANIMATION_DURATION_MS = 320;
-const MAP_CENTER_ANIMATION_STEPS = 12;
+const MAP_FOCUS_SETTLE_MS = 720;
 const MAP_CENTER_SYNC_EPSILON_METERS = 0.75;
 const MAP_SCALE_SYNC_EPSILON = 0.01;
 const MAP_POINT_FOCUS_SCALE = 18;
-const USER_LOCATION_FOCUS_SCALE = 18;
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let mapRefreshTimer: ReturnType<typeof setTimeout> | null = null;
-let mapCenterAnimationTimer: ReturnType<typeof setTimeout> | null = null;
 let drawerResizeResumeTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeUserLocation: (() => void) | null = null;
 let pointSummaryRequestSeq = 0;
 let poiResolveRequestSeq = 0;
+let viewportMarkerBubbleRequestSeq = 0;
+let mapCenterMoveRequestId = 0;
+let viewportMarkerBubblesVisible = false;
 
 const isPageVisible = ref(true);
 const isSearchMode = computed(() => searchKeyword.value.trim().length > 0);
+const taskCompletionFilterLabel = computed(() => {
+  if (taskCompletionFilter.value === "all") {
+    return "全部任务";
+  }
+  if (taskCompletionFilter.value === "completed") {
+    return "已完成任务";
+  }
+  return "未完成任务";
+});
 const activeFilterOption = computed(() =>
   activeFilter.value
     ? filterOptions.value.find((option) => option.key === activeFilter.value) || null
@@ -541,12 +607,29 @@ const filterMenuState = computed(() => ({
   open: filterMenuOpen.value,
   rpxRatio: drawerConfig.value.rpxRatio,
 }));
+const filteredTaskMapPointMarkers = computed(() => {
+  if (activeFilter.value !== TASK_MAP_FILTER_KEY || isSearchMode.value) {
+    return mapPointMarkers.value;
+  }
+
+  return mapPointMarkers.value.filter(
+    (marker) =>
+      filterMapShellItemsByTaskCompletion(
+        [mapMarkerToShellItem(marker)],
+        taskCompletionFilter.value,
+      ).length > 0,
+  );
+});
 const visibleItems = computed(() => {
   const items = isSearchMode.value
     ? searchResultItems.value
     : bottomContentItems.value;
+  const taskCompletionItems =
+    activeFilter.value === TASK_MAP_FILTER_KEY && !isSearchMode.value
+      ? filterMapShellItemsByTaskCompletion(items, taskCompletionFilter.value)
+      : items;
 
-  return items.filter((item) => {
+  return taskCompletionItems.filter((item) => {
     return (
       !activeFilter.value ||
       activeFilter.value === ALL_MAP_FILTER_KEY ||
@@ -849,6 +932,9 @@ const contentSectionTitle = computed(() => {
   }
 
   if (activeFilter.value) {
+    if (activeFilter.value === TASK_MAP_FILTER_KEY) {
+      return taskCompletionFilterLabel.value;
+    }
     return activeFilterLabel.value;
   }
 
@@ -946,7 +1032,7 @@ function shouldSkipPoiResolve(
   );
 }
 
-function suppressNativePoiTaps(durationMs = MAP_CENTER_ANIMATION_DURATION_MS + 400) {
+function suppressNativePoiTaps(durationMs = MAP_FOCUS_SETTLE_MS) {
   nativePoiTapSuppressedUntil.value = Date.now() + durationMs;
 }
 
@@ -1037,7 +1123,6 @@ defineExpose({
 
 function clearSelectedMapPointState() {
   const hadPendingPointSummary = pendingPointSummaryRequestId.value !== null;
-  const hadSelectedPoint = Boolean(selectedSummary.value || selectedPoiMarker.value);
   cancelPointSummaryRequest();
   filterMenuOpen.value = false;
   poiResolveRequestSeq += 1;
@@ -1045,9 +1130,6 @@ function clearSelectedMapPointState() {
   lastResolvedPoiTapKey.value = null;
   selectedSummary.value = null;
   selectedPoiMarker.value = null;
-  if (hadSelectedPoint) {
-    suppressUnselectedMarkerLabels.value = true;
-  }
   if (hadPendingPointSummary && contentLoadState.value === "loading") {
     contentLoadState.value = "ready";
   }
@@ -1062,18 +1144,14 @@ function getNativeMarkerDisplayMode(marker: MapPointMarkerDto): MapMarkerDisplay
   if (selectedPointId && selectedPointId !== marker.point_id) return "icon";
 
   return getMarkerDisplayMode({
+    selected: selectedPointId === marker.point_id,
     zoom: observedMapScale.value,
     visibleMarkerCount: nativeMarkerSourceMarkers.value.length,
-    previewEnabled: marker.preview_enabled || Boolean(marker.cover_photo_url),
-    labelMinZoom: marker.label_min_zoom,
-    previewMinZoom: marker.preview_min_zoom,
-    selected: selectedPointId === marker.point_id,
-    suppressUnselectedLabels: !selectedPointId && suppressUnselectedMarkerLabels.value,
   });
 }
 
 const nativeMarkerSourceMarkers = computed(() => {
-  const markers = mapPointMarkers.value.filter((marker) =>
+  const markers = filteredTaskMapPointMarkers.value.filter((marker) =>
     isFiniteLngLat({ lng: marker.lng, lat: marker.lat }),
   );
   const selectedPoi = selectedPoiMarker.value;
@@ -1088,6 +1166,149 @@ const nativeMarkerSourceMarkers = computed(() => {
 
   return markers;
 });
+
+function getMapViewportBounds(
+  region: {
+    southwest?: { longitude?: number; latitude?: number };
+    northeast?: { longitude?: number; latitude?: number };
+  },
+): MapViewportBounds | null {
+  const southwest = region.southwest;
+  const northeast = region.northeast;
+  if (
+    typeof southwest?.longitude !== "number" ||
+    typeof southwest?.latitude !== "number" ||
+    typeof northeast?.longitude !== "number" ||
+    typeof northeast?.latitude !== "number"
+  ) {
+    return null;
+  }
+
+  const bounds: MapViewportBounds = {
+    southwest: { lng: southwest.longitude, lat: southwest.latitude },
+    northeast: { lng: northeast.longitude, lat: northeast.latitude },
+  };
+  return isFiniteLngLatBounds({
+    south_west: bounds.southwest,
+    north_east: bounds.northeast,
+  })
+    ? bounds
+    : null;
+}
+
+function isViewportBusinessMarker(marker: MapPointMarkerDto): boolean {
+  return !isExternalPoiMarker(marker) && isFiniteLngLat({ lng: marker.lng, lat: marker.lat });
+}
+
+function getViewportMarkerBubbleKey(marker: MapPointMarkerDto): string {
+  return `${marker.point_id || marker.business_id || marker.name}:${marker.lng.toFixed(6)},${marker.lat.toFixed(6)}`;
+}
+
+function clearViewportMarkerBubbles(resetVisibility = true) {
+  viewportMarkerBubbleRequestSeq += 1;
+  viewportMarkerBubbles.value = [];
+  if (resetVisibility) {
+    viewportMarkerBubblesVisible = false;
+  }
+}
+
+function toViewportMarkerBubble(
+  mapContext: NativeMapContext,
+  marker: MapPointMarkerDto,
+): Promise<ViewportMarkerBubble | null> {
+  return new Promise((resolve) => {
+    if (typeof mapContext.toScreenLocation !== "function") {
+      resolve(null);
+      return;
+    }
+    mapContext.toScreenLocation({
+      longitude: marker.lng,
+      latitude: marker.lat,
+      success: (position) => {
+        if (!Number.isFinite(position.x) || !Number.isFinite(position.y)) {
+          resolve(null);
+          return;
+        }
+        resolve({
+          key: getViewportMarkerBubbleKey(marker),
+          title: marker.name,
+          style: `left: ${position.x}px; top: ${position.y}px;`,
+        });
+      },
+      fail: () => resolve(null),
+    });
+  });
+}
+
+function refreshViewportMarkerBubbles() {
+  const requestId = viewportMarkerBubbleRequestSeq + 1;
+  viewportMarkerBubbleRequestSeq = requestId;
+  viewportMarkerBubbles.value = [];
+  if (
+    drawerResizeInProgress.value ||
+    !mapPointFilterReady.value ||
+    !activeFilter.value ||
+    !isPageVisible.value
+  ) {
+    viewportMarkerBubblesVisible = false;
+    return;
+  }
+
+  const mapContext = uni.createMapContext("campus-map") as unknown as NativeMapContext;
+  if (typeof mapContext.getRegion !== "function") {
+    viewportMarkerBubblesVisible = false;
+    return;
+  }
+
+  mapContext.getRegion({
+    success: (region) => {
+      if (requestId !== viewportMarkerBubbleRequestSeq) {
+        return;
+      }
+      const bounds = getMapViewportBounds(region);
+      if (!bounds) {
+        viewportMarkerBubblesVisible = false;
+        return;
+      }
+      const visibleMarkers = nativeMarkerSourceMarkers.value
+        .filter(isViewportBusinessMarker)
+        .filter((marker) => isLngLatInsideViewport(marker, bounds));
+      const visibleBubbleMarkers = visibleMarkers.filter(
+        (marker) => marker.point_id !== selectedSummary.value?.point_id,
+      );
+      const shouldShow = getMarkerBubbleVisibility({
+        zoom: observedMapScale.value,
+        stable: true,
+        filterReady: mapPointFilterReady.value,
+        hasActiveMarkerFilter: Boolean(activeFilter.value),
+        visibleMarkerCount: visibleMarkers.length,
+        previousVisible: viewportMarkerBubblesVisible,
+      });
+      viewportMarkerBubblesVisible = shouldShow;
+      if (!shouldShow || typeof mapContext.toScreenLocation !== "function") {
+        return;
+      }
+
+      void Promise.all(
+        visibleBubbleMarkers
+          .slice(0, 6)
+          .map((marker) => toViewportMarkerBubble(mapContext, marker)),
+      ).then((bubbles) => {
+        if (requestId !== viewportMarkerBubbleRequestSeq) {
+          return;
+        }
+        viewportMarkerBubbles.value = bubbles.filter(
+          (bubble): bubble is ViewportMarkerBubble => Boolean(bubble),
+        );
+      });
+    },
+    fail: () => {
+      if (requestId === viewportMarkerBubbleRequestSeq) {
+        viewportMarkerBubblesVisible = false;
+      }
+    },
+  });
+}
 
 function hashNativeMarkerKey(key: string): number {
   let hash = 0;
@@ -1203,13 +1424,40 @@ const nativeMapPolylines = computed(() => {
   ];
 });
 function selectFilter(option: MapFilterOption) {
-  const hadSelectedPoint = Boolean(selectedSummary.value || selectedPoiMarker.value);
   cancelPointSummaryRequest();
   filterMenuOpen.value = false;
   selectedSummary.value = null;
   selectedPoiMarker.value = null;
-  suppressUnselectedMarkerLabels.value = hadSelectedPoint;
-  activeFilter.value = option.key === NO_MAP_FILTER_KEY ? null : option.key;
+  clearViewportMarkerBubbles();
+  const nextFilter = option.key === NO_MAP_FILTER_KEY ? null : option.key;
+  if (nextFilter === TASK_MAP_FILTER_KEY) {
+    taskCompletionFilter.value = DEFAULT_MAP_TASK_COMPLETION_FILTER;
+  }
+  activeFilter.value = nextFilter;
+}
+
+function selectTaskCompletionFilter() {
+  if (activeFilter.value !== TASK_MAP_FILTER_KEY || isSearchMode.value) {
+    return;
+  }
+
+  const options: Array<{ label: string; value: MapTaskCompletionFilter }> = [
+    { label: "全部任务", value: "all" },
+    { label: "已完成任务", value: "completed" },
+    { label: "未完成任务", value: "unfinished" },
+  ];
+  uni.showActionSheet({
+    itemList: options.map((option) => option.label),
+    success: ({ tapIndex }) => {
+      const option = options[tapIndex];
+      if (!option) {
+        return;
+      }
+      taskCompletionFilter.value = option.value;
+      selectedSummary.value = null;
+      selectedPoiMarker.value = null;
+    },
+  });
 }
 
 function toggleFilterMenu() {
@@ -1469,58 +1717,45 @@ function handleMapError(error: unknown, fallbackMessage: string) {
   contentErrorMessage.value = fallbackMessage;
 }
 
-function stopMapCenterAnimation() {
-  if (!mapCenterAnimationTimer) {
-    return;
-  }
-  clearTimeout(mapCenterAnimationTimer);
-  mapCenterAnimationTimer = null;
+function getNativeMapContext(): NativeMapContext {
+  return uni.createMapContext("campus-map") as unknown as NativeMapContext;
 }
 
-function animateMapCenterToPoint(nextCenter: LngLat) {
-  stopMapCenterAnimation();
+function invalidateMapCenterMovement() {
+  mapCenterMoveRequestId += 1;
+}
 
-  const startCenter = { ...mapCenter.value };
-  const deltaLng = nextCenter.lng - startCenter.lng;
-  const deltaLat = nextCenter.lat - startCenter.lat;
-  if (Math.abs(deltaLng) < 0.000001 && Math.abs(deltaLat) < 0.000001) {
-    mapCenter.value = nextCenter;
+function moveNativeMapToPoint(nextCenter: LngLat) {
+  const requestId = ++mapCenterMoveRequestId;
+  const mapContext = getNativeMapContext();
+  const syncLatestCenter = () => {
+    if (requestId !== mapCenterMoveRequestId) {
+      return;
+    }
+    syncMapCenterFromNative(nextCenter);
+  };
+
+  if (typeof mapContext.moveToLocation !== "function") {
+    syncLatestCenter();
     return;
   }
 
-  let step = 0;
-  const tick = () => {
-    step += 1;
-    const progress = Math.min(step / MAP_CENTER_ANIMATION_STEPS, 1);
-    const easedProgress = 1 - (1 - progress) ** 3;
-    mapCenter.value = {
-      lng: startCenter.lng + deltaLng * easedProgress,
-      lat: startCenter.lat + deltaLat * easedProgress,
-    };
-
-    if (progress >= 1) {
-      mapCenter.value = nextCenter;
-      mapCenterAnimationTimer = null;
-      return;
-    }
-
-    mapCenterAnimationTimer = setTimeout(
-      tick,
-      MAP_CENTER_ANIMATION_DURATION_MS / MAP_CENTER_ANIMATION_STEPS,
-    );
-  };
-
-  tick();
+  mapContext.moveToLocation({
+    longitude: nextCenter.lng,
+    latitude: nextCenter.lat,
+    success: syncLatestCenter,
+    fail: syncLatestCenter,
+  });
 }
 
 function centerMapToPoint(point: LngLat, options: { smooth?: boolean } = {}) {
   const nextCenter = clampLngLatToBounds(point, campusMapConfig.value.limit_bounds);
   if (options.smooth) {
-    animateMapCenterToPoint(nextCenter);
+    moveNativeMapToPoint(nextCenter);
     return;
   }
-  stopMapCenterAnimation();
-  mapCenter.value = nextCenter;
+  invalidateMapCenterMovement();
+  syncMapCenterFromNative(nextCenter);
 }
 
 function centerMapToCampus() {
@@ -1532,7 +1767,15 @@ function syncUserLocation(point: LngLat | null) {
 }
 
 function focusMapToPoint(point: LngLat) {
-  setControlledMapScale(getMapPointFocusScale());
+  const targetScale = getClampedMapScale(
+    getMapFocusTargetScale(observedMapScale.value, MAP_POINT_FOCUS_SCALE),
+  );
+  if (
+    !Number.isFinite(observedMapScale.value) ||
+    targetScale > observedMapScale.value + MAP_SCALE_SYNC_EPSILON
+  ) {
+    setControlledMapScale(targetScale);
+  }
   centerMapToPoint(point, { smooth: true });
 }
 
@@ -1590,14 +1833,6 @@ function getClampedMapScale(targetScale: number): number {
   const minScale = campusMapConfig.value.min_zoom;
   const maxScale = campusMapConfig.value.max_zoom;
   return Math.min(Math.max(targetScale, minScale), maxScale);
-}
-
-function getMapPointFocusScale(): number {
-  return getClampedMapScale(MAP_POINT_FOCUS_SCALE);
-}
-
-function getUserLocationFocusScale(): number {
-  return getClampedMapScale(USER_LOCATION_FOCUS_SCALE);
 }
 
 async function getCurrentLocationForNavigation(): Promise<LngLat | null> {
@@ -1903,6 +2138,8 @@ async function refreshMapPoints() {
   const filterOption = activeFilterOption.value;
 
   if (!filterKey) {
+    mapPointFilterReady.value = true;
+    clearViewportMarkerBubbles();
     mapPointMarkers.value = [];
     if (selectedSummary.value && selectedSummary.value.business_type !== "tencent_poi") {
       ensureFocusedMarkerFromSummary(selectedSummary.value);
@@ -1915,8 +2152,12 @@ async function refreshMapPoints() {
 
   const token = await getAccessToken();
   if (!token) {
+    mapPointFilterReady.value = false;
     return;
   }
+
+  mapPointFilterReady.value = false;
+  clearViewportMarkerBubbles();
 
   if (!isSearchMode.value) {
     contentLoadState.value = "loading";
@@ -1940,7 +2181,13 @@ async function refreshMapPoints() {
       bottomContentItems.value = mapPointMarkers.value.map(mapMarkerToShellItem);
       contentLoadState.value = "ready";
     }
+    mapPointFilterReady.value = true;
+    refreshViewportMarkerBubbles();
   } catch (error) {
+    if (activeFilter.value === filterKey) {
+      mapPointFilterReady.value = false;
+      clearViewportMarkerBubbles();
+    }
     contentLoadState.value = "error";
     handleMapError(error, "地图点位加载失败");
   }
@@ -2019,9 +2266,13 @@ async function runSearch(keyword: string) {
       .map(mapSearchShellItemToMarker)
       .filter((marker): marker is MapPointMarkerDto => Boolean(marker));
     contentLoadState.value = "ready";
+    mapPointFilterReady.value = Boolean(activeFilter.value);
+    refreshViewportMarkerBubbles();
   } catch (error) {
     searchResultItems.value = [];
     mapPointMarkers.value = [];
+    mapPointFilterReady.value = false;
+    clearViewportMarkerBubbles();
     contentLoadState.value = "error";
     handleMapError(error, "搜索失败，请稍后重试。");
   }
@@ -2546,24 +2797,27 @@ function getMapRegionChangeDetail(event: Event): NativeRegionChangeDetail {
 function handleMapRegionChange(event: Event) {
   const detail = getMapRegionChangeDetail(event);
   if (drawerResizeInProgress.value) {
+    clearViewportMarkerBubbles(false);
     return;
   }
-  if (detail.causedBy === "drag" || detail.causedBy === "scale") {
-    suppressUnselectedMarkerLabels.value = false;
-  }
+  const shouldQueryScale = shouldQueryMapScaleFromRegionChange(detail);
   if (shouldSyncMapScaleFromRegionChange(detail)) {
     recordNativeMapScale(Number(detail.scale));
-  } else if (shouldQueryMapScaleFromRegionChange(detail)) {
-    syncMapScaleFromContext();
   }
   if (detail?.type && detail.type !== "end") {
+    clearViewportMarkerBubbles(false);
     if (detail.causedBy === "drag") {
-      stopMapCenterAnimation();
+      invalidateMapCenterMovement();
     }
     return;
   }
   const center = detail?.centerLocation;
   if (typeof center?.longitude !== "number" || typeof center?.latitude !== "number") {
+    if (shouldQueryScale) {
+      syncMapScaleFromContext(refreshViewportMarkerBubbles);
+    } else {
+      refreshViewportMarkerBubbles();
+    }
     return;
   }
 
@@ -2577,14 +2831,24 @@ function handleMapRegionChange(event: Event) {
     }
   } else if (detail.causedBy === "update") {
     // Programmatic center changes already flow through mapCenter; echoing them here can retrigger native map movement.
-  } else if (!mapCenterAnimationTimer) {
+  } else {
     syncMapCenterFromNative(nextCenter);
   }
 
   if (!mapPointEditMode.value || editableMarkerScreenPosition.value) {
+    if (shouldQueryScale) {
+      syncMapScaleFromContext(refreshViewportMarkerBubbles);
+    } else {
+      refreshViewportMarkerBubbles();
+    }
     return;
   }
   editedPointLocation.value = nextCenter;
+  if (shouldQueryScale) {
+    syncMapScaleFromContext(refreshViewportMarkerBubbles);
+  } else {
+    refreshViewportMarkerBubbles();
+  }
 }
 
 function getMapViewportOffset() {
@@ -2773,17 +3037,28 @@ function locateMe() {
   }
   clearNativePoiSelection();
   suppressNativePoiTaps();
-  setControlledMapScale(getUserLocationFocusScale());
-  centerMapToPoint(point, { smooth: true });
+  focusMapToPoint(point);
 }
+
+watch(selectedSummary, (summary) => {
+  if (summary) {
+    drawerDetailRequest.value += 1;
+  }
+});
 
 watch(activeFilter, () => {
   selectedSummary.value = null;
   selectedPoiMarker.value = null;
+  mapPointFilterReady.value = false;
+  clearViewportMarkerBubbles();
   void refreshMapPoints();
   if (isSearchMode.value) {
     void runSearch(searchKeyword.value);
   }
+});
+
+watch(taskCompletionFilter, () => {
+  refreshViewportMarkerBubbles();
 });
 
 watch(searchKeyword, (keyword) => {
@@ -2824,6 +3099,7 @@ onShow(() => {
 
 onHide(() => {
   isPageVisible.value = false;
+  clearViewportMarkerBubbles(false);
   if (mapRefreshTimer) {
     clearTimeout(mapRefreshTimer);
   }
@@ -2832,7 +3108,7 @@ onHide(() => {
 onBeforeUnmount(() => {
   unsubscribeUserLocation?.();
   unsubscribeUserLocation = null;
-  stopMapCenterAnimation();
+  invalidateMapCenterMovement();
 
   if (searchTimer) {
     clearTimeout(searchTimer);
@@ -2846,6 +3122,7 @@ onBeforeUnmount(() => {
     clearTimeout(drawerResizeResumeTimer);
   }
 
+  clearViewportMarkerBubbles(false);
   clearNativeRoute();
 });
 </script>
@@ -2925,6 +3202,40 @@ onBeforeUnmount(() => {
   height: calc(100vh - 288rpx);
   transform: translate(-24rpx, -194rpx);
   transform-origin: left top;
+}
+
+.marker-bubble {
+  position: absolute;
+  z-index: 4;
+  max-width: 220rpx;
+  box-sizing: border-box;
+  padding: 10rpx 14rpx;
+  border-radius: 16rpx;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8rpx 20rpx rgba(17, 24, 39, 0.16);
+  color: #374151;
+  font-size: 20rpx;
+  font-weight: 800;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translate(-50%, -132%);
+  transform-origin: center bottom;
+  animation: marker-bubble-appear 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes marker-bubble-appear {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -132%) scale(0.72);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, -132%) scale(1);
+  }
 }
 
 .map-placeholder {
@@ -3043,7 +3354,7 @@ onBeforeUnmount(() => {
 }
 
 .filter-menu {
-  width: 336rpx;
+  width: 224rpx;
   box-sizing: border-box;
   margin-top: 14rpx;
   padding: 12rpx;
@@ -3325,6 +3636,18 @@ onBeforeUnmount(() => {
 .section-title {
   color: #111827;
   font-size: 30rpx;
+  font-weight: 900;
+}
+
+.section-title-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.section-title-arrow {
+  color: #6b7280;
+  font-size: 22rpx;
   font-weight: 900;
 }
 

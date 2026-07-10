@@ -1,4 +1,12 @@
 <template>
+  <!-- #ifdef MP-WEIXIN -->
+  <page-container
+    :show="pageLeaveGuardArmed"
+    :overlay="false"
+    :duration="0"
+    @beforeleave="handleNativePageLeave"
+  >
+  <!-- #endif -->
   <view class="member-detail-page">
     <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
     <scroll-view class="detail-scroll" scroll-y :show-scrollbar="false">
@@ -178,10 +186,13 @@
       </view>
     </view>
   </view>
+  <!-- #ifdef MP-WEIXIN -->
+  </page-container>
+  <!-- #endif -->
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from "vue";
+import { computed, nextTick, reactive, ref, watch } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 
 import {
@@ -192,12 +203,22 @@ import {
   updateAdminUser,
   type AdminUserDto,
 } from "@/api/admin-users";
-import { uploadUserAvatar } from "@/api/files";
+import {
+  buildUserAvatarContentUrl,
+  resolveUserAvatarContentUrl,
+  uploadUserAvatar,
+} from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import { createPageLeaveGuard } from "@/utils/page-leave-guard";
 
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
+import {
+  createMemberEditSnapshot,
+  hasUnsavedMemberChanges,
+  type MemberEditSnapshot,
+} from "./member-edit-guard";
 
 type PickerChangeEvent = { detail: { value: string | number } };
 
@@ -227,6 +248,9 @@ const resetPassword = ref("");
 const isResetting = ref(false);
 const isClearingWechatBinding = ref(false);
 const isDeleting = ref(false);
+const savedMemberSnapshot = ref<MemberEditSnapshot | null>(null);
+const pageLeaveGuardArmed = ref(true);
+let isNavigatingAway = false;
 
 const form = reactive({
   nickname: "",
@@ -259,10 +283,13 @@ const roleIndex = computed(() => Math.max(0, roleOptions.findIndex((item) => ite
 const statusIndex = computed(() => Math.max(0, statusOptions.findIndex((item) => item.value === form.status)));
 const currentRoleLabel = computed(() => roleOptions[roleIndex.value]?.label || "成员");
 const currentStatusLabel = computed(() => statusOptions[statusIndex.value]?.label || "正常");
+const pageLeaveGuard = createPageLeaveGuard(
+  () => !isSaving.value && hasPendingMemberChanges(),
+);
 
 function applyUser(user: AdminUserDto) {
   userDetail.value = user;
-  avatarUrl.value = user.profile.avatar_url;
+  avatarUrl.value = resolveUserAvatarContentUrl(user.profile.avatar_url);
   form.nickname = user.profile.nickname || "";
   form.real_name = user.profile.real_name || "";
   form.department = user.profile.department || "";
@@ -270,6 +297,17 @@ function applyUser(user: AdminUserDto) {
   form.contact_info = user.profile.contact_info || "";
   form.role = user.role || "member";
   form.status = user.status || "active";
+  savedMemberSnapshot.value = createMemberEditSnapshot({
+    nickname: form.nickname,
+    real_name: form.real_name,
+    department: form.department,
+    grade: form.grade,
+    contact_info: form.contact_info,
+    role: form.role,
+    status: form.status,
+    avatar_url: avatarUrl.value,
+  });
+  pageLeaveGuard.reset();
 }
 
 async function getAccessToken(): Promise<string | null> {
@@ -341,7 +379,7 @@ async function uploadAvatar(tempPath: string) {
   uni.showLoading({ title: "头像上传中", mask: true });
   try {
     const asset = await uploadUserAvatar(token, tempPath, userId.value || undefined);
-    avatarUrl.value = asset.default_url;
+    avatarUrl.value = buildUserAvatarContentUrl(asset.asset_id);
     uni.hideLoading();
   } catch (error) {
     uni.hideLoading();
@@ -538,7 +576,79 @@ async function deleteAccount() {
 }
 
 function goBack() {
-  uni.navigateBack();
+  requestPageLeave();
+}
+
+function hasPendingMemberChanges() {
+  if (readonlyMode.value) {
+    return false;
+  }
+  return hasUnsavedMemberChanges(savedMemberSnapshot.value, {
+    nickname: form.nickname,
+    real_name: form.real_name,
+    department: form.department,
+    grade: form.grade,
+    contact_info: form.contact_info,
+    role: form.role,
+    status: form.status,
+    avatar_url: avatarUrl.value,
+  });
+}
+
+function requestPageLeave() {
+  const request = pageLeaveGuard.requestLeave();
+  if (request === "leave") {
+    releasePageLeaveGuardAndNavigateBack();
+    return;
+  }
+  if (request === "confirm") {
+    confirmDiscardMemberChanges();
+  }
+}
+
+function handleNativePageLeave() {
+  if (isNavigatingAway) {
+    return;
+  }
+  pageLeaveGuardArmed.value = false;
+  requestPageLeave();
+}
+
+function releasePageLeaveGuardAndNavigateBack() {
+  if (isNavigatingAway) {
+    return;
+  }
+  isNavigatingAway = true;
+  pageLeaveGuardArmed.value = false;
+  nextTick(() => {
+    uni.navigateBack();
+  });
+}
+
+function rearmNativePageLeaveGuard() {
+  isNavigatingAway = false;
+  pageLeaveGuardArmed.value = false;
+  nextTick(() => {
+    pageLeaveGuardArmed.value = true;
+  });
+}
+
+function confirmDiscardMemberChanges() {
+  uni.showModal({
+    title: "放弃修改",
+    content: "修改尚未保存，是否放弃？",
+    confirmText: "放弃",
+    confirmColor: "#d73546",
+    cancelText: "继续编辑",
+    success: (result) => {
+      if (result.confirm && pageLeaveGuard.confirmDiscard()) {
+        releasePageLeaveGuardAndNavigateBack();
+        return;
+      }
+      pageLeaveGuard.cancelDiscard();
+      rearmNativePageLeaveGuard();
+    },
+  });
 }
 
 onLoad((query) => {

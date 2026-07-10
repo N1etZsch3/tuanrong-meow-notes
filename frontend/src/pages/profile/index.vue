@@ -99,6 +99,7 @@
 import { computed, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 
+import { resolveUserAvatarContentUrl } from "@/api/files";
 import { getMeDashboard, type MeDashboardResponse } from "@/api/me";
 import AppTabBar from "@/components/AppTabBar.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
@@ -143,7 +144,10 @@ const profileMenuIconMap = {
 
 const avatarLoadFailed = ref(false);
 const profileAvatar = computed(
-  () => dashboard.value?.profile.avatar_url || userStore.currentUser?.avatar_url || defaultAvatar,
+  () =>
+    resolveUserAvatarContentUrl(
+      dashboard.value?.profile.avatar_url || userStore.currentUser?.avatar_url,
+    ) || defaultAvatar,
 );
 const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : profileAvatar.value));
 

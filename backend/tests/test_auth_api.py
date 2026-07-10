@@ -713,6 +713,8 @@ def test_clear_own_wechat_binding_rejects_unbound_account_without_invalidating_t
     )
 
     assert response.status_code == 400
+    assert response.json()["code"] == 40001
+    assert response.json()["message"] == "当前账号尚未绑定微信"
     db_session.refresh(user)
     assert user.wechat_openid is None
     assert user.wechat_bound_at is None

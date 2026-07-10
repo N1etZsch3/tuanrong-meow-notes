@@ -368,7 +368,7 @@ def renew_access_token(user: User) -> dict:
 def clear_current_user_wechat_binding(db: Session, user: User) -> dict:
     if not user.wechat_openid:
         raise APIError(
-            code=ErrorCode.WECHAT_OPENID_UNBOUND,
+            code=ErrorCode.PARAM_ERROR,
             message="当前账号尚未绑定微信",
             status_code=400,
         )

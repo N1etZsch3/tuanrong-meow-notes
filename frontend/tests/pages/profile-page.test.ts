@@ -160,13 +160,14 @@ describe("profile center pages", () => {
     expect(profileDetailSource).toContain("function releasePageLeaveGuardAndNavigateBack");
   });
 
-  it("uses the public file-content route for newly uploaded avatars", () => {
+  it("keeps pending avatars local until the server applies an approved asset", () => {
     const avatarUrl = buildUserAvatarContentUrl("avatar-asset-1");
 
     expect(avatarUrl).toContain("/files/assets/avatar-asset-1/content");
     expect(avatarUrl).toContain("scene=avatar_profile");
     for (const source of [profileDetailSource, profileCompleteSource, adminUserDetailSource]) {
-      expect(source).toContain("buildUserAvatarContentUrl");
+      expect(source).toContain("avatarUrl.value = tempPath");
+      expect(source).toContain("审核通过后自动生效");
       expect(source).not.toContain("avatarUrl.value = asset.default_url");
     }
   });

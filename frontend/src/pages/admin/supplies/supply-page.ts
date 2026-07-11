@@ -6,7 +6,7 @@ import type {
   SupplyPointCreatePayload,
   UploadedFileRef,
 } from "@/api/supplies";
-import { buildFileAssetContentUrl, type UploadedImageAsset } from "@/api/files";
+import { buildFileAssetContentUrl, type ApprovedImageAsset } from "@/api/files";
 
 export const SUPPLY_LOCATION_STORAGE_KEY = "catmap_supply_publish_location";
 export const HBNU_DEFAULT_SUPPLY_LOCATION = {
@@ -188,7 +188,7 @@ export function validateSupplyDraft(draft: SupplyPointDraft): ValidationResult {
   return { valid: true };
 }
 
-export function buildUploadedSupplyPhoto(asset: UploadedImageAsset): UploadedFileRef {
+export function buildUploadedSupplyPhoto(asset: ApprovedImageAsset): UploadedFileRef {
   return {
     file_id: asset.asset_id,
     file_url: asset.default_url,

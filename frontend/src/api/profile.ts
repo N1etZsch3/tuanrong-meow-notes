@@ -11,6 +11,8 @@ export interface MyProfileResponse {
   role: UserRole;
   nickname: string;
   avatar_url: string | null;
+  avatar_review_asset_id: string | null;
+  avatar_review_status: "idle" | "pending" | "passed" | "rejected" | "failed";
   department: string | null;
   contact_info: string | null;
   profile_completed: boolean;

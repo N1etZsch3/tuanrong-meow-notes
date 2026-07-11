@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 
+from app.core.errors import APIError, ErrorCode
 from app.modules.auth.models import User, UserProfile
 from app.modules.auth.service import clean_initial_display_text, clean_initial_text, now_utc
 from app.modules.profile.schemas import CompleteProfileRequest, UpdateProfileRequest
@@ -14,6 +15,8 @@ def profile_payload(user: User) -> dict:
         "role": user.role,
         "nickname": clean_initial_display_text(profile.nickname if profile else None),
         "avatar_url": profile.avatar_url if profile else None,
+        "avatar_review_asset_id": profile.avatar_review_asset_id if profile else None,
+        "avatar_review_status": profile.avatar_review_status if profile else "idle",
         "department": clean_initial_text(profile.department if profile else None),
         "contact_info": clean_initial_text(profile.contact_info if profile else None),
         "profile_completed": bool(profile and profile.profile_completed),
@@ -27,8 +30,13 @@ def complete_profile(db: Session, user: User, payload: CompleteProfileRequest) -
         profile = UserProfile(user_id=user.id, nickname=payload.nickname)
         db.add(profile)
 
+    if payload.avatar_url is not None and payload.avatar_url != profile.avatar_url:
+        raise APIError(
+            code=ErrorCode.FILE_SECURITY_REJECTED,
+            message="请通过头像上传功能提交图片审核",
+            status_code=422,
+        )
     profile.nickname = payload.nickname
-    profile.avatar_url = payload.avatar_url
     profile.department = payload.department
     profile.contact_info = payload.contact_info
     profile.profile_completed = True
@@ -51,7 +59,12 @@ def update_profile(db: Session, user: User, payload: UpdateProfileRequest) -> di
     if "nickname" in fields_set and payload.nickname is not None:
         profile.nickname = payload.nickname.strip()
     if "avatar_url" in fields_set:
-        profile.avatar_url = payload.avatar_url
+        if payload.avatar_url != profile.avatar_url:
+            raise APIError(
+                code=ErrorCode.FILE_SECURITY_REJECTED,
+                message="请通过头像上传功能提交图片审核",
+                status_code=422,
+            )
     if "department" in fields_set:
         profile.department = payload.department
     if "contact_info" in fields_set:

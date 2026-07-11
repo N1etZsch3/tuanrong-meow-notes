@@ -41,6 +41,7 @@
             <text class="avatar-note">
               {{ readonlyMode ? "管理员账号资料不可修改" : "点击更换头像，图片不超过 2MB" }}
             </text>
+            <text v-if="avatarReviewHint" class="avatar-review-hint">{{ avatarReviewHint }}</text>
           </view>
 
           <view class="form-card">
@@ -203,11 +204,7 @@ import {
   updateAdminUser,
   type AdminUserDto,
 } from "@/api/admin-users";
-import {
-  buildUserAvatarContentUrl,
-  resolveUserAvatarContentUrl,
-  uploadUserAvatar,
-} from "@/api/files";
+import { resolveUserAvatarContentUrl, uploadUserAvatar } from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import { createPageLeaveGuard } from "@/utils/page-leave-guard";
@@ -240,6 +237,7 @@ const userStore = useUserStore();
 const userId = ref("");
 const userDetail = ref<AdminUserDto | null>(null);
 const avatarUrl = ref<string | null>(null);
+const avatarReviewStatus = ref<"idle" | "pending" | "passed" | "rejected" | "failed">("idle");
 const loadState = ref<"loading" | "ready" | "error">("loading");
 const errorMessage = ref("");
 const isSaving = ref(false);
@@ -274,6 +272,15 @@ const isAccountActionPending = computed(
 );
 const avatarPreview = computed(() => avatarUrl.value || userDetail.value?.profile.avatar_url || defaultAvatar);
 const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : avatarPreview.value));
+const avatarReviewHint = computed(() => {
+  if (avatarReviewStatus.value === "pending") {
+    return "图片已上传，审核通过后自动生效";
+  }
+  if (["rejected", "failed"].includes(avatarReviewStatus.value)) {
+    return "头像审核未通过，请更换图片后重试";
+  }
+  return "";
+});
 
 watch(avatarPreview, () => {
   avatarLoadFailed.value = false;
@@ -290,6 +297,7 @@ const pageLeaveGuard = createPageLeaveGuard(
 function applyUser(user: AdminUserDto) {
   userDetail.value = user;
   avatarUrl.value = resolveUserAvatarContentUrl(user.profile.avatar_url);
+  avatarReviewStatus.value = user.profile.avatar_review_status || "idle";
   form.nickname = user.profile.nickname || "";
   form.real_name = user.profile.real_name || "";
   form.department = user.profile.department || "";
@@ -379,8 +387,13 @@ async function uploadAvatar(tempPath: string) {
   uni.showLoading({ title: "头像上传中", mask: true });
   try {
     const asset = await uploadUserAvatar(token, tempPath, userId.value || undefined);
-    avatarUrl.value = buildUserAvatarContentUrl(asset.asset_id);
+    avatarUrl.value = tempPath;
+    avatarReviewStatus.value = asset.security_status === "pending" ? "pending" : "passed";
+    if (savedMemberSnapshot.value) {
+      savedMemberSnapshot.value = { ...savedMemberSnapshot.value, avatar_url: tempPath };
+    }
     uni.hideLoading();
+    uni.showToast({ title: asset.review_message || "头像已提交", icon: "none" });
   } catch (error) {
     uni.hideLoading();
     const message = error instanceof Error ? error.message : "头像上传失败";
@@ -415,7 +428,6 @@ async function saveMember() {
       status: form.status,
       profile: {
         nickname: form.nickname.trim(),
-        avatar_url: avatarUrl.value,
         real_name: form.real_name || null,
         department: form.department || null,
         grade: form.grade || null,
@@ -802,6 +814,14 @@ onLoad((query) => {
   margin-top: 18rpx;
   color: #737b84;
   font-size: 24rpx;
+}
+
+.avatar-review-hint {
+  margin-top: 10rpx;
+  color: #9a6826;
+  font-size: 24rpx;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .form-card {

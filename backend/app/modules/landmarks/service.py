@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import APIError, ErrorCode
 from app.modules.auth.models import AdminOperationLog, User
-from app.modules.files.models import FileAsset
+from app.modules.files.service import resolve_business_image
 from app.modules.landmarks.schemas import (
     LandmarkCreateRequest,
     LandmarkPhotoRequest,
@@ -30,17 +30,16 @@ def _as_float(value) -> float | None:
 def _resolve_uploaded_file_urls(
     db: Session,
     photo: LandmarkPhotoRequest,
-) -> tuple[str, str | None]:
-    if photo.file_id is None:
-        return photo.file_url, photo.thumbnail_url
-
-    asset = db.get(FileAsset, photo.file_id)
-    if asset is None or asset.deleted_at is not None:
-        return photo.file_url, photo.thumbnail_url
-
-    return (
-        asset.default_url or photo.file_url,
-        asset.default_thumb_url or photo.thumbnail_url,
+    *,
+    uploaded_by: User,
+) -> tuple[UUID | None, str | None, str | None]:
+    return resolve_business_image(
+        db=db,
+        current_user=uploaded_by,
+        file_id=photo.file_id,
+        file_url=photo.file_url,
+        thumbnail_url=photo.thumbnail_url,
+        allowed_usage_types={"map_point_cover", "map_point_scene", "map_point_route"},
     )
 
 
@@ -149,7 +148,11 @@ def _add_photos(
     created = []
     cover_exists = any(photo.is_cover for photo in photos)
     for index, photo in enumerate(photos):
-        file_url, thumbnail_url = _resolve_uploaded_file_urls(db, photo)
+        _, file_url, thumbnail_url = _resolve_uploaded_file_urls(
+            db,
+            photo,
+            uploaded_by=uploaded_by,
+        )
         if not file_url:
             raise APIError(
                 code=ErrorCode.MAP_PARAM_ERROR,

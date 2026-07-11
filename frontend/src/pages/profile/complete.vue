@@ -53,6 +53,7 @@
             </view>
             <text class="avatar-copy">点击上传头像</text>
             <text class="avatar-rule">未上传时默认使用萌猫头像，图片不超过 2MB</text>
+            <text v-if="avatarReviewHint" class="avatar-review-hint">{{ avatarReviewHint }}</text>
           </view>
         </view>
 
@@ -104,11 +105,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from "vue";
 
-import {
-  buildUserAvatarContentUrl,
-  resolveUserAvatarContentUrl,
-  uploadUserAvatar,
-} from "@/api/files";
+import { resolveUserAvatarContentUrl, uploadUserAvatar } from "@/api/files";
 import { HOME_ROUTE, LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
@@ -128,6 +125,7 @@ const departments = ["生存保障部", "活动部", "宣传部", "秘书部", "
 const userStore = useUserStore();
 const isSubmitting = ref(false);
 const avatarUrl = ref<string | null>(null);
+const avatarReviewStatus = ref<"idle" | "pending" | "passed" | "rejected" | "failed">("idle");
 
 const initialDepartment = normalizeInitialProfileText(userStore.currentUser?.department);
 
@@ -147,6 +145,15 @@ const avatarPreview = computed(
   () => resolveUserAvatarContentUrl(avatarUrl.value || userStore.currentUser?.avatar_url) || defaultAvatar,
 );
 const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : avatarPreview.value));
+const avatarReviewHint = computed(() => {
+  if (avatarReviewStatus.value === "pending") {
+    return "图片已上传，审核通过后自动生效";
+  }
+  if (["rejected", "failed"].includes(avatarReviewStatus.value)) {
+    return "头像审核未通过，请更换图片后重试";
+  }
+  return "";
+});
 
 watch(avatarPreview, () => {
   avatarLoadFailed.value = false;
@@ -186,8 +193,10 @@ async function uploadAvatar(tempPath: string) {
   uni.showLoading({ title: "头像上传中", mask: true });
   try {
     const asset = await uploadUserAvatar(userStore.accessToken, tempPath, userStore.currentUser?.id);
-    avatarUrl.value = buildUserAvatarContentUrl(asset.asset_id);
+    avatarUrl.value = tempPath;
+    avatarReviewStatus.value = asset.security_status === "pending" ? "pending" : "passed";
     uni.hideLoading();
+    uni.showToast({ title: asset.review_message || "头像已提交", icon: "none" });
   } catch (error) {
     uni.hideLoading();
     const message = error instanceof Error ? error.message : "头像上传失败";
@@ -235,7 +244,6 @@ async function submitProfile() {
   try {
     await userStore.completeCurrentProfile({
       nickname: form.nickname,
-      avatar_url: avatarUrl.value,
       department: form.department,
       contact_info: form.contact_info,
     });
@@ -517,6 +525,12 @@ async function submitProfile() {
   margin-top: 8rpx;
   color: #9097a0;
   font-size: 21rpx;
+}
+
+.avatar-review-hint {
+  color: #9a6826;
+  font-size: 24rpx;
+  line-height: 1.5;
 }
 
 .privacy-note {

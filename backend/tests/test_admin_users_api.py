@@ -1,3 +1,4 @@
+from app.core.errors import ErrorCode
 from app.modules.auth.models import User
 from tests.test_auth_api import create_captcha, create_token, create_user
 
@@ -331,6 +332,36 @@ def test_admin_can_view_and_update_non_admin_member_detail(api_client, db_sessio
     assert updated["profile"]["nickname"] == "新昵称"
     assert updated["profile"]["department"] == "宣传部"
     assert updated["profile"]["contact_info"] == "wx-cat-helper"
+
+
+def test_admin_cannot_bypass_avatar_review_with_direct_url(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin-avatar-security",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    member = create_user(
+        db_session,
+        student_no="trmx-avatar-security",
+        must_change_password=False,
+    )
+    token = create_token(admin)
+
+    response = api_client.patch(
+        f"/api/v1/admin/users/{member.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "profile": {
+                "nickname": member.profile.nickname,
+                "avatar_url": "https://unreviewed.example/avatar.jpg",
+            }
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == int(ErrorCode.FILE_SECURITY_REJECTED)
 
 
 def test_admin_can_soft_delete_non_admin_member(api_client, db_session):

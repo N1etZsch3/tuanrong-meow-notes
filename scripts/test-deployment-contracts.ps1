@@ -105,6 +105,26 @@ Assert-Contains `
     -Needle 'install -m 600 "`$ENV_UPLOAD" "`$DEPLOY_DIR/.env"' `
     -Message "deploy-backend.ps1 must install the uploaded env file into the backend deploy directory."
 
+Assert-Contains `
+    -Content $deployScript `
+    -Needle 'CATMAP_WECHAT_CONTENT_SECURITY_MODE=enforced' `
+    -Message "deploy-backend.ps1 must require production image content security."
+
+Assert-Contains `
+    -Content $deployScript `
+    -Needle 'CATMAP_WECHAT_CONTENT_SECURITY_CALLBACK_TOKEN=' `
+    -Message "deploy-backend.ps1 must require a content security callback token."
+
+Assert-Contains `
+    -Content $deployScript `
+    -Needle "grep -Eq '^CATMAP_WECHAT_CONTENT_SECURITY_MODE=enforced" `
+    -Message "deploy-backend.ps1 must verify the effective remote content security mode."
+
+Assert-Contains `
+    -Content $deployScript `
+    -Needle 'unset callback_token' `
+    -Message "deploy-backend.ps1 must clear the callback token shell variable after validation."
+
 Assert-Before `
     -Content $deployScript `
     -EarlierNeedle 'if [ -f "`$ENV_UPLOAD" ]; then' `

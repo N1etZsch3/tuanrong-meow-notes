@@ -14,6 +14,8 @@ class ProfileResponse(BaseModel):
     role: str
     nickname: str
     avatar_url: str | None
+    avatar_review_asset_id: UUID | None = None
+    avatar_review_status: str = "idle"
     department: str | None
     contact_info: str | None
     profile_completed: bool

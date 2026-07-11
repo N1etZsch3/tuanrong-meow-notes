@@ -26,6 +26,7 @@
             <text class="avatar-plus">+</text>
           </view>
           <text class="avatar-note">点击更换头像，图片不超过 2MB</text>
+          <text v-if="avatarReviewHint" class="avatar-review-hint">{{ avatarReviewHint }}</text>
         </view>
 
         <view class="form-card">
@@ -82,11 +83,7 @@
 import { computed, nextTick, reactive, ref, watch } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 
-import {
-  buildUserAvatarContentUrl,
-  resolveUserAvatarContentUrl,
-  uploadUserAvatar,
-} from "@/api/files";
+import { resolveUserAvatarContentUrl, uploadUserAvatar } from "@/api/files";
 import { getMyProfile, updateMyProfile, type MyProfileResponse } from "@/api/profile";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
@@ -107,6 +104,7 @@ const departments = ["生存保障部", "活动部", "宣传部", "秘书部", "
 const userStore = useUserStore();
 const profile = ref<MyProfileResponse | null>(null);
 const avatarUrl = ref<string | null>(null);
+const avatarReviewStatus = ref<"idle" | "pending" | "passed" | "rejected" | "failed">("idle");
 const isSaving = ref(false);
 const savedProfileSnapshot = ref<ProfileEditSnapshot | null>(null);
 const pageLeaveGuardArmed = ref(true);
@@ -121,6 +119,15 @@ const form = reactive({
 const avatarLoadFailed = ref(false);
 const avatarPreview = computed(() => avatarUrl.value || profile.value?.avatar_url || defaultAvatar);
 const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : avatarPreview.value));
+const avatarReviewHint = computed(() => {
+  if (avatarReviewStatus.value === "pending") {
+    return "图片已上传，审核通过后自动生效";
+  }
+  if (["rejected", "failed"].includes(avatarReviewStatus.value)) {
+    return "头像审核未通过，请更换图片后重试";
+  }
+  return "";
+});
 
 watch(avatarPreview, () => {
   avatarLoadFailed.value = false;
@@ -137,6 +144,7 @@ const pageLeaveGuard = createPageLeaveGuard(
 function applyProfile(nextProfile: MyProfileResponse) {
   profile.value = nextProfile;
   avatarUrl.value = resolveUserAvatarContentUrl(nextProfile.avatar_url);
+  avatarReviewStatus.value = nextProfile.avatar_review_status;
   form.nickname = nextProfile.nickname;
   form.department = nextProfile.department || "";
   form.contact_info = nextProfile.contact_info || "";
@@ -199,8 +207,13 @@ async function uploadAvatar(tempPath: string) {
   uni.showLoading({ title: "头像上传中", mask: true });
   try {
     const asset = await uploadUserAvatar(accessToken, tempPath, userStore.currentUser?.id);
-    avatarUrl.value = buildUserAvatarContentUrl(asset.asset_id);
+    avatarUrl.value = tempPath;
+    avatarReviewStatus.value = asset.security_status === "pending" ? "pending" : "passed";
+    if (savedProfileSnapshot.value) {
+      savedProfileSnapshot.value = { ...savedProfileSnapshot.value, avatar_url: tempPath };
+    }
     uni.hideLoading();
+    uni.showToast({ title: asset.review_message || "头像已提交", icon: "none" });
   } catch (error) {
     uni.hideLoading();
     const message = error instanceof Error ? error.message : "头像上传失败";
@@ -245,7 +258,6 @@ async function saveProfile() {
     const updatedProfile = await updateMyProfile(
       {
         nickname: form.nickname,
-        avatar_url: avatarUrl.value,
         department: form.department,
         contact_info: form.contact_info,
       },
@@ -433,6 +445,13 @@ onShow(() => {
   margin-top: 18rpx;
   color: #737b84;
   font-size: 24rpx;
+}
+
+.avatar-review-hint {
+  color: #9a6826;
+  font-size: 24rpx;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .form-card {

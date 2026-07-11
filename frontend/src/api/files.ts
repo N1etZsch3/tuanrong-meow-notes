@@ -9,15 +9,23 @@ import {
   request,
 } from "@/services/request";
 import type { ApiResponse } from "@/types/api";
+import { requestWechatLoginCode } from "@/services/wechat-auth";
 
 export interface UploadedImageAsset {
   asset_id: string;
   usage_type?: string;
   owner_type?: string | null;
   owner_id?: string | null;
-  default_url: string;
+  default_url: string | null;
   default_thumb_url: string | null;
+  security_status?: "legacy" | "pending" | "passed" | "rejected" | "failed";
+  review_message?: string;
   created_at?: string;
+}
+
+export interface ApprovedImageAsset extends Omit<UploadedImageAsset, "default_url" | "security_status"> {
+  default_url: string;
+  security_status?: "legacy" | "passed";
 }
 
 export interface DeleteImageAssetResponse {
@@ -32,6 +40,7 @@ export interface UploadImageOptions {
   owner_id?: string;
   visibility?: "private" | "internal" | "public";
   caption?: string;
+  wechat_code?: string;
 }
 
 export function buildFileAssetContentUrl(
@@ -76,56 +85,110 @@ function parseUploadResponse<T>(data: unknown): ApiResponse<T> {
   return data as ApiResponse<T>;
 }
 
-export function uploadImage(
+function submitImageUpload(
   accessToken: string,
   filePath: string,
   options: UploadImageOptions,
 ): Promise<UploadedImageAsset> {
-  return new Promise((resolve, reject) => {
-    uni.uploadFile({
-      url: buildRequestUrl(appEnv.apiBaseUrl, API_ENDPOINTS.files.images),
-      filePath,
-      name: "file",
-      header: createAuthorizationHeader(accessToken),
-      formData: compactFormData(options),
-      success: (result) => {
-        const response = parseUploadResponse<UploadedImageAsset>(result.data);
-        if (result.statusCode < 200 || result.statusCode >= 300) {
-          if (typeof response?.code === "number") {
-            reject(
-              new ApiBusinessError(
-                response.code,
-                response.message,
-                response.trace_id,
-                response.data,
-              ),
-            );
-            return;
-          }
+  return requestWechatLoginCode().then(
+    (wechatCode) =>
+      new Promise((resolve, reject) => {
+        uni.uploadFile({
+          url: buildRequestUrl(appEnv.apiBaseUrl, API_ENDPOINTS.files.images),
+          filePath,
+          name: "file",
+          header: createAuthorizationHeader(accessToken),
+          formData: compactFormData({
+            ...options,
+            ...(wechatCode ? { wechat_code: wechatCode } : {}),
+          }),
+          success: (result) => {
+            const response = parseUploadResponse<UploadedImageAsset>(result.data);
+            if (result.statusCode < 200 || result.statusCode >= 300) {
+              if (typeof response?.code === "number") {
+                reject(
+                  new ApiBusinessError(
+                    response.code,
+                    response.message,
+                    response.trace_id,
+                    response.data,
+                  ),
+                );
+                return;
+              }
 
-          reject(new ApiHttpError(result.statusCode));
-          return;
-        }
+              reject(new ApiHttpError(result.statusCode));
+              return;
+            }
 
-        if (response.code !== 0) {
-          reject(
-            new ApiBusinessError(
-              response.code,
-              response.message,
-              response.trace_id,
-              response.data,
-            ),
-          );
-          return;
-        }
+            if (response.code !== 0) {
+              reject(
+                new ApiBusinessError(
+                  response.code,
+                  response.message,
+                  response.trace_id,
+                  response.data,
+                ),
+              );
+              return;
+            }
 
-        resolve(response.data);
-      },
-      fail: (error) => {
-        reject(new ApiNetworkError(error.errMsg));
-      },
+            resolve(response.data);
+          },
+          fail: (error) => {
+            reject(new ApiNetworkError(error.errMsg));
+          },
+        });
+      }),
+  );
+}
+
+function waitForNextReviewCheck(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 1000));
+}
+
+async function waitForApprovedImage(
+  accessToken: string,
+  initialAsset: UploadedImageAsset,
+): Promise<ApprovedImageAsset> {
+  let asset = initialAsset;
+  for (let attempt = 0; attempt < 60; attempt += 1) {
+    if (
+      asset.security_status !== "pending" &&
+      asset.security_status !== "rejected" &&
+      asset.security_status !== "failed" &&
+      asset.default_url
+    ) {
+      return asset as ApprovedImageAsset;
+    }
+    if (asset.security_status === "passed" && asset.default_url) {
+      return asset as ApprovedImageAsset;
+    }
+    if (asset.security_status === "rejected" || asset.security_status === "failed") {
+      throw new ApiBusinessError(
+        65024,
+        "图片包含违规内容，请更换后重试",
+        "",
+        asset,
+      );
+    }
+    await waitForNextReviewCheck();
+    asset = await request<UploadedImageAsset>({
+      url: API_ENDPOINTS.files.asset(asset.asset_id),
+      method: "GET",
+      token: accessToken,
     });
-  });
+  }
+  throw new ApiBusinessError(65023, "图片正在审核，请稍后再试", "", asset);
+}
+
+export async function uploadImage(
+  accessToken: string,
+  filePath: string,
+  options: UploadImageOptions,
+): Promise<ApprovedImageAsset> {
+  const asset = await submitImageUpload(accessToken, filePath, options);
+  return waitForApprovedImage(accessToken, asset);
 }
 
 export function uploadUserAvatar(
@@ -133,7 +196,7 @@ export function uploadUserAvatar(
   filePath: string,
   ownerId?: string,
 ): Promise<UploadedImageAsset> {
-  return uploadImage(accessToken, filePath, {
+  return submitImageUpload(accessToken, filePath, {
     usage_type: "user_avatar",
     owner_type: "user",
     owner_id: ownerId,

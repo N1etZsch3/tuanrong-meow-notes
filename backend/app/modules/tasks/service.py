@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.errors import APIError, ErrorCode
 from app.modules.auth.models import AdminOperationLog, User
 from app.modules.files.models import FileAsset
+from app.modules.files.service import resolve_business_image
 from app.modules.map.models import MapPoint
 from app.modules.map.service import associated_poi_payload, get_default_campus
 from app.modules.tasks.execution_state import (
@@ -381,17 +382,17 @@ def _asset_backed_photo_urls(photo: TaskPhoto | TaskCheckinPhoto) -> tuple[str, 
 def _resolve_uploaded_file_urls(
     db: Session,
     photo: UploadedFileRef,
-) -> tuple[str, str | None]:
-    if photo.file_id is None:
-        return photo.file_url, photo.thumbnail_url
-
-    asset = db.get(FileAsset, photo.file_id)
-    if asset is None or asset.deleted_at is not None:
-        return photo.file_url, photo.thumbnail_url
-
-    return (
-        asset.default_url or photo.file_url,
-        asset.default_thumb_url or photo.thumbnail_url,
+    *,
+    uploaded_by: User,
+    allowed_usage_types: set[str],
+) -> tuple[UUID | None, str | None, str | None]:
+    return resolve_business_image(
+        db=db,
+        current_user=uploaded_by,
+        file_id=photo.file_id,
+        file_url=photo.file_url,
+        thumbnail_url=photo.thumbnail_url,
+        allowed_usage_types=allowed_usage_types,
     )
 
 
@@ -998,7 +999,12 @@ def _add_task_photos(
     created: list[TaskPhoto] = []
     cover_exists = any(photo.is_cover for photo in photos)
     for index, photo in enumerate(photos):
-        file_url, thumbnail_url = _resolve_uploaded_file_urls(db, photo)
+        file_id, file_url, thumbnail_url = _resolve_uploaded_file_urls(
+            db,
+            photo,
+            uploaded_by=uploaded_by,
+            allowed_usage_types={"map_point_cover", "map_point_scene", "map_point_route"},
+        )
         if not file_url:
             raise APIError(
                 code=TASK_ERROR_PHOTO_INVALID,
@@ -1008,7 +1014,7 @@ def _add_task_photos(
         is_cover = photo.is_cover or (index == 0 and not cover_exists)
         task_photo = TaskPhoto(
             task_id=task.id,
-            file_id=photo.file_id,
+            file_id=file_id,
             file_url=file_url,
             thumbnail_url=thumbnail_url,
             cos_object_key=photo.cos_object_key,
@@ -1132,11 +1138,16 @@ def _checkin_photo(
     uploaded_by: User,
     sort_order: int,
 ) -> TaskCheckinPhoto:
-    file_url, thumbnail_url = _resolve_uploaded_file_urls(db, photo)
+    file_id, file_url, thumbnail_url = _resolve_uploaded_file_urls(
+        db,
+        photo,
+        uploaded_by=uploaded_by,
+        allowed_usage_types={"task_checkin_photo"},
+    )
     checkin_photo = TaskCheckinPhoto(
         checkin_id=checkin_id,
         task_id=task_id,
-        file_id=photo.file_id,
+        file_id=file_id,
         file_url=file_url,
         thumbnail_url=thumbnail_url,
         sort_order=sort_order,

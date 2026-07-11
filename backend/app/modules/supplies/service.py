@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import APIError
 from app.modules.auth.models import AdminOperationLog, User
-from app.modules.files.models import FileAsset
+from app.modules.files.service import resolve_business_image
 from app.modules.map.models import MapPoint, MapPointPhoto
 from app.modules.map.service import associated_poi_payload, get_default_campus
 from app.modules.supplies.models import (
@@ -94,17 +94,17 @@ def _latest_record(supply: SupplyPoint) -> SupplyPointRecord | None:
 def _resolve_uploaded_file_urls(
     db: Session,
     photo: UploadedFileRef,
-) -> tuple[str, str | None]:
-    if photo.file_id is None:
-        return photo.file_url, photo.thumbnail_url
-
-    asset = db.get(FileAsset, photo.file_id)
-    if asset is None or asset.deleted_at is not None:
-        return photo.file_url, photo.thumbnail_url
-
-    return (
-        asset.default_url or photo.file_url,
-        asset.default_thumb_url or photo.thumbnail_url,
+    *,
+    uploaded_by: User,
+    allowed_usage_types: set[str],
+) -> tuple[UUID | None, str | None, str | None]:
+    return resolve_business_image(
+        db=db,
+        current_user=uploaded_by,
+        file_id=photo.file_id,
+        file_url=photo.file_url,
+        thumbnail_url=photo.thumbnail_url,
+        allowed_usage_types=allowed_usage_types,
     )
 
 
@@ -503,7 +503,12 @@ def _add_photos(
     created = []
     cover_exists = any(photo.is_cover for photo in photos)
     for index, photo in enumerate(photos):
-        file_url, thumbnail_url = _resolve_uploaded_file_urls(db, photo)
+        _, file_url, thumbnail_url = _resolve_uploaded_file_urls(
+            db,
+            photo,
+            uploaded_by=uploaded_by,
+            allowed_usage_types={"map_point_cover", "map_point_scene", "map_point_route"},
+        )
         if not file_url:
             raise APIError(
                 code=SUPPLY_ERROR_PHOTO_INVALID,
@@ -729,7 +734,12 @@ def create_supply_record(
             )
         selected_by_id[item.item_id] = item.quantity
     match_status, display_tone = _record_match_status(active_items, selected_by_id)
-    file_url, thumbnail_url = _resolve_uploaded_file_urls(db, payload.photo)
+    file_id, file_url, thumbnail_url = _resolve_uploaded_file_urls(
+        db,
+        payload.photo,
+        uploaded_by=user,
+        allowed_usage_types={"supply_record_photo"},
+    )
     if not file_url:
         raise APIError(
             code=SUPPLY_ERROR_PHOTO_INVALID,
@@ -743,7 +753,7 @@ def create_supply_record(
         recorded_at=now,
         match_status=match_status,
         display_tone=display_tone,
-        photo_file_id=payload.photo.file_id,
+        photo_file_id=file_id,
         photo_file_url=file_url,
         photo_thumbnail_url=thumbnail_url,
         photo_cos_object_key=payload.photo.cos_object_key,

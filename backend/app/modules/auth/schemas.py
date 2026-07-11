@@ -66,6 +66,8 @@ class WeChatLoginRequest(BaseModel):
 class CurrentUserProfile(BaseModel):
     nickname: str
     avatar_url: str | None = None
+    avatar_review_asset_id: UUID | None = None
+    avatar_review_status: str = "idle"
     real_name: str | None = None
     department: str | None = None
     grade: str | None = None

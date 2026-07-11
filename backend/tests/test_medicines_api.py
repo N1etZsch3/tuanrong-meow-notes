@@ -6,8 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
+from app.modules.files import service as file_service
 from app.modules.medicines import service as medicine_service
 from app.modules.medicines.models import MedicineHolding, MedicinePhoto, MedicineUseApplication
 
@@ -82,6 +84,36 @@ def test_medicine_models_register_expected_tables():
     from app.db.base import Base
 
     assert EXPECTED_MEDICINE_TABLES.issubset(Base.metadata.tables)
+
+
+def test_medicine_create_rejects_unreviewed_external_photo_url(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        file_service,
+        "get_settings",
+        lambda: Settings(wechat_content_security_mode="enforced"),
+        raising=False,
+    )
+    member = create_user(db_session)
+
+    response = api_client.post(
+        "/api/v1/medicines",
+        headers=auth_headers(member),
+        json={
+            "catalog": {
+                "name": "未经审核的药品图片",
+                "unit": "盒",
+                "cover_image_url": "https://untrusted.example/rejected.jpg",
+            },
+            "initial_quantity": 1,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == 65024
 
 
 def test_member_can_create_medicine_and_read_catalog_summary(api_client, db_session):

@@ -27,7 +27,7 @@
 
 - `src/components/default-state.ts` 保存状态配置、插画资源、标题、说明和默认按钮。
 - `src/components/DefaultState.vue` 负责渲染背景、标题、白色圆角卡片、插画、说明和操作按钮。
-- 背景复用 `frontend/素材/加载页素材/加载页背景.png`，避免再引入一套新背景资源。
+- 背景复用 `frontend/素材/加载页素材/背景.jpg`，避免再引入一套新背景资源。
 - 插画使用 `frontend/素材/svg/缺省页` 中的 SVG，不使用外部替代素材。
 - 页面可以通过 props 覆盖标题、说明和按钮文案；按钮事件由页面决定具体动作。
 

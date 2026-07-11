@@ -3,27 +3,32 @@
     <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
 
     <view class="content">
-      <view class="brand-block">
-        <image class="association-logo" :src="loadingLogo" mode="aspectFit" />
-        <text class="app-title">团绒喵记本</text>
-        <text class="app-subtitle">探索校园 · 守护猫咪</text>
-        <view class="system-name">
-          <image class="wheat-icon wheat-icon-left" :src="wheatRightIcon" mode="aspectFit" />
-          <text>校园猫咪任务协作系统</text>
-          <image class="wheat-icon wheat-icon-right" :src="wheatLeftIcon" mode="aspectFit" />
-        </view>
-      </view>
+      <view class="brand-scene">
+        <image class="cat-illustration" :src="catIllustration" mode="aspectFit" />
+        <image class="app-wordmark" :src="appWordmark" mode="aspectFill" />
+        <text class="app-tagline">记录每一次温暖的相遇</text>
 
-      <view class="loader-block">
-        <view class="paw-loader" aria-label="加载中">
-          <image class="loading-paw paw-one" :src="pawIcon" mode="aspectFit" />
-          <image class="loading-paw paw-two" :src="pawIcon" mode="aspectFit" />
-          <image class="loading-paw paw-three" :src="pawIcon" mode="aspectFit" />
-        </view>
-        <view class="message-shell">
-          <text :key="activeMessage" class="loading-message">
-            {{ activeMessage }}
-          </text>
+        <view
+          class="progress-section"
+          role="progressbar"
+          aria-label="应用启动进度"
+          aria-valuemin="0"
+          aria-valuemax="100"
+          :aria-valuenow="loadingProgress"
+        >
+          <view class="progress-track">
+            <view class="progress-fill" :style="progressFillStyle">
+              <view class="progress-highlight" />
+            </view>
+          </view>
+
+          <view class="progress-copy">
+            <image class="progress-paw" :src="pawIcon" mode="aspectFit" />
+            <view class="progress-text">
+              <text>{{ progressMessage }}</text>
+              <text class="progress-percent">{{ loadingProgress }}%</text>
+            </view>
+          </view>
         </view>
       </view>
     </view>
@@ -39,32 +44,40 @@ import {
   type StartupRoute,
 } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import {
+  advanceStartupProgress,
+  STARTUP_PROGRESS_INITIAL,
+} from "./loading-page";
 
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
-import loadingLogo from "../../../素材/加载页素材/加载页会徽.png";
-import wheatLeftIcon from "../../../素材/加载页素材/麦穗1.svg";
-import wheatRightIcon from "../../../素材/加载页素材/麦穗2.svg";
+import catIllustration from "../../../素材/加载页素材/团绒猫.png";
+import appWordmark from "../../../素材/加载页素材/团绒喵记本字标.png";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 
-const LOADING_MESSAGES = [
-  "正在寻找校园里的猫猫...",
-  "正在加载猫咪地图...",
-  "猫猫正在带路中...",
-] as const;
-
-const MESSAGE_INTERVAL_MS = 2600;
 const MIN_LOADING_DURATION_MS = 1200;
+const PROGRESS_INTERVAL_MS = 80;
+const PROGRESS_COMPLETION_HOLD_MS = 180;
 
 const userStore = useUserStore();
-const messageIndex = ref(0);
-let messageTimer: ReturnType<typeof setInterval> | undefined;
+const loadingProgress = ref(STARTUP_PROGRESS_INITIAL);
+let progressTimer: ReturnType<typeof setInterval> | undefined;
 
-const activeMessage = computed(() => LOADING_MESSAGES[messageIndex.value]);
+const progressFillStyle = computed(() => ({
+  width: `${loadingProgress.value}%`,
+}));
+
+const progressMessage = computed(() =>
+  loadingProgress.value >= 100 ? "加载完成" : "正在加载中...",
+);
+
+function wait(durationMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, durationMs);
+  });
+}
 
 function waitForMinimumLoadingTime(): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, MIN_LOADING_DURATION_MS);
-  });
+  return wait(MIN_LOADING_DURATION_MS);
 }
 
 function navigateTo(route: StartupRoute): Promise<void> {
@@ -76,46 +89,65 @@ function navigateTo(route: StartupRoute): Promise<void> {
   });
 }
 
+function stopProgressAnimation() {
+  if (progressTimer) {
+    clearInterval(progressTimer);
+    progressTimer = undefined;
+  }
+}
+
+function startProgressAnimation() {
+  stopProgressAnimation();
+  loadingProgress.value = STARTUP_PROGRESS_INITIAL;
+  progressTimer = setInterval(() => {
+    loadingProgress.value = advanceStartupProgress(loadingProgress.value);
+  }, PROGRESS_INTERVAL_MS);
+}
+
+async function completeLoadingProgress() {
+  stopProgressAnimation();
+  loadingProgress.value = 100;
+  await wait(PROGRESS_COMPLETION_HOLD_MS);
+}
+
 async function beginStartup() {
   const [route] = await Promise.all([
     resolveStartupRoute(userStore),
     waitForMinimumLoadingTime(),
   ]);
 
+  await completeLoadingProgress();
   await navigateTo(route);
 }
 
 onMounted(() => {
-  messageTimer = setInterval(() => {
-    messageIndex.value = (messageIndex.value + 1) % LOADING_MESSAGES.length;
-  }, MESSAGE_INTERVAL_MS);
+  startProgressAnimation();
 
-  void beginStartup().catch(() => {
+  void beginStartup().catch(async () => {
     userStore.clearSession();
-    void navigateTo(LOGIN_ROUTE);
+    await completeLoadingProgress();
+    await navigateTo(LOGIN_ROUTE);
   });
 });
 
 onUnmounted(() => {
-  if (messageTimer) {
-    clearInterval(messageTimer);
-  }
+  stopProgressAnimation();
 });
 </script>
 
 <style scoped>
 .loading-page {
   position: relative;
+  width: 100%;
   min-height: 100vh;
   overflow: hidden;
-  background: #f7fbef;
-  font-family: "Songti SC", "STSong", "SimSun", serif;
+  background: #fbfdf5;
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
 }
 
 .page-bg {
   position: fixed;
-  top: 0;
-  left: 0;
+  inset: 0;
   width: 100%;
   height: 100%;
   z-index: 0;
@@ -124,173 +156,142 @@ onUnmounted(() => {
 .content {
   position: relative;
   z-index: 1;
+  width: 100%;
   min-height: 100vh;
   box-sizing: border-box;
-  padding: 248rpx 44rpx 214rpx;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.brand-block {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.association-logo {
-  width: 516rpx;
-  height: 516rpx;
-  filter: drop-shadow(0 24rpx 38rpx rgba(61, 110, 47, 0.22));
-}
-
-.app-title {
-  margin-top: 64rpx;
-  color: #276f2e;
-  font-size: 96rpx;
-  font-weight: 900;
-  line-height: 1;
-  letter-spacing: 7rpx;
-  text-shadow: 0 8rpx 18rpx rgba(39, 111, 46, 0.16);
-}
-
-.app-subtitle {
-  margin-top: 42rpx;
-  color: #6b7570;
-  font-size: 42rpx;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: 4rpx;
-}
-
-.system-name {
-  margin-top: 54rpx;
+  padding: max(44rpx, env(safe-area-inset-top)) 38rpx
+    max(64rpx, env(safe-area-inset-bottom));
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 20rpx;
-  color: #6f7b73;
-  font-size: 29rpx;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: 2rpx;
 }
 
-.wheat-icon {
-  width: 32rpx;
-  height: 32rpx;
-  opacity: 0.68;
+.brand-scene {
+  width: 100%;
+  margin-top: -38rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.cat-illustration {
+  width: 360rpx;
+  height: 310rpx;
+  flex: 0 0 auto;
+  filter: drop-shadow(0 12rpx 18rpx rgba(122, 154, 75, 0.1));
+  animation: catFloat 3.2s ease-in-out infinite;
+}
+
+.app-wordmark {
+  width: 460rpx;
+  height: 110rpx;
+  margin-top: 24rpx;
   flex: 0 0 auto;
 }
 
-.wheat-icon-left {
-  transform: rotate(-24deg);
+.app-tagline {
+  margin-top: -8rpx;
+  color: #8a9683;
+  font-size: 26rpx;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: 2rpx;
+  text-align: center;
 }
 
-.wheat-icon-right {
-  transform: rotate(24deg);
-}
-
-.loader-block {
-  width: 100%;
-  min-height: 164rpx;
+.progress-section {
+  width: 310rpx;
+  margin-top: 50rpx;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.paw-loader {
-  width: 214rpx;
-  height: 70rpx;
-  box-sizing: border-box;
-  padding: 0 28rpx;
+.progress-track {
+  position: relative;
+  width: 270rpx;
+  height: 14rpx;
+  overflow: hidden;
+  border: 2rpx solid rgba(151, 174, 126, 0.12);
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.72);
-  box-shadow: 0 14rpx 30rpx rgba(73, 117, 54, 0.12);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  background: rgba(220, 225, 210, 0.72);
+  box-shadow: inset 0 2rpx 5rpx rgba(109, 130, 88, 0.12);
 }
 
-.loading-paw {
-  width: 40rpx;
-  height: 40rpx;
-  opacity: 0.32;
-  transform: scale(0.82);
-  animation: pawPulse 1.55s ease-in-out infinite;
+.progress-fill {
+  position: relative;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #a8ca71 0%, #8eba59 72%, #83ad4e 100%);
+  box-shadow: 0 2rpx 10rpx rgba(117, 163, 67, 0.2);
+  transition: width 180ms ease-out;
 }
 
-.paw-two {
-  animation-delay: 0.22s;
+.progress-highlight {
+  position: absolute;
+  top: 2rpx;
+  right: 8rpx;
+  left: 8rpx;
+  height: 4rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.3);
 }
 
-.paw-three {
-  animation-delay: 0.44s;
-}
-
-.message-shell {
-  height: 48rpx;
-  margin-top: 38rpx;
+.progress-copy {
+  position: relative;
+  width: 100%;
+  min-height: 44rpx;
+  margin-top: 18rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
 }
 
-.loading-message {
-  display: block;
-  font-size: 31rpx;
-  font-weight: 800;
-  line-height: 48rpx;
-  letter-spacing: 2rpx;
+.progress-paw {
+  position: absolute;
+  left: 0;
+  width: 40rpx;
+  height: 40rpx;
+  opacity: 0.16;
+  transform: rotate(-15deg);
+}
+
+.progress-text {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 10rpx;
+  color: #9aa58f;
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 1.5;
+  letter-spacing: 1rpx;
   text-align: center;
-  color: #4a7c3d;
-  background-image: linear-gradient(90deg, #9fb894 0%, #2f7f33 48%, #b8cfaa 100%);
-  background-size: 220% 100%;
-  background-position: 100% 0;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: messageFade 2.52s ease-in-out both;
 }
 
-@keyframes pawPulse {
+.progress-percent {
+  min-width: 58rpx;
+  color: #84aa58;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+@keyframes catFloat {
   0%,
   100% {
-    opacity: 0.26;
-    transform: translateY(0) scale(0.82);
+    transform: translateY(0);
   }
 
-  45% {
-    opacity: 1;
-    transform: translateY(-8rpx) scale(1);
+  50% {
+    transform: translateY(-8rpx);
   }
 }
 
-@keyframes messageFade {
-  0% {
-    opacity: 0;
-    transform: translateY(14rpx);
-    background-position: 100% 0;
-  }
-
-  16% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-
-  72% {
-    opacity: 1;
-    transform: translateY(0);
-    background-position: 0 0;
-  }
-
-  100% {
-    opacity: 0;
-    transform: translateY(-10rpx);
-    background-position: 0 0;
+@media screen and (max-height: 680px) {
+  .brand-scene {
+    margin-top: -28rpx;
+    transform: scale(0.92);
   }
 }
 </style>

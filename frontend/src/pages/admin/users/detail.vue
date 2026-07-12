@@ -1,12 +1,4 @@
 <template>
-  <!-- #ifdef MP-WEIXIN -->
-  <page-container
-    :show="pageLeaveGuardArmed"
-    :overlay="false"
-    :duration="0"
-    @beforeleave="handleNativePageLeave"
-  >
-  <!-- #endif -->
   <view class="member-detail-page">
     <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
     <scroll-view class="detail-scroll" scroll-y :show-scrollbar="false">
@@ -186,10 +178,15 @@
         </view>
       </view>
     </view>
+    <!-- #ifdef MP-WEIXIN -->
+    <page-container
+      :show="pageLeaveGuardArmed"
+      :overlay="false"
+      :duration="0"
+      @beforeleave="handleNativePageLeave"
+    />
+    <!-- #endif -->
   </view>
-  <!-- #ifdef MP-WEIXIN -->
-  </page-container>
-  <!-- #endif -->
 </template>
 
 <script setup lang="ts">
@@ -247,8 +244,8 @@ const isResetting = ref(false);
 const isClearingWechatBinding = ref(false);
 const isDeleting = ref(false);
 const savedMemberSnapshot = ref<MemberEditSnapshot | null>(null);
-const pageLeaveGuardArmed = ref(true);
-let isNavigatingAway = false;
+const nativePageLeaveGuardReady = ref(true);
+const isNavigatingAway = ref(false);
 
 const form = reactive({
   nickname: "",
@@ -292,6 +289,13 @@ const currentRoleLabel = computed(() => roleOptions[roleIndex.value]?.label || "
 const currentStatusLabel = computed(() => statusOptions[statusIndex.value]?.label || "正常");
 const pageLeaveGuard = createPageLeaveGuard(
   () => !isSaving.value && hasPendingMemberChanges(),
+);
+const pageLeaveGuardArmed = computed(
+  () =>
+    nativePageLeaveGuardReady.value &&
+    !isNavigatingAway.value &&
+    !isSaving.value &&
+    hasPendingMemberChanges(),
 );
 
 function applyUser(user: AdminUserDto) {
@@ -588,6 +592,11 @@ async function deleteAccount() {
 }
 
 function goBack() {
+  if (!hasPendingMemberChanges()) {
+    isNavigatingAway.value = true;
+    uni.navigateBack();
+    return;
+  }
   requestPageLeave();
 }
 
@@ -619,29 +628,29 @@ function requestPageLeave() {
 }
 
 function handleNativePageLeave() {
-  if (isNavigatingAway) {
+  if (isNavigatingAway.value) {
     return;
   }
-  pageLeaveGuardArmed.value = false;
+  nativePageLeaveGuardReady.value = false;
   requestPageLeave();
 }
 
 function releasePageLeaveGuardAndNavigateBack() {
-  if (isNavigatingAway) {
+  if (isNavigatingAway.value) {
     return;
   }
-  isNavigatingAway = true;
-  pageLeaveGuardArmed.value = false;
+  isNavigatingAway.value = true;
+  nativePageLeaveGuardReady.value = false;
   nextTick(() => {
     uni.navigateBack();
   });
 }
 
 function rearmNativePageLeaveGuard() {
-  isNavigatingAway = false;
-  pageLeaveGuardArmed.value = false;
+  isNavigatingAway.value = false;
+  nativePageLeaveGuardReady.value = false;
   nextTick(() => {
-    pageLeaveGuardArmed.value = true;
+    nativePageLeaveGuardReady.value = true;
   });
 }
 

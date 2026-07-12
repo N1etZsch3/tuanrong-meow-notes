@@ -5,7 +5,7 @@
         <view class="hero">
           <view class="hero-copy">
             <view class="hero-title-row">
-              <text class="hero-title">我的</text>
+              <text class="hero-title">喵的</text>
               <image class="hero-cat" :src="catLineArt" mode="aspectFit" />
             </view>
             <text class="hero-subtitle">个人信息与任务记录</text>

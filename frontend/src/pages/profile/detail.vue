@@ -1,12 +1,4 @@
 <template>
-  <!-- #ifdef MP-WEIXIN -->
-  <page-container
-    :show="pageLeaveGuardArmed"
-    :overlay="false"
-    :duration="0"
-    @beforeleave="handleNativePageLeave"
-  >
-  <!-- #endif -->
   <view class="detail-page">
     <scroll-view class="detail-scroll" scroll-y>
       <view class="detail-inner">
@@ -73,10 +65,15 @@
         <button class="save-button" :loading="isSaving" @tap="saveProfile">保存资料</button>
       </view>
     </scroll-view>
+    <!-- #ifdef MP-WEIXIN -->
+    <page-container
+      :show="pageLeaveGuardArmed"
+      :overlay="false"
+      :duration="0"
+      @beforeleave="handleNativePageLeave"
+    />
+    <!-- #endif -->
   </view>
-  <!-- #ifdef MP-WEIXIN -->
-  </page-container>
-  <!-- #endif -->
 </template>
 
 <script setup lang="ts">
@@ -107,8 +104,8 @@ const avatarUrl = ref<string | null>(null);
 const avatarReviewStatus = ref<"idle" | "pending" | "passed" | "rejected" | "failed">("idle");
 const isSaving = ref(false);
 const savedProfileSnapshot = ref<ProfileEditSnapshot | null>(null);
-const pageLeaveGuardArmed = ref(true);
-let isNavigatingAway = false;
+const nativePageLeaveGuardReady = ref(true);
+const isNavigatingAway = ref(false);
 
 const form = reactive({
   nickname: "",
@@ -139,6 +136,13 @@ const departmentIndex = computed(() => {
 });
 const pageLeaveGuard = createPageLeaveGuard(
   () => !isSaving.value && hasPendingProfileChanges(),
+);
+const pageLeaveGuardArmed = computed(
+  () =>
+    nativePageLeaveGuardReady.value &&
+    !isNavigatingAway.value &&
+    !isSaving.value &&
+    hasPendingProfileChanges(),
 );
 
 function applyProfile(nextProfile: MyProfileResponse) {
@@ -283,6 +287,11 @@ async function saveProfile() {
 }
 
 function goBack() {
+  if (!hasPendingProfileChanges()) {
+    isNavigatingAway.value = true;
+    uni.navigateBack();
+    return;
+  }
   requestPageLeave();
 }
 
@@ -298,29 +307,29 @@ function requestPageLeave() {
 }
 
 function handleNativePageLeave() {
-  if (isNavigatingAway) {
+  if (isNavigatingAway.value) {
     return;
   }
-  pageLeaveGuardArmed.value = false;
+  nativePageLeaveGuardReady.value = false;
   requestPageLeave();
 }
 
 function releasePageLeaveGuardAndNavigateBack() {
-  if (isNavigatingAway) {
+  if (isNavigatingAway.value) {
     return;
   }
-  isNavigatingAway = true;
-  pageLeaveGuardArmed.value = false;
+  isNavigatingAway.value = true;
+  nativePageLeaveGuardReady.value = false;
   nextTick(() => {
     uni.navigateBack();
   });
 }
 
 function rearmNativePageLeaveGuard() {
-  isNavigatingAway = false;
-  pageLeaveGuardArmed.value = false;
+  isNavigatingAway.value = false;
+  nativePageLeaveGuardReady.value = false;
   nextTick(() => {
-    pageLeaveGuardArmed.value = true;
+    nativePageLeaveGuardReady.value = true;
   });
 }
 

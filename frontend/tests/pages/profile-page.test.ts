@@ -83,6 +83,8 @@ describe("profile center pages", () => {
     expect(subtitleRule).toContain("font-weight: 700");
     expect(profileIndexSource).toMatch(/\.hero\s*{[^}]*align-items: flex-start;[^}]*}/s);
     expect(profileIndexSource).not.toMatch(/\.hero\s*{[^}]*justify-content: space-between/s);
+    expect(profileIndexSource).toContain('<text class="hero-title">喵的</text>');
+    expect(profileIndexSource).not.toContain('<text class="hero-title">我的</text>');
   });
 
   it("defines clickable stats and favorite cat record entries", () => {
@@ -158,6 +160,19 @@ describe("profile center pages", () => {
     expect(profileDetailSource).toContain('@beforeleave="handleNativePageLeave"');
     expect(profileDetailSource).toContain("function requestPageLeave");
     expect(profileDetailSource).toContain("function releasePageLeaveGuardAndNavigateBack");
+  });
+
+  it("does not put a clean profile page behind a permanent intermediate container", () => {
+    const pageRootIndex = profileDetailSource.indexOf('<view class="detail-page">');
+    const guardIndex = profileDetailSource.indexOf("<page-container");
+
+    expect(pageRootIndex).toBeGreaterThanOrEqual(0);
+    expect(guardIndex).toBeGreaterThan(pageRootIndex);
+    expect(profileDetailSource).toContain("const pageLeaveGuardArmed = computed(");
+    expect(profileDetailSource).not.toContain("const pageLeaveGuardArmed = ref(true)");
+    expect(profileDetailSource).toMatch(
+      /function goBack\(\)\s*{[\s\S]*if \(!hasPendingProfileChanges\(\)\)[\s\S]*uni\.navigateBack\(\)/,
+    );
   });
 
   it("keeps pending avatars local until the server applies an approved asset", () => {

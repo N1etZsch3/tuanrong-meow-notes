@@ -125,6 +125,16 @@ Assert-Contains `
     -Needle 'unset callback_token' `
     -Message "deploy-backend.ps1 must clear the callback token shell variable after validation."
 
+Assert-Contains `
+    -Content $deployScript `
+    -Needle '$env:CATMAP_WECHAT_CONTENT_SECURITY_MODE = "off"' `
+    -Message "deploy-backend.ps1 must isolate ordinary local tests from production content security mode."
+
+Assert-Contains `
+    -Content $deployScript `
+    -Needle 'Remove-Item Env:CATMAP_WECHAT_CONTENT_SECURITY_MODE' `
+    -Message "deploy-backend.ps1 must restore an unset local content security mode after checks."
+
 Assert-Before `
     -Content $deployScript `
     -EarlierNeedle 'if [ -f "`$ENV_UPLOAD" ]; then' `

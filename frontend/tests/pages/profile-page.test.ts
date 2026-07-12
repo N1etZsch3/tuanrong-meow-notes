@@ -257,10 +257,16 @@ describe("profile center pages", () => {
   it("routes legacy COS avatar asset URLs through the content endpoint", () => {
     const assetId = "7e2a085d-9dc9-46e9-aa61-d18ddcd55c15";
     const legacyCosUrl = `https://cos.example/catmap/dev/user/member/${assetId}/avatar_lg.jpg`;
+    const backendRelativeUrl =
+      `/api/v1/files/assets/${assetId}/content?scene=avatar_profile`;
 
     expect(resolveUserAvatarContentUrl(legacyCosUrl)).toBe(
       buildUserAvatarContentUrl(assetId),
     );
+    expect(resolveUserAvatarContentUrl(backendRelativeUrl)).toBe(
+      buildUserAvatarContentUrl(assetId),
+    );
+    expect(resolveUserAvatarContentUrl(backendRelativeUrl)).not.toContain("127.0.0.1");
     expect(resolveUserAvatarContentUrl("/uploads/legacy-avatar.jpg")).toBe(
       "/uploads/legacy-avatar.jpg",
     );

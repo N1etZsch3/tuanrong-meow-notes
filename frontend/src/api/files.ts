@@ -61,13 +61,17 @@ export function buildUserAvatarContentUrl(assetId: string): string {
 
 const LEGACY_USER_AVATAR_ASSET_ID_PATTERN =
   /\/catmap\/[^/]+\/user\/[^/]+\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\//i;
+const BACKEND_FILE_ASSET_CONTENT_PATTERN =
+  /^\/(?:api\/v1\/)?files\/assets\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/content(?:\?|$)/i;
 
 export function resolveUserAvatarContentUrl(avatarUrl: string | null | undefined): string | null {
   if (!avatarUrl) {
     return null;
   }
 
-  const assetId = avatarUrl.match(LEGACY_USER_AVATAR_ASSET_ID_PATTERN)?.[1];
+  const assetId =
+    avatarUrl.match(BACKEND_FILE_ASSET_CONTENT_PATTERN)?.[1] ||
+    avatarUrl.match(LEGACY_USER_AVATAR_ASSET_ID_PATTERN)?.[1];
   return assetId ? buildUserAvatarContentUrl(assetId) : avatarUrl;
 }
 

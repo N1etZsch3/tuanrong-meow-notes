@@ -113,8 +113,23 @@ if ($EnvFile) {
 }
 
 if (-not $SkipLocalChecks) {
-    Invoke-Native "py" @("-3.11", "-m", "pytest", "-q") $backendDir
-    Invoke-Native "py" @("-3.11", "-m", "ruff", "check", ".") $backendDir
+    $previousContentSecurityMode = [Environment]::GetEnvironmentVariable(
+        "CATMAP_WECHAT_CONTENT_SECURITY_MODE",
+        "Process"
+    )
+    try {
+        $env:CATMAP_WECHAT_CONTENT_SECURITY_MODE = "off"
+        Invoke-Native "py" @("-3.11", "-m", "pytest", "-q") $backendDir
+        Invoke-Native "py" @("-3.11", "-m", "ruff", "check", ".") $backendDir
+    }
+    finally {
+        if ($null -eq $previousContentSecurityMode) {
+            Remove-Item Env:CATMAP_WECHAT_CONTENT_SECURITY_MODE -ErrorAction SilentlyContinue
+        }
+        else {
+            $env:CATMAP_WECHAT_CONTENT_SECURITY_MODE = $previousContentSecurityMode
+        }
+    }
 }
 
 $tempDir = Join-Path ([IO.Path]::GetTempPath()) ("catmap-deploy-" + (Get-Date -Format "yyyyMMddHHmmss"))

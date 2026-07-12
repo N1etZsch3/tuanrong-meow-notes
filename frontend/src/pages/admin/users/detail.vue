@@ -184,13 +184,14 @@
       :overlay="false"
       :duration="0"
       @beforeleave="handleNativePageLeave"
+      @afterleave="handleGuardContainerAfterLeave"
     />
     <!-- #endif -->
   </view>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 
 import {
@@ -204,7 +205,13 @@ import {
 import { resolveUserAvatarContentUrl, uploadUserAvatar } from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
-import { createPageLeaveGuard } from "@/utils/page-leave-guard";
+import { consumeAvatarReviewFailureNotice } from "@/utils/avatar-review-notice";
+import {
+  createPageContainerLeaveCoordinator,
+  createPageLeaveGuard,
+  type PageContainerLeaveAction,
+  type PageLeaveOrigin,
+} from "@/utils/page-leave-guard";
 
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
@@ -246,6 +253,7 @@ const isDeleting = ref(false);
 const savedMemberSnapshot = ref<MemberEditSnapshot | null>(null);
 const nativePageLeaveGuardReady = ref(true);
 const isNavigatingAway = ref(false);
+const isGuardContainerClosing = ref(false);
 
 const form = reactive({
   nickname: "",
@@ -273,9 +281,6 @@ const avatarReviewHint = computed(() => {
   if (avatarReviewStatus.value === "pending") {
     return "图片已上传，审核通过后自动生效";
   }
-  if (["rejected", "failed"].includes(avatarReviewStatus.value)) {
-    return "头像审核未通过，请更换图片后重试";
-  }
   return "";
 });
 
@@ -290,6 +295,7 @@ const currentStatusLabel = computed(() => statusOptions[statusIndex.value]?.labe
 const pageLeaveGuard = createPageLeaveGuard(
   () => !isSaving.value && hasPendingMemberChanges(),
 );
+const pageLeaveCoordinator = createPageContainerLeaveCoordinator();
 const pageLeaveGuardArmed = computed(
   () =>
     nativePageLeaveGuardReady.value &&
@@ -298,10 +304,20 @@ const pageLeaveGuardArmed = computed(
     hasPendingMemberChanges(),
 );
 
-function applyUser(user: AdminUserDto) {
+function applyUser(
+  user: AdminUserDto,
+  options: { preservePendingAvatar?: boolean } = {},
+) {
+  const preservePendingAvatar = Boolean(
+    options.preservePendingAvatar &&
+    avatarReviewStatus.value === "pending" &&
+    user.profile.avatar_review_status !== "passed",
+  );
   userDetail.value = user;
-  avatarUrl.value = resolveUserAvatarContentUrl(user.profile.avatar_url);
-  avatarReviewStatus.value = user.profile.avatar_review_status || "idle";
+  if (!preservePendingAvatar) {
+    avatarUrl.value = resolveUserAvatarContentUrl(user.profile.avatar_url);
+    avatarReviewStatus.value = user.profile.avatar_review_status || "idle";
+  }
   form.nickname = user.profile.nickname || "";
   form.real_name = user.profile.real_name || "";
   form.department = user.profile.department || "";
@@ -340,7 +356,17 @@ async function loadUser() {
   }
   loadState.value = "loading";
   try {
-    applyUser(await getAdminUserDetail(token, userId.value));
+    const user = await getAdminUserDetail(token, userId.value);
+    applyUser(user);
+    if (
+      consumeAvatarReviewFailureNotice(
+        user.id,
+        user.profile.avatar_review_asset_id,
+        user.profile.avatar_review_status || "idle",
+      )
+    ) {
+      uni.showToast({ title: "头像审核未通过，请更换图片后重试", icon: "none" });
+    }
     loadState.value = "ready";
   } catch (error) {
     loadState.value = "error";
@@ -438,7 +464,7 @@ async function saveMember() {
         contact_info: form.contact_info || null,
       },
     });
-    applyUser(updated);
+    applyUser(updated, { preservePendingAvatar: true });
     uni.showToast({ title: "成员资料已保存", icon: "success" });
   } catch (error) {
     const message = error instanceof Error ? error.message : "保存失败";
@@ -597,7 +623,7 @@ function goBack() {
     uni.navigateBack();
     return;
   }
-  requestPageLeave();
+  requestPageLeave("button");
 }
 
 function hasPendingMemberChanges() {
@@ -616,42 +642,71 @@ function hasPendingMemberChanges() {
   });
 }
 
-function requestPageLeave() {
+function requestPageLeave(origin: PageLeaveOrigin) {
   const request = pageLeaveGuard.requestLeave();
   if (request === "leave") {
-    releasePageLeaveGuardAndNavigateBack();
+    navigateBackAfterGuard();
     return;
   }
   if (request === "confirm") {
+    pageLeaveCoordinator.begin(origin);
     confirmDiscardMemberChanges();
   }
 }
 
 function handleNativePageLeave() {
-  if (isNavigatingAway.value) {
+  if (isNavigatingAway.value || isGuardContainerClosing.value) {
+    return;
+  }
+  if (isSaving.value || !hasPendingMemberChanges()) {
     return;
   }
   nativePageLeaveGuardReady.value = false;
-  requestPageLeave();
+  requestPageLeave("container");
 }
 
-function releasePageLeaveGuardAndNavigateBack() {
+function navigateBackAfterGuard() {
   if (isNavigatingAway.value) {
     return;
   }
   isNavigatingAway.value = true;
   nativePageLeaveGuardReady.value = false;
-  nextTick(() => {
-    uni.navigateBack();
+  uni.navigateBack({
+    fail: () => {
+      isNavigatingAway.value = false;
+      pageLeaveGuard.reset();
+      pageLeaveCoordinator.reset();
+      nativePageLeaveGuardReady.value = hasPendingMemberChanges();
+      uni.showToast({ title: "返回失败，请重试", icon: "none" });
+    },
   });
 }
 
 function rearmNativePageLeaveGuard() {
   isNavigatingAway.value = false;
-  nativePageLeaveGuardReady.value = false;
-  nextTick(() => {
-    nativePageLeaveGuardReady.value = true;
-  });
+  nativePageLeaveGuardReady.value = hasPendingMemberChanges();
+}
+
+function runGuardLeaveAction(action: PageContainerLeaveAction | null) {
+  if (action === "navigate") {
+    navigateBackAfterGuard();
+  } else if (action === "rearm") {
+    rearmNativePageLeaveGuard();
+  }
+}
+
+function resolveGuardLeave(action: PageContainerLeaveAction) {
+  const resolution = pageLeaveCoordinator.resolve(action);
+  if (resolution.closeContainer) {
+    isGuardContainerClosing.value = true;
+    nativePageLeaveGuardReady.value = false;
+  }
+  runGuardLeaveAction(resolution.action);
+}
+
+function handleGuardContainerAfterLeave() {
+  isGuardContainerClosing.value = false;
+  runGuardLeaveAction(pageLeaveCoordinator.afterContainerLeave());
 }
 
 function confirmDiscardMemberChanges() {
@@ -663,11 +718,11 @@ function confirmDiscardMemberChanges() {
     cancelText: "继续编辑",
     success: (result) => {
       if (result.confirm && pageLeaveGuard.confirmDiscard()) {
-        releasePageLeaveGuardAndNavigateBack();
+        resolveGuardLeave("navigate");
         return;
       }
       pageLeaveGuard.cancelDiscard();
-      rearmNativePageLeaveGuard();
+      resolveGuardLeave("rearm");
     },
   });
 }

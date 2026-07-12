@@ -180,7 +180,13 @@ describe("admin entry pages", () => {
     expect(adminUsersDetailSource).toContain("createPageLeaveGuard");
     expect(adminUsersDetailSource).toContain("<page-container");
     expect(adminUsersDetailSource).toContain('@beforeleave="handleNativePageLeave"');
+    expect(adminUsersDetailSource).toContain('@afterleave="handleGuardContainerAfterLeave"');
+    expect(adminUsersDetailSource).toContain("createPageContainerLeaveCoordinator");
+    expect(adminUsersDetailSource).toContain(
+      "if (isSaving.value || !hasPendingMemberChanges())",
+    );
     expect(adminUsersDetailSource).toContain("修改尚未保存，是否放弃？");
+    expect(adminUsersDetailSource).toContain("preservePendingAvatar");
   });
 
   it("does not put a clean member detail page behind a permanent intermediate container", () => {

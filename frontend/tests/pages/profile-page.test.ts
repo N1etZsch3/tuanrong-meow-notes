@@ -22,7 +22,11 @@ import {
   createProfileEditSnapshot,
   hasUnsavedProfileChanges,
 } from "../../src/pages/profile/profile-edit-guard";
-import { createPageLeaveGuard } from "../../src/utils/page-leave-guard";
+import {
+  createPageContainerLeaveCoordinator,
+  createPageLeaveGuard,
+} from "../../src/utils/page-leave-guard";
+import { consumeAvatarReviewFailureNotice } from "../../src/utils/avatar-review-notice";
 
 function extractCssRule(source: string, selector: string): string {
   const start = source.lastIndexOf(`${selector} {`);
@@ -158,8 +162,46 @@ describe("profile center pages", () => {
     expect(profileDetailSource).toContain("createPageLeaveGuard");
     expect(profileDetailSource).toContain("<page-container");
     expect(profileDetailSource).toContain('@beforeleave="handleNativePageLeave"');
+    expect(profileDetailSource).toContain('@afterleave="handleGuardContainerAfterLeave"');
     expect(profileDetailSource).toContain("function requestPageLeave");
-    expect(profileDetailSource).toContain("function releasePageLeaveGuardAndNavigateBack");
+    expect(profileDetailSource).toContain("createPageContainerLeaveCoordinator");
+    expect(profileDetailSource).toContain(
+      "if (isSaving.value || !hasPendingProfileChanges())",
+    );
+  });
+
+  it("waits for the fake page to finish leaving before navigating or rearming", () => {
+    const buttonConfirm = createPageContainerLeaveCoordinator();
+    buttonConfirm.begin("button");
+    expect(buttonConfirm.resolve("navigate")).toEqual({
+      closeContainer: true,
+      action: null,
+    });
+    expect(buttonConfirm.afterContainerLeave()).toBe("navigate");
+
+    const buttonCancel = createPageContainerLeaveCoordinator();
+    buttonCancel.begin("button");
+    expect(buttonCancel.resolve("rearm")).toEqual({
+      closeContainer: false,
+      action: null,
+    });
+    expect(buttonCancel.afterContainerLeave()).toBeNull();
+
+    const swipeConfirm = createPageContainerLeaveCoordinator();
+    swipeConfirm.begin("container");
+    expect(swipeConfirm.afterContainerLeave()).toBeNull();
+    expect(swipeConfirm.resolve("navigate")).toEqual({
+      closeContainer: false,
+      action: "navigate",
+    });
+
+    const swipeCancel = createPageContainerLeaveCoordinator();
+    swipeCancel.begin("container");
+    expect(swipeCancel.resolve("rearm")).toEqual({
+      closeContainer: false,
+      action: null,
+    });
+    expect(swipeCancel.afterContainerLeave()).toBe("rearm");
   });
 
   it("does not put a clean profile page behind a permanent intermediate container", () => {
@@ -185,6 +227,31 @@ describe("profile center pages", () => {
       expect(source).toContain("审核通过后自动生效");
       expect(source).not.toContain("avatarUrl.value = asset.default_url");
     }
+  });
+
+  it("shows an asynchronous avatar rejection only once per reviewed asset", () => {
+    const seen = new Set<string>();
+    const storage = {
+      getStorageSync: (key: string) => seen.has(key),
+      setStorageSync: (key: string) => {
+        seen.add(key);
+      },
+    };
+
+    expect(
+      consumeAvatarReviewFailureNotice("user-1", "asset-1", "rejected", storage),
+    ).toBe(true);
+    expect(
+      consumeAvatarReviewFailureNotice("user-1", "asset-1", "rejected", storage),
+    ).toBe(false);
+    expect(
+      consumeAvatarReviewFailureNotice("user-1", "asset-2", "failed", storage),
+    ).toBe(true);
+    expect(
+      consumeAvatarReviewFailureNotice("user-1", "asset-3", "pending", storage),
+    ).toBe(false);
+    expect(profileDetailSource).toContain("preservePendingAvatar");
+    expect(profileDetailSource).toContain("consumeAvatarReviewFailureNotice");
   });
 
   it("routes legacy COS avatar asset URLs through the content endpoint", () => {

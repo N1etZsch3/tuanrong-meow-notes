@@ -90,12 +90,11 @@ def _parse_callback_body(body: bytes) -> dict:
             message="图片审核回调内容无效",
             status_code=400,
         ) from exc
-    payload = {child.tag: child.text or "" for child in root}
-    for key in ("result", "detail"):
-        value = payload.get(key)
-        if isinstance(value, str):
-            try:
-                payload[key] = json.loads(value)
-            except json.JSONDecodeError:
-                continue
-    return payload
+    return {child.tag: _xml_element_value(child) for child in root}
+
+
+def _xml_element_value(element: ElementTree.Element):
+    children = list(element)
+    if not children:
+        return element.text or ""
+    return {child.tag: _xml_element_value(child) for child in children}

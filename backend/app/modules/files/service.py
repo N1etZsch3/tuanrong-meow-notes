@@ -68,7 +68,7 @@ def upload_image(
         owner_id=owner_id,
         current_user=current_user,
     )
-    security_enabled = settings.wechat_content_security_mode == "enforced"
+    security_enabled = _requires_content_security_review(usage_type, settings)
     if security_enabled:
         if security_openid is None:
             if not wechat_code:
@@ -215,7 +215,7 @@ def batch_upload_images(
             status_code=400,
         )
     security_openid: str | None = None
-    if settings.wechat_content_security_mode == "enforced":
+    if _requires_content_security_review(usage_type, settings):
         if not wechat_code:
             raise APIError(
                 code=ErrorCode.FILE_SECURITY_CODE_REQUIRED,
@@ -374,6 +374,15 @@ def bind_asset_owner(
         _validate_usage_type(usage_type)
     asset = _load_asset(db, asset_id)
     _ensure_asset_access(asset, current_user)
+    target_usage_type = usage_type or asset.usage_type
+    if target_usage_type in CONTENT_SECURITY_SCENES and (
+        asset.usage_type != target_usage_type or asset.security_status != "passed"
+    ):
+        raise APIError(
+            code=ErrorCode.FILE_SECURITY_REJECTED,
+            message="头像必须通过专用上传流程完成安全审核",
+            status_code=422,
+        )
     _ensure_security_ready(asset)
     if asset.owner_type not in {None, "temporary", owner_type} and asset.owner_id != owner_id:
         raise APIError(
@@ -384,7 +393,7 @@ def bind_asset_owner(
     asset.owner_type = owner_type
     asset.owner_id = owner_id
     if usage_type:
-        asset.usage_type = usage_type
+        asset.usage_type = target_usage_type
     db.commit()
     db.refresh(asset)
     return {
@@ -455,18 +464,6 @@ def resolve_business_image(
             message="文件正在处理中",
             status_code=409,
         )
-    if asset.security_status == "pending":
-        raise APIError(
-            code=ErrorCode.FILE_SECURITY_PENDING,
-            message="图片正在进行安全审核",
-            status_code=409,
-        )
-    if asset.security_status != "passed":
-        raise APIError(
-            code=ErrorCode.FILE_SECURITY_REJECTED,
-            message="图片未经安全审核，请重新上传",
-            status_code=422,
-        )
     if asset.usage_type not in allowed_usage_types:
         raise APIError(
             code=ErrorCode.FILE_SECURITY_REJECTED,
@@ -479,6 +476,8 @@ def resolve_business_image(
             message="无权使用该图片",
             status_code=403,
         )
+    if _asset_requires_content_security_review(asset):
+        _ensure_security_ready(asset)
     if not asset.default_url:
         raise APIError(
             code=ErrorCode.FILE_PROCESSING,
@@ -502,7 +501,8 @@ def build_object_key(
 
 
 def asset_payload(asset: FileAsset) -> dict:
-    security_ready = asset.security_status in {"legacy", "passed"}
+    security_ready = _is_security_ready(asset)
+    security_status = _public_security_status(asset)
     variants = {
         variant.variant_key: variant_payload(variant, include_url=security_ready)
         for variant in asset.variants
@@ -519,8 +519,8 @@ def asset_payload(asset: FileAsset) -> dict:
         "default_thumb_variant_key": asset.default_thumb_variant_key,
         "default_url": asset.default_url if security_ready else None,
         "default_thumb_url": asset.default_thumb_url if security_ready else None,
-        "security_status": asset.security_status,
-        "review_message": security_review_message(asset.security_status),
+        "security_status": security_status,
+        "review_message": security_review_message(security_status),
         "variants": variants,
         "source": {
             "source_filename": asset.source_filename,
@@ -534,7 +534,7 @@ def asset_payload(asset: FileAsset) -> dict:
 
 
 def asset_summary_payload(asset: FileAsset) -> dict:
-    security_ready = asset.security_status in {"legacy", "passed"}
+    security_ready = _is_security_ready(asset)
     return {
         "asset_id": asset.id,
         "usage_type": asset.usage_type,
@@ -543,7 +543,7 @@ def asset_summary_payload(asset: FileAsset) -> dict:
         "process_status": asset.process_status,
         "default_url": asset.default_url if security_ready else None,
         "default_thumb_url": asset.default_thumb_url if security_ready else None,
-        "security_status": asset.security_status,
+        "security_status": _public_security_status(asset),
         "created_at": asset.created_at,
     }
 
@@ -593,6 +593,15 @@ def handle_security_callback(db: Session, payload: dict) -> dict:
     asset = db.query(FileAsset).filter(FileAsset.security_trace_id == trace_id).one_or_none()
     if asset is None:
         return {"matched": False, "trace_id": trace_id}
+
+    if not _asset_requires_content_security_review(asset):
+        asset.security_status = "legacy"
+        db.commit()
+        return {
+            "matched": True,
+            "asset_id": asset.id,
+            "security_status": "legacy",
+        }
 
     if asset.security_status in {"passed", "rejected"}:
         return {
@@ -838,7 +847,7 @@ def _ensure_asset_owner_or_admin(asset: FileAsset, current_user: User) -> None:
 
 
 def _ensure_security_ready(asset: FileAsset) -> None:
-    if asset.security_status in {"legacy", "passed"}:
+    if _is_security_ready(asset):
         return
     if asset.security_status == "pending":
         raise APIError(
@@ -851,6 +860,28 @@ def _ensure_security_ready(asset: FileAsset) -> None:
         message="图片包含违规内容，请更换后重试",
         status_code=422,
     )
+
+
+def _requires_content_security_review(usage_type: str, settings: Settings) -> bool:
+    return (
+        settings.wechat_content_security_mode == "enforced"
+        and usage_type in CONTENT_SECURITY_SCENES
+    )
+
+
+def _asset_requires_content_security_review(asset: FileAsset) -> bool:
+    return asset.usage_type in CONTENT_SECURITY_SCENES
+
+
+def _is_security_ready(asset: FileAsset) -> bool:
+    return not _asset_requires_content_security_review(asset) or asset.security_status in {
+        "legacy",
+        "passed",
+    }
+
+
+def _public_security_status(asset: FileAsset) -> str:
+    return asset.security_status if _asset_requires_content_security_review(asset) else "legacy"
 
 
 def _find_variant(asset: FileAsset, variant_key: str) -> FileAssetVariant | None:

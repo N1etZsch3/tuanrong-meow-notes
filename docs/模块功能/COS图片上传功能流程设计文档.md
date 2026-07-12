@@ -50,11 +50,13 @@ V1 推荐采用：
   ↓
 后端上传到腾讯云 COS 隔离对象
   ↓
-写入 file_assets，内容安全状态为 pending
+写入 file_assets
   ↓
-后端使用预签名 URL 调微信 mediaCheckAsync 2.0
+user_avatar：状态 pending，使用预签名 URL 调微信 mediaCheckAsync 2.0
   ↓
-微信回调 pass 后才允许业务表保存 asset_id + URL
+头像等待微信回调，pass 后服务器自动替换
+  ↓
+其他 usage_type：状态 legacy，立即向业务返回 asset_id + URL
 ```
 
 不建议在 V1 直接让小程序把图片直传到 COS 正式目录。原因：
@@ -348,9 +350,9 @@ temporary
 3. 如果用户 `profile_completed = false`，只允许上传 `user_avatar`。
 4. 后端必须校验真实文件类型，不能只信任 `Content-Type` 和文件后缀。
 5. 所有图片必须生成 display 和 thumbnail 两个版本。
-6. 上传成功后写入 `file_assets`，新上传图片默认进入 `pending` 内容安全状态。
-7. 所有用户上传图片都通过服务端调用微信 `mediaCheckAsync` 2.0；前端不得持有 access token 或 AppSecret。
-8. 微信 `pass` 后才允许读取、绑定或写入业务表；`risky/review` 均拒绝发布。
+6. 上传成功后写入 `file_assets`；`user_avatar` 进入 `pending`，其他图片标记为无需微信审核的 `legacy` 并立即可用。
+7. 只有用户头像通过服务端调用微信 `mediaCheckAsync` 2.0；前端不得持有 access token 或 AppSecret。
+8. 用户头像只有微信 `pass` 后才允许读取和自动应用；`risky/review` 均拒绝发布。
 9. 头像通过回调自动生效，待审或拒绝时继续展示旧头像。
 10. 接口异常采用关闭失败策略，不能把“审核服务不可用”当成审核通过。
 
@@ -556,10 +558,11 @@ client.put_object(
 2. 生成 asset_id
 3. 生成 display/thumb bytes
 4. 上传 display/thumb 到 COS 隔离路径
-5. 所有对象成功后写入 file_assets/file_asset_variants，security_status = pending
-6. 用预签名 display URL 提交微信 mediaCheckAsync，记录 trace_id
-7. 立即返回待审 asset_id，不返回可发布 URL
-8. 微信回调 pass 后开放 URL；risky/review/failed 均不可发布
+5. 所有对象成功后写入 file_assets/file_asset_variants
+6. user_avatar 写入 pending，用预签名 display URL 提交微信 mediaCheckAsync，记录 trace_id
+7. user_avatar 立即返回待审 asset_id，不返回可发布 URL
+8. user_avatar 在微信回调 pass 后开放 URL；risky/review/failed 均不可发布
+9. 其他 usage_type 写入 legacy，立即返回可用 URL，不获取 wechat_code、不提交微信审核
 ```
 
 如果第 4 步成功、第 5 步失败，需要删除第 4 步已上传对象，或者写入失败日志等待清理。V1 推荐失败时尽量回滚已上传对象。
@@ -718,7 +721,7 @@ uni.uploadFile({
 ## 15. V1 最终规范
 
 ```text
-1. 所有用户上传图片必须经过后端 FileService 和微信内容安全审核。
+1. 所有用户上传图片必须经过后端 FileService；只有 `user_avatar` 进入微信内容安全审核。
 2. 所有图片先压缩、转码、生成缩略图，再上传腾讯云 COS。
 3. V1 不长期保存用户手机原始大图。
 4. file_url 表示压缩后的标准展示图。
@@ -728,7 +731,7 @@ uni.uploadFile({
 8. 对象 Key 由后端生成，禁止前端传入最终 Key。
 9. 删除图片默认先软删除，物理清理后置。
 10. 头像、猫咪照片、点位照片、任务打卡照片使用同一套 FileService。
-11. 新图片只有 security_status = passed 才允许发布；历史图片标记 legacy，保持原业务关联但不得重新绑定绕过审核。
+11. 用户头像只有 `security_status = passed` 才自动生效；普通业务图片使用 `legacy` 表示无需本轮微信审核，并可立即绑定。
 ```
 
 ---

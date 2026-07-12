@@ -603,6 +603,41 @@ def test_bind_temporary_asset_to_owner(api_client, db_session):
     assert data["owner_id"] == str(owner_id)
 
 
+def test_bind_cannot_reclassify_unreviewed_business_image_as_user_avatar(
+    api_client,
+    db_session,
+):
+    install_fake_storage(api_client)
+    user = create_user(
+        db_session,
+        student_no="trmx-avatar-reclassify",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    token = create_token(user)
+    upload_response = api_client.post(
+        "/api/v1/files/images",
+        headers=auth_headers(token),
+        data={"usage_type": "cat_photo"},
+        files={"file": ("ordinary.jpg", image_bytes(), "image/jpeg")},
+    )
+    asset_id = upload_response.json()["data"]["asset_id"]
+
+    response = api_client.patch(
+        f"/api/v1/files/assets/{asset_id}/owner",
+        headers=auth_headers(token),
+        json={
+            "owner_type": "user",
+            "owner_id": str(user.id),
+            "usage_type": "user_avatar",
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == int(ErrorCode.FILE_SECURITY_REJECTED)
+
+
 def test_delete_asset_soft_deletes_asset_and_variants(api_client, db_session):
     install_fake_storage(api_client)
     user = create_user(
@@ -902,6 +937,59 @@ def test_content_security_callback_verifies_signature_and_applies_result(
     assert user.profile.avatar_review_status == "passed"
 
 
+def test_xml_content_security_callback_applies_passed_avatar(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    install_fake_storage(api_client)
+    install_enforced_content_security(api_client, monkeypatch, trace_id="wechat-route-xml")
+    user = create_user(
+        db_session,
+        student_no="trmx-security-xml",
+        password="Password123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    token = create_token(user)
+    api_client.post(
+        "/api/v1/files/images",
+        headers=auth_headers(token),
+        data={
+            "usage_type": "user_avatar",
+            "owner_type": "user",
+            "owner_id": str(user.id),
+            "wechat_code": "fresh-code",
+        },
+        files={"file": ("avatar.jpg", image_bytes(), "image/jpeg")},
+    )
+    timestamp = "1783810001"
+    nonce = "nonce-xml"
+    source = "".join(sorted(("callback-token", timestamp, nonce)))
+    signature = hashlib.sha1(source.encode()).hexdigest()
+    body = b"""<xml>
+      <Event><![CDATA[wxa_media_check]]></Event>
+      <trace_id><![CDATA[wechat-route-xml]]></trace_id>
+      <errcode>0</errcode>
+      <result>
+        <suggest><![CDATA[pass]]></suggest>
+        <label>100</label>
+      </result>
+    </xml>"""
+
+    response = api_client.post(
+        f"/api/v1/wechat/content-security/events?signature={signature}"
+        f"&timestamp={timestamp}&nonce={nonce}",
+        content=body,
+        headers={"content-type": "application/xml"},
+    )
+
+    assert response.status_code == 200
+    assert response.text == "success"
+    db_session.refresh(user.profile)
+    assert user.profile.avatar_review_status == "passed"
+
+
 def test_profile_update_rejects_direct_avatar_url_bypass(api_client, db_session):
     user = create_user(
         db_session,
@@ -922,7 +1010,7 @@ def test_profile_update_rejects_direct_avatar_url_bypass(api_client, db_session)
     assert response.json()["code"] == int(ErrorCode.FILE_SECURITY_REJECTED)
 
 
-def test_all_business_images_use_content_security_before_becoming_readable(
+def test_non_avatar_images_skip_content_security_and_are_immediately_readable(
     api_client,
     db_session,
     monkeypatch,
@@ -948,37 +1036,42 @@ def test_all_business_images_use_content_security_before_becoming_readable(
         data={
             "usage_type": "map_point_scene",
             "owner_type": "task",
-            "wechat_code": "fresh-code",
         },
         files={"file": ("scene.jpg", image_bytes(), "image/jpeg")},
     )
     assert response.status_code == 200
     asset_id = response.json()["data"]["asset_id"]
-    assert security.calls[0]["scene"] == 4
-    assert response.json()["data"]["security_status"] == "pending"
+    assert security.calls == []
+    assert response.json()["data"]["security_status"] == "legacy"
+    assert response.json()["data"]["default_url"] is not None
 
-    pending = api_client.get(
+    readable = api_client.get(
         f"/api/v1/files/assets/{asset_id}/variant?scene=task_list_cover",
         headers=auth_headers(token),
     )
-    assert pending.status_code == 409
-    service.handle_security_callback(
-        db_session,
-        {
-            "trace_id": "wechat-business-trace",
-            "errcode": 0,
-            "result": {"suggest": "pass", "label": 100},
-        },
+    assert readable.status_code == 200
+    assert readable.json()["data"]["url"].startswith("https://signed.test/")
+
+    asset = db_session.get(FileAsset, UUID(asset_id))
+    asset.security_status = "failed"
+    db_session.commit()
+
+    historical_failure = api_client.get(
+        f"/api/v1/files/assets/{asset_id}",
+        headers=auth_headers(token),
     )
-    approved = api_client.get(
+    assert historical_failure.status_code == 200
+    assert historical_failure.json()["data"]["security_status"] == "legacy"
+    assert historical_failure.json()["data"]["default_url"] is not None
+
+    readable_after_old_failure = api_client.get(
         f"/api/v1/files/assets/{asset_id}/variant?scene=task_list_cover",
         headers=auth_headers(token),
     )
-    assert approved.status_code == 200
-    assert approved.json()["data"]["url"].startswith("https://signed.test/")
+    assert readable_after_old_failure.status_code == 200
 
 
-def test_enforced_image_upload_requires_fresh_wechat_code(api_client, db_session, monkeypatch):
+def test_enforced_avatar_upload_requires_fresh_wechat_code(api_client, db_session, monkeypatch):
     install_fake_storage(api_client)
     install_enforced_content_security(api_client, monkeypatch)
     user = create_user(
@@ -992,8 +1085,8 @@ def test_enforced_image_upload_requires_fresh_wechat_code(api_client, db_session
     response = api_client.post(
         "/api/v1/files/images",
         headers=auth_headers(token),
-        data={"usage_type": "task_checkin_photo"},
-        files={"file": ("checkin.jpg", image_bytes(), "image/jpeg")},
+        data={"usage_type": "user_avatar", "owner_type": "user", "owner_id": str(user.id)},
+        files={"file": ("avatar.jpg", image_bytes(), "image/jpeg")},
     )
     assert response.status_code == 400
     assert response.json()["code"] == int(ErrorCode.FILE_SECURITY_CODE_REQUIRED)

@@ -90,7 +90,10 @@ function submitImageUpload(
   filePath: string,
   options: UploadImageOptions,
 ): Promise<UploadedImageAsset> {
-  return requestWechatLoginCode().then(
+  const wechatCodePromise = options.usage_type === "user_avatar"
+    ? requestWechatLoginCode()
+    : Promise.resolve(null);
+  return wechatCodePromise.then(
     (wechatCode) =>
       new Promise((resolve, reject) => {
         uni.uploadFile({
@@ -143,52 +146,16 @@ function submitImageUpload(
   );
 }
 
-function waitForNextReviewCheck(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 1000));
-}
-
-async function waitForApprovedImage(
-  accessToken: string,
-  initialAsset: UploadedImageAsset,
-): Promise<ApprovedImageAsset> {
-  let asset = initialAsset;
-  for (let attempt = 0; attempt < 60; attempt += 1) {
-    if (
-      asset.security_status !== "pending" &&
-      asset.security_status !== "rejected" &&
-      asset.security_status !== "failed" &&
-      asset.default_url
-    ) {
-      return asset as ApprovedImageAsset;
-    }
-    if (asset.security_status === "passed" && asset.default_url) {
-      return asset as ApprovedImageAsset;
-    }
-    if (asset.security_status === "rejected" || asset.security_status === "failed") {
-      throw new ApiBusinessError(
-        65024,
-        "图片包含违规内容，请更换后重试",
-        "",
-        asset,
-      );
-    }
-    await waitForNextReviewCheck();
-    asset = await request<UploadedImageAsset>({
-      url: API_ENDPOINTS.files.asset(asset.asset_id),
-      method: "GET",
-      token: accessToken,
-    });
-  }
-  throw new ApiBusinessError(65023, "图片正在审核，请稍后再试", "", asset);
-}
-
 export async function uploadImage(
   accessToken: string,
   filePath: string,
   options: UploadImageOptions,
 ): Promise<ApprovedImageAsset> {
   const asset = await submitImageUpload(accessToken, filePath, options);
-  return waitForApprovedImage(accessToken, asset);
+  if (!asset.default_url) {
+    throw new ApiBusinessError(65011, "图片处理失败，请重新上传", "", asset);
+  }
+  return asset as ApprovedImageAsset;
 }
 
 export function uploadUserAvatar(

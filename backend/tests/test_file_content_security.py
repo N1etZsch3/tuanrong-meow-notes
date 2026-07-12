@@ -2,6 +2,7 @@ from uuid import uuid4
 
 import pytest
 
+from app.api.v1.wechat_content_security import _parse_callback_body
 from app.core.config import Settings
 from app.core.errors import APIError, ErrorCode
 from app.core.security import hash_password
@@ -67,6 +68,23 @@ def test_callback_signature_matches_wechat_plaintext_mode():
     ) is True
 
 
+def test_xml_callback_preserves_nested_review_result():
+    payload = _parse_callback_body(
+        b"""<xml>
+        <Event><![CDATA[wxa_media_check]]></Event>
+        <trace_id><![CDATA[trace-xml-1]]></trace_id>
+        <errcode>0</errcode>
+        <result>
+          <suggest><![CDATA[pass]]></suggest>
+          <label>100</label>
+        </result>
+        </xml>"""
+    )
+
+    assert payload["Event"] == "wxa_media_check"
+    assert payload["result"] == {"suggest": "pass", "label": "100"}
+
+
 def test_new_file_assets_fail_closed_by_default():
     status_default = FileAsset.__table__.c.security_status.default
 
@@ -117,9 +135,11 @@ def _business_user(db_session, *, role: str = "member") -> User:
     return user
 
 
-def test_business_binding_resolves_only_passed_asset_to_canonical_urls(
+@pytest.mark.parametrize("status", ["legacy", "pending", "passed", "rejected", "failed"])
+def test_business_binding_allows_non_avatar_asset_without_review(
     db_session,
     monkeypatch,
+    status,
 ):
     monkeypatch.setattr(
         file_service,
@@ -127,7 +147,7 @@ def test_business_binding_resolves_only_passed_asset_to_canonical_urls(
         lambda: Settings(_env_file=None, wechat_content_security_mode="enforced"),
     )
     user = _business_user(db_session)
-    asset = _business_asset(db_session, user, status="passed", usage_type="medicine_photo")
+    asset = _business_asset(db_session, user, status=status, usage_type="medicine_photo")
 
     resolved = file_service.resolve_business_image(
         db=db_session,
@@ -139,37 +159,6 @@ def test_business_binding_resolves_only_passed_asset_to_canonical_urls(
     )
 
     assert resolved == (asset.id, asset.default_url, asset.default_thumb_url)
-
-
-@pytest.mark.parametrize(
-    ("status", "expected_code"),
-    [("pending", ErrorCode.FILE_SECURITY_PENDING), ("legacy", ErrorCode.FILE_SECURITY_REJECTED)],
-)
-def test_business_binding_rejects_asset_that_is_not_newly_approved(
-    db_session,
-    monkeypatch,
-    status,
-    expected_code,
-):
-    monkeypatch.setattr(
-        file_service,
-        "get_settings",
-        lambda: Settings(_env_file=None, wechat_content_security_mode="enforced"),
-    )
-    user = _business_user(db_session)
-    asset = _business_asset(db_session, user, status=status, usage_type="medicine_photo")
-
-    with pytest.raises(APIError) as exc_info:
-        file_service.resolve_business_image(
-            db=db_session,
-            current_user=user,
-            file_id=asset.id,
-            file_url=asset.default_url,
-            thumbnail_url=None,
-            allowed_usage_types={"medicine_photo"},
-        )
-
-    assert exc_info.value.code == expected_code
 
 
 def test_business_binding_rejects_wrong_usage_and_other_members_asset(

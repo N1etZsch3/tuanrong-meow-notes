@@ -130,8 +130,7 @@ describe("files api", () => {
     );
   });
 
-  it("waits for non-avatar image approval before returning a publishable URL", async () => {
-    vi.useFakeTimers();
+  it("returns non-avatar images immediately without login or review polling", async () => {
     const uploadFile = vi.fn((options: UniNamespace.UploadFileOption) => {
       options.success?.({
         statusCode: 200,
@@ -139,10 +138,10 @@ describe("files api", () => {
           code: 0,
           message: "success",
           data: {
-            asset_id: "asset-business-pending",
-            default_url: null,
-            default_thumb_url: null,
-            security_status: "pending",
+            asset_id: "asset-business-ready",
+            default_url: "https://cos.example/display.jpg",
+            default_thumb_url: "https://cos.example/thumb.jpg",
+            security_status: "legacy",
           },
           trace_id: "trace-upload",
         }),
@@ -150,24 +149,18 @@ describe("files api", () => {
         cookies: [],
       } as UniNamespace.UploadFileSuccessCallbackResult);
     });
-    const requestMock = mockSuccess({
-      asset_id: "asset-business-pending",
-      default_url: "https://approved.example/display.jpg",
-      default_thumb_url: "https://approved.example/thumb.jpg",
-      security_status: "passed",
-    });
-    vi.stubGlobal("uni", { uploadFile, request: requestMock });
+    const login = vi.fn();
+    const requestMock = vi.fn();
+    vi.stubGlobal("uni", { login, uploadFile, request: requestMock });
 
-    const resultPromise = uploadImage("token-1", "/tmp/checkin.jpg", {
+    await expect(uploadImage("token-1", "/tmp/checkin.jpg", {
       usage_type: "task_checkin_photo",
+    })).resolves.toMatchObject({
+      security_status: "legacy",
+      default_url: "https://cos.example/display.jpg",
     });
-    await vi.advanceTimersByTimeAsync(1000);
-
-    await expect(resultPromise).resolves.toMatchObject({
-      security_status: "passed",
-      default_url: "https://approved.example/display.jpg",
-    });
-    vi.useRealTimers();
+    expect(login).not.toHaveBeenCalled();
+    expect(requestMock).not.toHaveBeenCalled();
   });
 
   it("soft deletes an uploaded image asset with bearer token", async () => {

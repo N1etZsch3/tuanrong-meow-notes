@@ -168,16 +168,6 @@ USAGE_TYPE_CONFIGS: dict[str, UsageTypeConfig] = {
 
 CONTENT_SECURITY_SCENES: dict[str, int] = {
     "user_avatar": 1,
-    "cat_avatar": 1,
-    "cat_photo": 1,
-    "cat_health_photo": 1,
-    "map_point_cover": 4,
-    "map_point_scene": 4,
-    "map_point_route": 4,
-    "task_checkin_photo": 4,
-    "supply_record_photo": 4,
-    "medicine_photo": 1,
-    "observation_photo": 4,
 }
 
 

@@ -48,11 +48,13 @@ V1 推荐采用：
   ↓
 生成 display 图和 thumbnail 图
   ↓
-后端上传到腾讯云 COS
+后端上传到腾讯云 COS 隔离对象
   ↓
-写入 file_assets 文件资产表
+写入 file_assets，内容安全状态为 pending
   ↓
-业务表保存 asset_id + file_url + thumbnail_url
+后端使用预签名 URL 调微信 mediaCheckAsync 2.0
+  ↓
+微信回调 pass 后才允许业务表保存 asset_id + URL
 ```
 
 不建议在 V1 直接让小程序把图片直传到 COS 正式目录。原因：
@@ -346,8 +348,11 @@ temporary
 3. 如果用户 `profile_completed = false`，只允许上传 `user_avatar`。
 4. 后端必须校验真实文件类型，不能只信任 `Content-Type` 和文件后缀。
 5. 所有图片必须生成 display 和 thumbnail 两个版本。
-6. 上传成功后写入 `file_assets`。
-7. 业务表是否写入，由后续业务接口决定。
+6. 上传成功后写入 `file_assets`，新上传图片默认进入 `pending` 内容安全状态。
+7. 所有用户上传图片都通过服务端调用微信 `mediaCheckAsync` 2.0；前端不得持有 access token 或 AppSecret。
+8. 微信 `pass` 后才允许读取、绑定或写入业务表；`risky/review` 均拒绝发布。
+9. 头像通过回调自动生效，待审或拒绝时继续展示旧头像。
+10. 接口异常采用关闭失败策略，不能把“审核服务不可用”当成审核通过。
 
 ---
 
@@ -389,10 +394,10 @@ COS 物理对象暂不立即删除
 推荐流程：
 
 ```text
-1. 前端上传头像到 /files/images，usage_type = user_avatar
-2. 后端返回 asset_id、file_url、thumbnail_url
-3. 前端 PATCH /profile/me，传 avatar_asset_id 或 avatar_url
-4. 后端更新 user_profiles.avatar_asset_id、avatar_url
+1. 前端上传头像到 /files/images，传 usage_type = user_avatar 和新鲜 wechat_code
+2. 后端暂存图片并返回 pending asset_id，旧头像保持不变
+3. 微信回调 pass 后，后端自动更新 user_profiles.avatar_asset_id、avatar_url
+4. risky/review 时保留旧头像并向资料接口暴露通用失败状态
 ```
 
 也可以封装成专用接口：
@@ -550,10 +555,11 @@ client.put_object(
 1. 后端校验图片
 2. 生成 asset_id
 3. 生成 display/thumb bytes
-4. 上传 display 到 COS
-5. 上传 thumb 到 COS
-6. 两个对象都上传成功后，写入 file_assets
-7. 返回 asset_id 和 URL
+4. 上传 display/thumb 到 COS 隔离路径
+5. 所有对象成功后写入 file_assets/file_asset_variants，security_status = pending
+6. 用预签名 display URL 提交微信 mediaCheckAsync，记录 trace_id
+7. 立即返回待审 asset_id，不返回可发布 URL
+8. 微信回调 pass 后开放 URL；risky/review/failed 均不可发布
 ```
 
 如果第 4 步成功、第 5 步失败，需要删除第 4 步已上传对象，或者写入失败日志等待清理。V1 推荐失败时尽量回滚已上传对象。
@@ -580,6 +586,11 @@ client.put_object(
 | 65012 | 409 | 文件已被删除 |
 | 65013 | 400 | 文件数量超过限制 |
 | 65014 | 500 | 文件元数据写入失败 |
+| 65021 | 400 | 缺少微信登录 code |
+| 65022 | 502 | 微信图片审核服务不可用 |
+| 65023 | 409 | 图片正在审核 |
+| 65024 | 422 | 图片审核未通过或试图绕过审核 |
+| 65025 | 400/403 | 微信审核回调无效 |
 
 ---
 
@@ -647,6 +658,9 @@ uni.uploadFile({
 | EXIF 旋转 | 图片方向正确 |
 | COS 上传失败 | 返回 65008 |
 | 数据库写入失败 | 已上传对象可回滚或记录待清理 |
+| 待审图片访问/绑定 | 返回 65023，不泄露 URL |
+| risky/review 回调 | 保留旧头像或旧业务内容，返回通用违规提示 |
+| 重复/乱序回调 | 幂等；较旧头像审核结果不得覆盖较新的待审头像 |
 
 ### 13.2 集成测试
 
@@ -704,7 +718,7 @@ uni.uploadFile({
 ## 15. V1 最终规范
 
 ```text
-1. 所有用户上传图片必须经过后端 FileService。
+1. 所有用户上传图片必须经过后端 FileService 和微信内容安全审核。
 2. 所有图片先压缩、转码、生成缩略图，再上传腾讯云 COS。
 3. V1 不长期保存用户手机原始大图。
 4. file_url 表示压缩后的标准展示图。
@@ -714,6 +728,7 @@ uni.uploadFile({
 8. 对象 Key 由后端生成，禁止前端传入最终 Key。
 9. 删除图片默认先软删除，物理清理后置。
 10. 头像、猫咪照片、点位照片、任务打卡照片使用同一套 FileService。
+11. 新图片只有 security_status = passed 才允许发布；历史图片标记 legacy，保持原业务关联但不得重新绑定绕过审核。
 ```
 
 ---

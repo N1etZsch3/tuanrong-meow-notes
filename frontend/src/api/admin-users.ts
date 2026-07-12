@@ -37,6 +37,8 @@ export interface AdminCreateUserResponse {
 export interface AdminUserProfileDto {
   nickname: string;
   avatar_url: string | null;
+  avatar_review_asset_id?: string | null;
+  avatar_review_status?: "idle" | "pending" | "passed" | "rejected" | "failed";
   real_name: string | null;
   department: string | null;
   grade: string | null;

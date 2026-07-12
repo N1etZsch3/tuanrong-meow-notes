@@ -5,7 +5,7 @@ import type {
   LandmarkPhotoPayload,
 } from "@/api/landmarks";
 import type { TencentPoiDto } from "@/api/map";
-import type { UploadedImageAsset } from "@/api/files";
+import type { ApprovedImageAsset } from "@/api/files";
 
 export const LANDMARK_LOCATION_STORAGE_KEY = "catmap_admin_landmark_location";
 
@@ -67,7 +67,7 @@ export function createDefaultLandmarkDraft(): LandmarkDraft {
   };
 }
 
-export function buildUploadedLandmarkPhoto(asset: UploadedImageAsset): LandmarkPhotoPayload {
+export function buildUploadedLandmarkPhoto(asset: ApprovedImageAsset): LandmarkPhotoPayload {
   return {
     file_id: asset.asset_id,
     file_url: asset.default_url,

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.errors import APIError, ErrorCode
 from app.modules.auth.models import User
+from app.modules.files.service import resolve_business_image
 from app.modules.medicines.models import (
     MedicineCatalog,
     MedicineCategory,
@@ -161,6 +162,27 @@ def _catalog_photo_urls(
         if len(normalized) >= MEDICINE_PHOTO_LIMIT:
             break
     return normalized
+
+
+def _resolve_catalog_photo_urls(
+    db: Session,
+    *,
+    photo_urls: list[str],
+    user: User,
+) -> list[str]:
+    resolved: list[str] = []
+    for file_url in photo_urls:
+        _, canonical_url, _ = resolve_business_image(
+            db=db,
+            current_user=user,
+            file_id=None,
+            file_url=file_url,
+            thumbnail_url=None,
+            allowed_usage_types={"medicine_photo"},
+        )
+        if canonical_url:
+            resolved.append(canonical_url)
+    return resolved
 
 
 def _create_catalog_photos(
@@ -632,7 +654,8 @@ def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) 
             cover_image_url=payload.catalog.cover_image_url,
             photo_urls=payload.catalog.photo_urls,
         )
-        cover_image_url = payload.catalog.cover_image_url or (photo_urls[0] if photo_urls else None)
+        photo_urls = _resolve_catalog_photo_urls(db, photo_urls=photo_urls, user=user)
+        cover_image_url = photo_urls[0] if photo_urls else None
         catalog = MedicineCatalog(
             name=payload.catalog.name,
             category_id=category_id,
@@ -1660,11 +1683,16 @@ def update_catalog(
     if payload.usage_notes is not None:
         catalog.usage_notes = payload.usage_notes
     if payload.cover_image_url is not None:
-        catalog.cover_image_url = payload.cover_image_url
+        resolved_urls = _resolve_catalog_photo_urls(
+            db,
+            photo_urls=[payload.cover_image_url],
+            user=admin,
+        )
+        catalog.cover_image_url = resolved_urls[0] if resolved_urls else None
         _upsert_cover_photo(
             db,
             catalog=catalog,
-            file_url=payload.cover_image_url,
+            file_url=catalog.cover_image_url,
             user=admin,
             now=_now(),
         )

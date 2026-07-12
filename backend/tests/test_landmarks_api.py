@@ -2,8 +2,10 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
+from app.modules.files import service as file_service
 from app.modules.map.models import Campus, MapMarkerConfig, MapPoint
 
 
@@ -105,6 +107,30 @@ def create_landmark(api_client, admin: User, campus: Campus) -> dict:
     )
     assert response.status_code == 200
     return response.json()["data"]
+
+
+def test_landmark_publish_rejects_unreviewed_external_photo_url(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        file_service,
+        "get_settings",
+        lambda: Settings(wechat_content_security_mode="enforced"),
+        raising=False,
+    )
+    admin = create_user(db_session, role="admin")
+    campus = seed_campus(db_session)
+
+    response = api_client.post(
+        "/api/v1/admin/landmarks",
+        headers=auth_headers(admin),
+        json=landmark_payload(campus),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == 65024
 
 
 def test_admin_can_create_landmark_and_member_can_view_from_map(api_client, db_session):

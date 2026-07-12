@@ -86,15 +86,19 @@ def profile_payload(profile: UserProfile | None) -> dict:
     if profile is None:
         return {
             "nickname": "",
-        "avatar_url": None,
-        "real_name": None,
-        "department": None,
-        "grade": None,
-        "contact_info": None,
+            "avatar_url": None,
+            "avatar_review_asset_id": None,
+            "avatar_review_status": "idle",
+            "real_name": None,
+            "department": None,
+            "grade": None,
+            "contact_info": None,
         }
     return {
         "nickname": clean_initial_display_text(profile.nickname),
         "avatar_url": profile.avatar_url,
+        "avatar_review_asset_id": profile.avatar_review_asset_id,
+        "avatar_review_status": profile.avatar_review_status,
         "real_name": clean_initial_text(profile.real_name),
         "department": clean_initial_text(profile.department),
         "grade": clean_initial_text(profile.grade),
@@ -618,8 +622,15 @@ def update_user_detail(
         if user.profile is None:
             user.profile = UserProfile(user_id=user.id, nickname="")
         profile = user.profile
+        if "avatar_url" in payload.profile.model_fields_set:
+            requested_avatar_url = clean_initial_text(payload.profile.avatar_url)
+            if requested_avatar_url != profile.avatar_url:
+                raise APIError(
+                    code=ErrorCode.FILE_SECURITY_REJECTED,
+                    message="请通过头像上传功能提交图片审核",
+                    status_code=422,
+                )
         profile.nickname = clean_initial_display_text(payload.profile.nickname)
-        profile.avatar_url = clean_initial_text(payload.profile.avatar_url)
         profile.real_name = clean_initial_text(payload.profile.real_name)
         profile.department = clean_initial_text(payload.profile.department)
         profile.grade = clean_initial_text(payload.profile.grade)

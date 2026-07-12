@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     wechat_miniapp_secret: str = ""
     wechat_auth_mode: Literal["off", "optional", "enforced"] = "off"
     wechat_code2session_timeout_seconds: float = 3.0
+    wechat_content_security_mode: Literal["off", "enforced"] = "off"
+    wechat_content_security_timeout_seconds: float = 5.0
+    wechat_content_security_callback_token: str = ""
     amap_web_key: str = ""
     amap_web_service_key: str = ""
     amap_security_js_code: str = ""

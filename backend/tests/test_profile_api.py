@@ -77,7 +77,10 @@ def test_complete_profile_saves_required_identity_fields(api_client, db_session)
     assert user.profile.profile_completed_at is not None
 
 
-def test_update_profile_me_edits_visible_identity_fields(api_client, db_session):
+def test_update_profile_me_edits_text_fields_without_bypassing_avatar_review(
+    api_client,
+    db_session,
+):
     user = create_user(
         db_session,
         student_no="trmx0001",
@@ -92,7 +95,6 @@ def test_update_profile_me_edits_visible_identity_fields(api_client, db_session)
         headers=auth_headers(token),
         json={
             "nickname": "巡查搭子",
-            "avatar_url": "/uploads/avatar/u1.jpg",
             "department": "活动部",
             "contact_info": "13900139000",
         },
@@ -101,7 +103,7 @@ def test_update_profile_me_edits_visible_identity_fields(api_client, db_session)
     assert response.status_code == 200
     data = response.json()["data"]
     assert data["nickname"] == "巡查搭子"
-    assert data["avatar_url"] == "/uploads/avatar/u1.jpg"
+    assert data["avatar_url"] is None
     assert data["department"] == "活动部"
     assert data["contact_info"] == "13900139000"
 

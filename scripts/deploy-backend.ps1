@@ -91,6 +91,27 @@ if (-not (Test-Path -LiteralPath $SshKeyPath)) {
     throw "SSH key not found: $SshKeyPath. Run scripts/bootstrap-server-ssh-key.ps1 first."
 }
 
+if ($EnvFile) {
+    if (-not (Test-Path -LiteralPath $EnvFile)) {
+        throw "Env file not found: $EnvFile"
+    }
+    $envContent = Get-Content -LiteralPath $EnvFile -Raw -Encoding UTF8
+    if ($envContent -notmatch '(?m)^CATMAP_WECHAT_CONTENT_SECURITY_MODE=enforced\s*$') {
+        throw "Production image uploads require CATMAP_WECHAT_CONTENT_SECURITY_MODE=enforced."
+    }
+    $callbackTokenMatch = [regex]::Match(
+        $envContent,
+        '(?m)^CATMAP_WECHAT_CONTENT_SECURITY_CALLBACK_TOKEN=(?<value>[^\r\n]+)\s*$'
+    )
+    if (
+        -not $callbackTokenMatch.Success -or
+        [string]::IsNullOrWhiteSpace($callbackTokenMatch.Groups['value'].Value) -or
+        $callbackTokenMatch.Groups['value'].Value.StartsWith('replace-with-')
+    ) {
+        throw "Production image uploads require a non-placeholder content security callback token."
+    }
+}
+
 if (-not $SkipLocalChecks) {
     Invoke-Native "py" @("-3.11", "-m", "pytest", "-q") $backendDir
     Invoke-Native "py" @("-3.11", "-m", "ruff", "check", ".") $backendDir
@@ -187,6 +208,17 @@ elif [ ! -f "`$DEPLOY_DIR/.env" ]; then
     exit 1
 fi
 
+grep -Eq '^CATMAP_WECHAT_CONTENT_SECURITY_MODE=enforced[[:space:]]*$' "`$DEPLOY_DIR/.env" || {
+    echo 'Production image content security must be enforced.' >&2
+    exit 1
+}
+callback_token="`$(sed -n 's/^CATMAP_WECHAT_CONTENT_SECURITY_CALLBACK_TOKEN=//p' "`$DEPLOY_DIR/.env" | tail -n 1)"
+if [ -z "`$callback_token" ] || [[ "`$callback_token" == replace-with-* ]]; then
+    echo 'A non-placeholder image content security callback token is required.' >&2
+    exit 1
+fi
+unset callback_token
+
 cd "`$DEPLOY_DIR"
 python3.11 -m venv .venv
 .venv/bin/python -m pip install --upgrade pip
@@ -231,9 +263,6 @@ rm -f "`$ARCHIVE" "`$ENV_UPLOAD" "`$NGINX_UPLOAD" "`$SERVICE_UPLOAD" "`$CERT_UPL
     Copy-ToRemote $systemdService "/tmp/catmap-backend.service"
 
     if ($EnvFile) {
-        if (-not (Test-Path -LiteralPath $EnvFile)) {
-            throw "Env file not found: $EnvFile"
-        }
         Copy-ToRemote $EnvFile "/tmp/catmap-backend.env"
     }
 

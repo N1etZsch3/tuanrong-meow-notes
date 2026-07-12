@@ -11,6 +11,7 @@ from app.db.session import get_db
 from app.modules.auth.dependencies import require_password_changed
 from app.modules.auth.models import User
 from app.modules.files import service
+from app.modules.files.content_security import ContentSecurityClient, get_content_security_client
 from app.modules.files.dependencies import get_object_storage, get_optional_object_storage
 from app.modules.files.presets import upload_config_payload
 from app.modules.files.storage import ObjectStorage
@@ -41,9 +42,11 @@ def upload_image(
     owner_id: UUID | None = Form(default=None),
     visibility: str | None = Form(default="internal"),
     caption: str | None = Form(default=None),
+    wechat_code: str | None = Form(default=None),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     storage: ObjectStorage = Depends(get_object_storage),
+    content_security: ContentSecurityClient = Depends(get_content_security_client),
     current_user: User = Depends(require_password_changed),
 ):
     data = service.upload_image(
@@ -53,8 +56,10 @@ def upload_image(
         owner_type=owner_type,
         owner_id=owner_id,
         visibility=visibility,
+        wechat_code=wechat_code,
         current_user=current_user,
         storage=storage,
+        content_security=content_security,
         settings=settings,
     )
     return api_success(data=data, trace_id=request.state.trace_id)
@@ -68,9 +73,11 @@ def batch_upload_images(
     owner_type: str | None = Form(default=None),
     owner_id: UUID | None = Form(default=None),
     visibility: str | None = Form(default="internal"),
+    wechat_code: str | None = Form(default=None),
     db: Session = Depends(get_db),
     settings: Settings = Depends(get_settings),
     storage: ObjectStorage = Depends(get_object_storage),
+    content_security: ContentSecurityClient = Depends(get_content_security_client),
     current_user: User = Depends(require_password_changed),
 ):
     data = service.batch_upload_images(
@@ -80,8 +87,10 @@ def batch_upload_images(
         owner_type=owner_type,
         owner_id=owner_id,
         visibility=visibility,
+        wechat_code=wechat_code,
         current_user=current_user,
         storage=storage,
+        content_security=content_security,
         settings=settings,
     )
     return api_success(data=data, trace_id=request.state.trace_id)

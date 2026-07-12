@@ -3,8 +3,10 @@ from uuid import UUID, uuid4
 
 from sqlalchemy.orm import Session
 
+from app.core.config import Settings
 from app.core.security import create_access_token, hash_password
 from app.modules.auth.models import User, UserProfile
+from app.modules.files import service as file_service
 from app.modules.files.models import FileAsset, FileAssetVariant
 from app.modules.map import service as map_service
 from app.modules.map.models import Campus, MapMarkerConfig, MapPoint
@@ -110,6 +112,7 @@ def create_uploaded_asset(
     usage_type: str = "map_point_scene",
     default_url: str | None = None,
     default_thumb_url: str | None = None,
+    security_status: str = "legacy",
 ) -> FileAsset:
     asset_id = asset_id or uuid4()
     display_url = default_url or f"https://cos.test/catmap/test/task/{asset_id}/display.jpg"
@@ -138,6 +141,7 @@ def create_uploaded_asset(
         default_thumb_url=thumb_url,
         process_preset="normal_photo_v1",
         process_status="completed",
+        security_status=security_status,
         visibility="internal",
         uploaded_by=user.id,
     )
@@ -230,6 +234,66 @@ def publish_task(api_client, admin: User, campus: Campus) -> dict:
     )
     assert response.status_code == 200
     return response.json()["data"]
+
+
+def test_task_publish_rejects_unreviewed_external_photo_url(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        file_service,
+        "get_settings",
+        lambda: Settings(wechat_content_security_mode="enforced"),
+        raising=False,
+    )
+    admin = create_user(db_session, role="admin")
+    campus = seed_campus(db_session)
+
+    response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=publish_payload(campus),
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == 65024
+
+
+def test_task_publish_accepts_passed_asset_in_enforced_mode(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        file_service,
+        "get_settings",
+        lambda: Settings(_env_file=None, wechat_content_security_mode="enforced"),
+    )
+    admin = create_user(db_session, role="admin")
+    campus = seed_campus(db_session)
+    asset = create_uploaded_asset(db_session, admin, security_status="passed")
+    payload = publish_payload(campus)
+    payload["photos"] = [
+        {
+            "file_id": str(asset.id),
+            "file_url": "https://untrusted.example/client-value.jpg",
+            "thumbnail_url": "https://untrusted.example/client-thumb.jpg",
+            "photo_type": "cover",
+            "is_cover": True,
+        }
+    ]
+
+    response = api_client.post(
+        "/api/v1/admin/tasks/summer-feeding",
+        headers=auth_headers(admin),
+        json=payload,
+    )
+
+    assert response.status_code == 200
+    saved = db_session.query(TaskPhoto).filter(TaskPhoto.file_id == asset.id).one()
+    assert saved.file_url == asset.default_url
+    assert saved.thumbnail_url == asset.default_thumb_url
 
 
 def test_admin_can_publish_summer_feeding_task_and_map_marker_is_visible(

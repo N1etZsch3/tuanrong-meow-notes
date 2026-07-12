@@ -4,7 +4,7 @@ import type {
   TaskPhotoPayload,
   UploadedFileRef,
 } from "@/api/tasks";
-import { buildFileAssetContentUrl, type UploadedImageAsset } from "@/api/files";
+import { buildFileAssetContentUrl, type ApprovedImageAsset } from "@/api/files";
 
 export const DEFAULT_REQUIRED_ITEMS = "猫粮、水";
 export const DEFAULT_ROUTE_INSTRUCTION = "";
@@ -200,7 +200,7 @@ export function validatePublishDraft(draft: FeedingTaskDraft): ValidationResult 
   return { valid: true };
 }
 
-export function buildUploadedTaskPhoto(asset: UploadedImageAsset): UploadedFileRef {
+export function buildUploadedTaskPhoto(asset: ApprovedImageAsset): UploadedFileRef {
   return {
     file_id: asset.asset_id,
     file_url: asset.default_url,

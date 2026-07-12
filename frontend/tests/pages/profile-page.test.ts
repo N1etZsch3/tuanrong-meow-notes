@@ -83,6 +83,8 @@ describe("profile center pages", () => {
     expect(subtitleRule).toContain("font-weight: 700");
     expect(profileIndexSource).toMatch(/\.hero\s*{[^}]*align-items: flex-start;[^}]*}/s);
     expect(profileIndexSource).not.toMatch(/\.hero\s*{[^}]*justify-content: space-between/s);
+    expect(profileIndexSource).toContain('<text class="hero-title">喵的</text>');
+    expect(profileIndexSource).not.toContain('<text class="hero-title">我的</text>');
   });
 
   it("defines clickable stats and favorite cat record entries", () => {
@@ -160,13 +162,27 @@ describe("profile center pages", () => {
     expect(profileDetailSource).toContain("function releasePageLeaveGuardAndNavigateBack");
   });
 
-  it("uses the public file-content route for newly uploaded avatars", () => {
+  it("does not put a clean profile page behind a permanent intermediate container", () => {
+    const pageRootIndex = profileDetailSource.indexOf('<view class="detail-page">');
+    const guardIndex = profileDetailSource.indexOf("<page-container");
+
+    expect(pageRootIndex).toBeGreaterThanOrEqual(0);
+    expect(guardIndex).toBeGreaterThan(pageRootIndex);
+    expect(profileDetailSource).toContain("const pageLeaveGuardArmed = computed(");
+    expect(profileDetailSource).not.toContain("const pageLeaveGuardArmed = ref(true)");
+    expect(profileDetailSource).toMatch(
+      /function goBack\(\)\s*{[\s\S]*if \(!hasPendingProfileChanges\(\)\)[\s\S]*uni\.navigateBack\(\)/,
+    );
+  });
+
+  it("keeps pending avatars local until the server applies an approved asset", () => {
     const avatarUrl = buildUserAvatarContentUrl("avatar-asset-1");
 
     expect(avatarUrl).toContain("/files/assets/avatar-asset-1/content");
     expect(avatarUrl).toContain("scene=avatar_profile");
     for (const source of [profileDetailSource, profileCompleteSource, adminUserDetailSource]) {
-      expect(source).toContain("buildUserAvatarContentUrl");
+      expect(source).toContain("avatarUrl.value = tempPath");
+      expect(source).toContain("审核通过后自动生效");
       expect(source).not.toContain("avatarUrl.value = asset.default_url");
     }
   });

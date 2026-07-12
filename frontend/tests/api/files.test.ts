@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { buildFileAssetContentUrl, deleteImageAsset, uploadImage } from "@/api/files";
+import {
+  buildFileAssetContentUrl,
+  deleteImageAsset,
+  uploadImage,
+  uploadUserAvatar,
+} from "@/api/files";
 import { appEnv } from "@/config/app-env";
 
 function mockSuccess(data: unknown) {
@@ -21,6 +26,7 @@ function mockSuccess(data: unknown) {
 
 describe("files api", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
@@ -86,6 +92,82 @@ describe("files api", () => {
         },
       }),
     );
+  });
+
+  it("adds a fresh WeChat code for server-side image review", async () => {
+    const uploadFile = vi.fn((options: UniNamespace.UploadFileOption) => {
+      options.success?.({
+        statusCode: 200,
+        data: JSON.stringify({
+          code: 0,
+          message: "success",
+          data: {
+            asset_id: "asset-pending",
+            default_url: null,
+            default_thumb_url: null,
+            security_status: "pending",
+          },
+          trace_id: "trace-file",
+        }),
+        header: {},
+        cookies: [],
+      } as UniNamespace.UploadFileSuccessCallbackResult);
+    });
+    const login = vi.fn((options: UniNamespace.LoginOptions) => {
+      options.success?.({ code: "wechat-code-1", errMsg: "login:ok", authResult: "" });
+    });
+    vi.stubGlobal("uni", { login, uploadFile });
+
+    await uploadUserAvatar("token-1", "/tmp/avatar.jpg", "user-1");
+
+    expect(uploadFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        formData: expect.objectContaining({
+          usage_type: "user_avatar",
+          wechat_code: "wechat-code-1",
+        }),
+      }),
+    );
+  });
+
+  it("waits for non-avatar image approval before returning a publishable URL", async () => {
+    vi.useFakeTimers();
+    const uploadFile = vi.fn((options: UniNamespace.UploadFileOption) => {
+      options.success?.({
+        statusCode: 200,
+        data: JSON.stringify({
+          code: 0,
+          message: "success",
+          data: {
+            asset_id: "asset-business-pending",
+            default_url: null,
+            default_thumb_url: null,
+            security_status: "pending",
+          },
+          trace_id: "trace-upload",
+        }),
+        header: {},
+        cookies: [],
+      } as UniNamespace.UploadFileSuccessCallbackResult);
+    });
+    const requestMock = mockSuccess({
+      asset_id: "asset-business-pending",
+      default_url: "https://approved.example/display.jpg",
+      default_thumb_url: "https://approved.example/thumb.jpg",
+      security_status: "passed",
+    });
+    vi.stubGlobal("uni", { uploadFile, request: requestMock });
+
+    const resultPromise = uploadImage("token-1", "/tmp/checkin.jpg", {
+      usage_type: "task_checkin_photo",
+    });
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await expect(resultPromise).resolves.toMatchObject({
+      security_status: "passed",
+      default_url: "https://approved.example/display.jpg",
+    });
+    vi.useRealTimers();
   });
 
   it("soft deletes an uploaded image asset with bearer token", async () => {

@@ -182,4 +182,17 @@ describe("admin entry pages", () => {
     expect(adminUsersDetailSource).toContain('@beforeleave="handleNativePageLeave"');
     expect(adminUsersDetailSource).toContain("修改尚未保存，是否放弃？");
   });
+
+  it("does not put a clean member detail page behind a permanent intermediate container", () => {
+    const pageRootIndex = adminUsersDetailSource.indexOf('<view class="member-detail-page">');
+    const guardIndex = adminUsersDetailSource.indexOf("<page-container");
+
+    expect(pageRootIndex).toBeGreaterThanOrEqual(0);
+    expect(guardIndex).toBeGreaterThan(pageRootIndex);
+    expect(adminUsersDetailSource).toContain("const pageLeaveGuardArmed = computed(");
+    expect(adminUsersDetailSource).not.toContain("const pageLeaveGuardArmed = ref(true)");
+    expect(adminUsersDetailSource).toMatch(
+      /function goBack\(\)\s*{[\s\S]*if \(!hasPendingMemberChanges\(\)\)[\s\S]*uni\.navigateBack\(\)/,
+    );
+  });
 });

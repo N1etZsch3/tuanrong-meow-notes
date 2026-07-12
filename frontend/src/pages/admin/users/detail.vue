@@ -1,12 +1,4 @@
 <template>
-  <!-- #ifdef MP-WEIXIN -->
-  <page-container
-    :show="pageLeaveGuardArmed"
-    :overlay="false"
-    :duration="0"
-    @beforeleave="handleNativePageLeave"
-  >
-  <!-- #endif -->
   <view class="member-detail-page">
     <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
     <scroll-view class="detail-scroll" scroll-y :show-scrollbar="false">
@@ -41,6 +33,7 @@
             <text class="avatar-note">
               {{ readonlyMode ? "管理员账号资料不可修改" : "点击更换头像，图片不超过 2MB" }}
             </text>
+            <text v-if="avatarReviewHint" class="avatar-review-hint">{{ avatarReviewHint }}</text>
           </view>
 
           <view class="form-card">
@@ -185,10 +178,15 @@
         </view>
       </view>
     </view>
+    <!-- #ifdef MP-WEIXIN -->
+    <page-container
+      :show="pageLeaveGuardArmed"
+      :overlay="false"
+      :duration="0"
+      @beforeleave="handleNativePageLeave"
+    />
+    <!-- #endif -->
   </view>
-  <!-- #ifdef MP-WEIXIN -->
-  </page-container>
-  <!-- #endif -->
 </template>
 
 <script setup lang="ts">
@@ -203,11 +201,7 @@ import {
   updateAdminUser,
   type AdminUserDto,
 } from "@/api/admin-users";
-import {
-  buildUserAvatarContentUrl,
-  resolveUserAvatarContentUrl,
-  uploadUserAvatar,
-} from "@/api/files";
+import { resolveUserAvatarContentUrl, uploadUserAvatar } from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import { createPageLeaveGuard } from "@/utils/page-leave-guard";
@@ -240,6 +234,7 @@ const userStore = useUserStore();
 const userId = ref("");
 const userDetail = ref<AdminUserDto | null>(null);
 const avatarUrl = ref<string | null>(null);
+const avatarReviewStatus = ref<"idle" | "pending" | "passed" | "rejected" | "failed">("idle");
 const loadState = ref<"loading" | "ready" | "error">("loading");
 const errorMessage = ref("");
 const isSaving = ref(false);
@@ -249,8 +244,8 @@ const isResetting = ref(false);
 const isClearingWechatBinding = ref(false);
 const isDeleting = ref(false);
 const savedMemberSnapshot = ref<MemberEditSnapshot | null>(null);
-const pageLeaveGuardArmed = ref(true);
-let isNavigatingAway = false;
+const nativePageLeaveGuardReady = ref(true);
+const isNavigatingAway = ref(false);
 
 const form = reactive({
   nickname: "",
@@ -274,6 +269,15 @@ const isAccountActionPending = computed(
 );
 const avatarPreview = computed(() => avatarUrl.value || userDetail.value?.profile.avatar_url || defaultAvatar);
 const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : avatarPreview.value));
+const avatarReviewHint = computed(() => {
+  if (avatarReviewStatus.value === "pending") {
+    return "图片已上传，审核通过后自动生效";
+  }
+  if (["rejected", "failed"].includes(avatarReviewStatus.value)) {
+    return "头像审核未通过，请更换图片后重试";
+  }
+  return "";
+});
 
 watch(avatarPreview, () => {
   avatarLoadFailed.value = false;
@@ -286,10 +290,18 @@ const currentStatusLabel = computed(() => statusOptions[statusIndex.value]?.labe
 const pageLeaveGuard = createPageLeaveGuard(
   () => !isSaving.value && hasPendingMemberChanges(),
 );
+const pageLeaveGuardArmed = computed(
+  () =>
+    nativePageLeaveGuardReady.value &&
+    !isNavigatingAway.value &&
+    !isSaving.value &&
+    hasPendingMemberChanges(),
+);
 
 function applyUser(user: AdminUserDto) {
   userDetail.value = user;
   avatarUrl.value = resolveUserAvatarContentUrl(user.profile.avatar_url);
+  avatarReviewStatus.value = user.profile.avatar_review_status || "idle";
   form.nickname = user.profile.nickname || "";
   form.real_name = user.profile.real_name || "";
   form.department = user.profile.department || "";
@@ -379,8 +391,13 @@ async function uploadAvatar(tempPath: string) {
   uni.showLoading({ title: "头像上传中", mask: true });
   try {
     const asset = await uploadUserAvatar(token, tempPath, userId.value || undefined);
-    avatarUrl.value = buildUserAvatarContentUrl(asset.asset_id);
+    avatarUrl.value = tempPath;
+    avatarReviewStatus.value = asset.security_status === "pending" ? "pending" : "passed";
+    if (savedMemberSnapshot.value) {
+      savedMemberSnapshot.value = { ...savedMemberSnapshot.value, avatar_url: tempPath };
+    }
     uni.hideLoading();
+    uni.showToast({ title: asset.review_message || "头像已提交", icon: "none" });
   } catch (error) {
     uni.hideLoading();
     const message = error instanceof Error ? error.message : "头像上传失败";
@@ -415,7 +432,6 @@ async function saveMember() {
       status: form.status,
       profile: {
         nickname: form.nickname.trim(),
-        avatar_url: avatarUrl.value,
         real_name: form.real_name || null,
         department: form.department || null,
         grade: form.grade || null,
@@ -576,6 +592,11 @@ async function deleteAccount() {
 }
 
 function goBack() {
+  if (!hasPendingMemberChanges()) {
+    isNavigatingAway.value = true;
+    uni.navigateBack();
+    return;
+  }
   requestPageLeave();
 }
 
@@ -607,29 +628,29 @@ function requestPageLeave() {
 }
 
 function handleNativePageLeave() {
-  if (isNavigatingAway) {
+  if (isNavigatingAway.value) {
     return;
   }
-  pageLeaveGuardArmed.value = false;
+  nativePageLeaveGuardReady.value = false;
   requestPageLeave();
 }
 
 function releasePageLeaveGuardAndNavigateBack() {
-  if (isNavigatingAway) {
+  if (isNavigatingAway.value) {
     return;
   }
-  isNavigatingAway = true;
-  pageLeaveGuardArmed.value = false;
+  isNavigatingAway.value = true;
+  nativePageLeaveGuardReady.value = false;
   nextTick(() => {
     uni.navigateBack();
   });
 }
 
 function rearmNativePageLeaveGuard() {
-  isNavigatingAway = false;
-  pageLeaveGuardArmed.value = false;
+  isNavigatingAway.value = false;
+  nativePageLeaveGuardReady.value = false;
   nextTick(() => {
-    pageLeaveGuardArmed.value = true;
+    nativePageLeaveGuardReady.value = true;
   });
 }
 
@@ -802,6 +823,14 @@ onLoad((query) => {
   margin-top: 18rpx;
   color: #737b84;
   font-size: 24rpx;
+}
+
+.avatar-review-hint {
+  margin-top: 10rpx;
+  color: #9a6826;
+  font-size: 24rpx;
+  line-height: 1.5;
+  text-align: center;
 }
 
 .form-card {

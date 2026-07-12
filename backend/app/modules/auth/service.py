@@ -2,6 +2,7 @@ import re
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from fastapi.encoders import jsonable_encoder
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -474,11 +475,7 @@ def admin_user_payload(user: User) -> dict:
 
 
 def admin_user_log_payload(user: User) -> dict:
-    payload = admin_user_payload(user)
-    payload["id"] = str(payload["id"])
-    if payload["last_login_at"] is not None:
-        payload["last_login_at"] = payload["last_login_at"].isoformat()
-    return payload
+    return jsonable_encoder(admin_user_payload(user))
 
 
 def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequest) -> User:

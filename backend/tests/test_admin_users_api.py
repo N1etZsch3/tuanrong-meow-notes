@@ -1,5 +1,7 @@
+from uuid import uuid4
+
 from app.core.errors import ErrorCode
-from app.modules.auth.models import User
+from app.modules.auth.models import AdminOperationLog, User
 from tests.test_auth_api import create_captcha, create_token, create_user
 
 
@@ -332,6 +334,55 @@ def test_admin_can_view_and_update_non_admin_member_detail(api_client, db_sessio
     assert updated["profile"]["nickname"] == "新昵称"
     assert updated["profile"]["department"] == "宣传部"
     assert updated["profile"]["contact_info"] == "wx-cat-helper"
+
+
+def test_admin_can_update_member_after_avatar_review_adds_nested_uuid(
+    api_client,
+    db_session,
+):
+    admin = create_user(
+        db_session,
+        student_no="admin-avatar-log",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    member = create_user(
+        db_session,
+        student_no="trmx-avatar-log",
+        must_change_password=False,
+    )
+    review_asset_id = uuid4()
+    member.profile.avatar_review_asset_id = review_asset_id
+    member.profile.avatar_review_status = "passed"
+    db_session.commit()
+    token = create_token(admin)
+
+    response = api_client.patch(
+        f"/api/v1/admin/users/{member.id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "role": "member",
+            "status": "active",
+            "profile": {
+                "nickname": "微信审核账号",
+                "real_name": None,
+                "department": "审核专用",
+                "grade": None,
+                "contact_info": None,
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    operation = (
+        db_session.query(AdminOperationLog)
+        .filter(AdminOperationLog.operation_type == "user_update_detail")
+        .one()
+    )
+    assert operation.before_data["profile"]["avatar_review_asset_id"] == str(
+        review_asset_id
+    )
 
 
 def test_admin_cannot_bypass_avatar_review_with_direct_url(api_client, db_session):

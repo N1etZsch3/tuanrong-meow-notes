@@ -1,0 +1,19 @@
+[Unit]
+Description=Campus Cat Association Map Backend (Development)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/catmap-dev/backend
+EnvironmentFile=/opt/catmap-dev/backend/.env
+ExecStart=/opt/catmap-dev/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

@@ -112,13 +112,37 @@ If a worktree has unrelated uncommitted files, do not touch them. If they block 
 
 Ignored environment and local config files are required for many checks, builds, and deployments.
 
-- Copy required ignored env files from the local `dev` worktree into a new focused worktree using the same relative paths.
+- Copy required ignored env files from the local `dev` worktree into a new focused worktree using the same relative paths only after confirming they are intended for that runtime environment.
 - Do not invent placeholder secrets.
 - If required env files are missing from `dev`, ask the user instead of fabricating values.
 - Verify copied env files remain ignored with `git status --short --ignored -- <path>`.
 - Do not print env contents.
+- Do not infer an environment from its worktree or filename. Before a development deployment, check only non-sensitive boolean conditions: the database name is `catmap_dev`, the database role is `catmap_dev_app`, and `CATMAP_TENCENT_COS_ENV_PREFIX` is `dev`.
 
 Mini Program AppIDs and third-party service keys are push-sensitive. Keep local development config aligned with the authorized app, but inspect staged diffs and push ranges before pushing. Do not push real AppIDs, keys, tokens, or private credentials to a remote unless the user explicitly approves that remote state.
+
+## Same-Host Development And Production Isolation
+
+Until separate physical servers are funded, production and development share one host but must remain logically isolated. This is a deployment boundary, not an invitation to treat the environments as interchangeable.
+
+| Concern | Production | Development |
+|---|---|---|
+| Backend directory | `/opt/catmap/backend` | `/opt/catmap-dev/backend` |
+| systemd unit | `catmap-backend` | `catmap-backend-dev` |
+| Backend listener | `127.0.0.1:8000` | `127.0.0.1:8001` |
+| Database | `catmap` | `catmap_dev` using `catmap_dev_app` |
+| Public API domain | production domain | `dev-api.trmx.fun` |
+| Mini Program build | `npm run build:mp-weixin:prod` only | `npm run build`, `npm run build:mp-weixin`, or `npm run build:mp-weixin:dev` |
+
+- The production deployment script, production unit, production Nginx vhost, production database, and production service must remain untouched during development deployment work.
+- Development deployment must use `scripts/deploy-backend-dev.ps1` with an explicit server host and ignored development environment file. Its fixed deployment directory, service name, domain, database, database role, and COS prefix guards must not be weakened or parameterized to production values.
+- The development service must run as the dedicated non-root `catmap-dev` system user, listen only on loopback, and must never add a public firewall/security-group rule for port 8001.
+- The development Nginx vhost must not use `default_server`. Obtain the development certificate with the HTTP webroot/bootstrap vhost; never use a standalone ACME mode that stops or occupies production 80/443 listeners.
+- One COS bucket may be shared temporarily, but development writes must use the `dev/` prefix. Treat this as naming isolation only: request a CAM policy limited to `dev/*` before considering object storage access fully isolated.
+- Do not automatically copy production data into development. Any later refresh must be a separate, approved procedure with backup, masking, restore validation, and rollback notes.
+- Deploy only a committed source baseline whose Alembic migrations are compatible with `catmap_dev`. Never deploy uncommitted worktree changes as a development release.
+- After a development deployment, verify both production and development health endpoints, both systemd units, the development database/role identity, the development migration version, loopback-only port 8001, and that production resource files and database version did not change.
+- The default frontend build is development by design. Production Mini Program validation is a deliberate release action using `npm run build:mp-weixin:prod`; do not use a development artifact for production upload.
 
 ## Commit And Push Discipline
 
@@ -281,6 +305,8 @@ npm run type-check
 npm run build:mp-weixin
 ```
 
+`npm run build:mp-weixin` is intentionally the development build. For an approved production release validation, additionally run `npm run build:mp-weixin:prod` and confirm the resulting artifact uses only the production API domain.
+
 Deployment-impacting backend work should also run the repository deployment verification path unless the user explicitly scopes the task to local-only work:
 
 ```powershell
@@ -288,6 +314,14 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-backend.ps1 -EnvFile bac
 ```
 
 Then verify the deployed `/api/v1/health` endpoint using the currently configured production or test host from scripts and progress notes.
+
+For an approved development-server deployment, use the isolated path instead:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy-backend-dev.ps1 -ServerHost <server-host> -EnvFile backend\.env
+```
+
+Do not run this command until the intended source baseline is committed and the development environment-file guard has passed. The post-deploy checks must cover both environments as defined in `Same-Host Development And Production Isolation`.
 
 If a verification step cannot be run, record exactly why and what risk remains.
 

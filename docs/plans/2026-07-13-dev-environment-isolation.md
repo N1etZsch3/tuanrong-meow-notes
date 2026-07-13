@@ -132,6 +132,8 @@ $SystemdUnitName = 'catmap-backend-dev.service'
 
 **Step 4: 运行部署契约测试确认通过**
 
+由于 Task 1 的完整契约会读取开发前端环境示例，先完成 Task 4 的步骤 1–3，再执行本步骤；这不会改变部署脚本的实现顺序，只消除测试工件间的依赖。
+
 Run: `powershell -ExecutionPolicy Bypass -File scripts/test-deployment-contracts.ps1`
 
 Expected: PASS，输出所有生产与开发静态部署契约均已验证。
@@ -153,6 +155,7 @@ git commit -m "feat: add guarded development deployment"
 
 **Files:**
 - Create: `frontend/.env.development.example`
+- Modify: `.gitignore`
 - Modify: `frontend/tests/config/app-env.test.ts`
 - Test: `frontend/tests/config/app-env.test.ts`
 
@@ -183,6 +186,8 @@ VITE_API_BASE_URL=https://dev-api.trmx.fun/api/v1
 ```
 
 不改 `frontend/.env.example` 中的生产示例，不提交 `.env.development.local`。
+
+在 `.gitignore` 的现有 `.env.*` 规则后增加 `!frontend/.env.development.example`，使该非敏感示例可被跟踪；运行 `git check-ignore -q -- frontend/.env.development.example`，预期返回未忽略。真实 `.env.development.local` 必须继续被忽略。
 
 **Step 4: 运行前端测试、类型检查和小程序构建**
 

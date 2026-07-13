@@ -16,6 +16,7 @@ $ServiceName = "catmap-backend-dev"
 $Domain = "dev-api.trmx.fun"
 $NginxConfigName = "catmap-dev.conf"
 $SystemdUnitName = "catmap-backend-dev.service"
+$DevelopmentDatabaseRole = "catmap_dev_app"
 $ProductionDeployDir = "/opt/catmap/backend"
 $ProductionServiceName = "catmap-backend"
 $ProductionDomain = "trmx.fun"
@@ -141,6 +142,9 @@ $databaseUrl = Get-RequiredEnvValue -Content $envContent -Name "CATMAP_DATABASE_
 if ($databaseUrl -notmatch '/catmap_dev(?:\?|$)') {
     throw "Development EnvFile must target the catmap_dev database."
 }
+if ($databaseUrl -notmatch "^[a-z0-9+]+://$([regex]::Escape($DevelopmentDatabaseRole))(?::[^@]*)?@") {
+    throw "Development EnvFile must use the $DevelopmentDatabaseRole database role."
+}
 
 $cosEnvPrefix = Get-RequiredEnvValue -Content $envContent -Name "CATMAP_TENCENT_COS_ENV_PREFIX"
 if ($cosEnvPrefix -ne "dev") {
@@ -174,6 +178,8 @@ $tempDir = Join-Path ([IO.Path]::GetTempPath()) ("catmap-dev-deploy-" + (Get-Dat
 New-Item -ItemType Directory -Path $tempDir | Out-Null
 $archivePath = Join-Path $tempDir "catmap-dev-backend.tar"
 $remoteScriptPath = Join-Path $tempDir "catmap-dev-remote-deploy.sh"
+$deploymentId = [Guid]::NewGuid().ToString("N")
+$remoteTempDir = "/opt/catmap-dev/.deploy-$deploymentId"
 
 try {
     Invoke-Native "tar" @(
@@ -195,10 +201,12 @@ set -euo pipefail
 DEPLOY_DIR='__DEPLOY_DIR__'
 SERVICE_NAME='__SERVICE_NAME__'
 NGINX_CONFIG_NAME='__NGINX_CONFIG_NAME__'
-ARCHIVE='/tmp/catmap-dev-backend.tar'
-ENV_UPLOAD='/tmp/catmap-dev-backend.env'
-NGINX_UPLOAD='/tmp/catmap-dev.conf'
-SERVICE_UPLOAD='/tmp/catmap-backend-dev.service'
+DEVELOPMENT_DATABASE_ROLE='__DATABASE_ROLE__'
+DEPLOY_TMP='__REMOTE_TEMP_DIR__'
+ARCHIVE="$DEPLOY_TMP/backend.tar"
+ENV_UPLOAD="$DEPLOY_TMP/backend.env"
+NGINX_UPLOAD="$DEPLOY_TMP/catmap-dev.conf"
+SERVICE_UPLOAD="$DEPLOY_TMP/catmap-backend-dev.service"
 
 EXPECTED_DEPLOY_DIR='/opt/catmap-dev/backend'
 EXPECTED_SERVICE_NAME='catmap-backend-dev'
@@ -216,6 +224,13 @@ if [ "$DEPLOY_DIR" = '/opt/catmap/backend' ] || [ "$SERVICE_NAME" = 'catmap-back
     exit 1
 fi
 
+cleanup() {
+    rm -rf "$DEPLOY_TMP" /tmp/catmap-dev-backend-new
+}
+trap cleanup EXIT
+
+install -d -m 700 "$DEPLOY_TMP"
+
 command -v nginx >/dev/null 2>&1 || { echo 'nginx is not installed.' >&2; exit 1; }
 command -v python3.11 >/dev/null 2>&1 || { echo 'python3.11 is not installed.' >&2; exit 1; }
 
@@ -226,6 +241,11 @@ fi
 
 if ! grep -Eq '^CATMAP_DATABASE_URL=.*\/catmap_dev([?[:space:]]|$)' "$ENV_UPLOAD"; then
     echo 'Development environment file must target catmap_dev.' >&2
+    exit 1
+fi
+
+if ! grep -Eq "^CATMAP_DATABASE_URL=[a-zA-Z0-9+]+://${DEVELOPMENT_DATABASE_ROLE}(:[^@[:space:]]*)?@" "$ENV_UPLOAD"; then
+    echo 'Development environment file must use the development database role.' >&2
     exit 1
 fi
 
@@ -253,6 +273,18 @@ fi
 
 NGINX_TARGET="$NGINX_DIR/$NGINX_CONFIG_NAME"
 NGINX_BACKUP="${NGINX_TARGET}.catmap-dev-backup"
+NGINX_LINK_PATH=''
+NGINX_LINK_TARGET_BACKUP=''
+if [ -n "$NGINX_LINK_DIR" ]; then
+    NGINX_LINK_PATH="$NGINX_LINK_DIR/$NGINX_CONFIG_NAME"
+    if [ -L "$NGINX_LINK_PATH" ]; then
+        NGINX_LINK_TARGET_BACKUP="$(readlink "$NGINX_LINK_PATH")"
+    elif [ -e "$NGINX_LINK_PATH" ]; then
+        echo 'Development Nginx sites-enabled target is not a symbolic link.' >&2
+        exit 1
+    fi
+fi
+
 if [ -f "$NGINX_TARGET" ]; then
     cp -a "$NGINX_TARGET" "$NGINX_BACKUP"
 else
@@ -264,6 +296,14 @@ restore_nginx_target() {
         mv -f "$NGINX_BACKUP" "$NGINX_TARGET"
     else
         rm -f "$NGINX_TARGET"
+    fi
+
+    if [ -n "$NGINX_LINK_PATH" ]; then
+        if [ -n "$NGINX_LINK_TARGET_BACKUP" ]; then
+            ln -sfn "$NGINX_LINK_TARGET_BACKUP" "$NGINX_LINK_PATH"
+        else
+            rm -f "$NGINX_LINK_PATH"
+        fi
     fi
 }
 
@@ -286,6 +326,11 @@ python3.11 -m venv .venv
 .venv/bin/python -m pip install -e .
 .venv/bin/python -m alembic upgrade head
 
+if ! id -u catmap-dev >/dev/null 2>&1; then
+    useradd --system --home-dir /opt/catmap-dev --create-home --shell /sbin/nologin catmap-dev
+fi
+chown -R catmap-dev:catmap-dev "$DEPLOY_DIR"
+
 install -m 644 "$SERVICE_UPLOAD" "/etc/systemd/system/$SERVICE_NAME.service"
 systemctl daemon-reload
 systemctl enable "$SERVICE_NAME"
@@ -303,24 +348,37 @@ if ! nginx -t; then
     exit 1
 fi
 
-systemctl is-active --quiet nginx || { echo 'nginx is not active.' >&2; exit 1; }
-systemctl reload nginx
-rm -f "$NGINX_BACKUP" "$ARCHIVE" "$ENV_UPLOAD" "$NGINX_UPLOAD" "$SERVICE_UPLOAD"
+if ! systemctl is-active --quiet nginx; then
+    restore_nginx_target
+    echo 'nginx is not active.' >&2
+    exit 1
+fi
+
+if ! systemctl reload nginx; then
+    restore_nginx_target
+    echo 'nginx reload failed; restored the previous development vhost state.' >&2
+    exit 1
+fi
+
+rm -f "$NGINX_BACKUP"
 '@
     $remoteScript = $remoteScript.
         Replace('__DEPLOY_DIR__', $DeployDir).
         Replace('__SERVICE_NAME__', $ServiceName).
-        Replace('__NGINX_CONFIG_NAME__', $NginxConfigName)
+        Replace('__NGINX_CONFIG_NAME__', $NginxConfigName).
+        Replace('__DATABASE_ROLE__', $DevelopmentDatabaseRole).
+        Replace('__REMOTE_TEMP_DIR__', $remoteTempDir)
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($remoteScriptPath, $remoteScript, $utf8NoBom)
 
-    Copy-ToRemote $archivePath "/tmp/catmap-dev-backend.tar"
-    Copy-ToRemote $remoteScriptPath "/tmp/catmap-dev-remote-deploy.sh"
-    Copy-ToRemote $nginxConfig "/tmp/catmap-dev.conf"
-    Copy-ToRemote $systemdService "/tmp/catmap-backend-dev.service"
-    Copy-ToRemote $EnvFile "/tmp/catmap-dev-backend.env"
+    Invoke-Remote "install -d -m 700 '$remoteTempDir'"
+    Copy-ToRemote $archivePath "$remoteTempDir/backend.tar"
+    Copy-ToRemote $remoteScriptPath "$remoteTempDir/remote-deploy.sh"
+    Copy-ToRemote $nginxConfig "$remoteTempDir/catmap-dev.conf"
+    Copy-ToRemote $systemdService "$remoteTempDir/catmap-backend-dev.service"
+    Copy-ToRemote $EnvFile "$remoteTempDir/backend.env"
 
-    Invoke-Remote "bash /tmp/catmap-dev-remote-deploy.sh"
+    Invoke-Remote "bash '$remoteTempDir/remote-deploy.sh'"
 
     $healthBody = ""
     $healthStatusCode = ""
@@ -351,5 +409,11 @@ rm -f "$NGINX_BACKUP" "$ARCHIVE" "$ENV_UPLOAD" "$NGINX_UPLOAD" "$SERVICE_UPLOAD"
     Write-Host "Development backend deployed and verified: $healthUrl"
 }
 finally {
+    try {
+        Invoke-Remote "rm -rf '$remoteTempDir'"
+    }
+    catch {
+        Write-Warning "Could not remove the protected development deployment temporary directory."
+    }
     Remove-Item -LiteralPath $tempDir -Recurse -Force -ErrorAction SilentlyContinue
 }

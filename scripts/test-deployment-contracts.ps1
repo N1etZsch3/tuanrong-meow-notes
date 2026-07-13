@@ -74,6 +74,8 @@ $devUnit = Read-RequiredFile (Join-Path $repoRoot "deploy/systemd/catmap-backend
 $devNginx = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap-dev.conf")
 $devNginxBootstrap = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap-dev-http-bootstrap.conf")
 $devFrontendEnvExample = Read-RequiredFile (Join-Path $repoRoot "frontend/.env.development.example")
+$devFrontendEnv = Read-RequiredFile (Join-Path $repoRoot "frontend/.env.development")
+$frontendPackage = Read-RequiredFile (Join-Path $repoRoot "frontend/package.json")
 
 Assert-NotContains `
     -Content $deployScript `
@@ -218,6 +220,36 @@ Assert-Contains `
 
 Assert-Contains `
     -Content $devDeployScript `
+    -Needle '$DevelopmentDatabaseRole = "catmap_dev_app"' `
+    -Message "Development deployment must require the development database role."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "trap cleanup EXIT" `
+    -Message "Development deployment must clean remote uploads when a deployment step fails."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "install -d -m 700" `
+    -Message "Development deployment must place uploaded environment files in a root-only temporary directory."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "NGINX_LINK_TARGET_BACKUP" `
+    -Message "Development deployment must restore a pre-existing Nginx sites-enabled link after a failed config test."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "useradd --system" `
+    -Message "Development deployment must provision its dedicated unprivileged system user."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "chown -R catmap-dev:catmap-dev" `
+    -Message "Development deployment must grant the development service user access only to its own deploy directory."
+
+Assert-Contains `
+    -Content $devDeployScript `
     -Needle "nginx -t" `
     -Message "Development deployment must validate Nginx before reloading it."
 
@@ -235,6 +267,21 @@ Assert-Contains `
     -Content $devUnit `
     -Needle "EnvironmentFile=/opt/catmap-dev/backend/.env" `
     -Message "Development systemd unit must use its own environment file."
+
+Assert-Contains `
+    -Content $devUnit `
+    -Needle "User=catmap-dev" `
+    -Message "Development systemd unit must run as its dedicated unprivileged user."
+
+Assert-Contains `
+    -Content $devUnit `
+    -Needle "Group=catmap-dev" `
+    -Message "Development systemd unit must use its dedicated unprivileged group."
+
+Assert-NotContains `
+    -Content $devUnit `
+    -Needle "User=root" `
+    -Message "Development systemd unit must not run application code as root."
 
 Assert-Contains `
     -Content $devUnit `
@@ -280,5 +327,30 @@ Assert-Contains `
     -Content $devFrontendEnvExample `
     -Needle "VITE_API_BASE_URL=https://dev-api.trmx.fun/api/v1" `
     -Message "Development frontend env example must document the development HTTPS API endpoint."
+
+Assert-Contains `
+    -Content $devFrontendEnv `
+    -Needle "VITE_API_BASE_URL=https://dev-api.trmx.fun/api/v1" `
+    -Message "Development frontend build env must use the development HTTPS API endpoint."
+
+Assert-Contains `
+    -Content $frontendPackage `
+    -Needle '"build:mp-weixin:dev": "uni build -p mp-weixin --mode development"' `
+    -Message "Frontend package scripts must provide a dedicated development mini-program build command."
+
+Assert-Contains `
+    -Content $frontendPackage `
+    -Needle '"build:mp-weixin": "uni build -p mp-weixin --mode development"' `
+    -Message "The default mini-program build command must target the development API environment."
+
+Assert-Contains `
+    -Content $frontendPackage `
+    -Needle '"build": "npm run build:mp-weixin:dev"' `
+    -Message "The generic frontend build command must not bypass the development API environment."
+
+Assert-Contains `
+    -Content $frontendPackage `
+    -Needle '"build:mp-weixin:prod": "uni build -p mp-weixin --mode production"' `
+    -Message "Production mini-program builds must require the explicit production command."
 
 Write-Host "Deployment contract checks passed."

@@ -5,11 +5,15 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=root
-Group=root
+User=catmap-dev
+Group=catmap-dev
 WorkingDirectory=/opt/catmap-dev/backend
 EnvironmentFile=/opt/catmap-dev/backend/.env
 ExecStart=/opt/catmap-dev/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/opt/catmap-dev
 Restart=always
 RestartSec=5
 KillSignal=SIGINT

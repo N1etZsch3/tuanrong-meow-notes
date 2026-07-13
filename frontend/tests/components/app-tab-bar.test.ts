@@ -12,13 +12,13 @@ describe("app tab bar navigation", () => {
   it("keeps the four primary tabs in product order", () => {
     expect(APP_TAB_ITEMS.map((item) => item.label)).toEqual([
       "喵图",
-      "猫咪库",
+      "喵息",
       "喵记",
       "喵的",
     ]);
     expect(APP_TAB_ITEMS.map((item) => item.route)).toEqual([
       "/pages/index/index",
-      "/pages/cats/index",
+      "/pages/messages/index",
       "/pages/tasks/index",
       "/pages/profile/index",
     ]);
@@ -26,13 +26,14 @@ describe("app tab bar navigation", () => {
 
   it("matches active tab by exact page route", () => {
     expect(getActiveTabKey("/pages/index/index")).toBe("map");
-    expect(getActiveTabKey("pages/cats/index")).toBe("cats");
+    expect(getActiveTabKey("pages/messages/index")).toBe("messages");
     expect(getActiveTabKey("/pages/tasks/index?status=pending")).toBe("tasks");
     expect(getActiveTabKey("/pages/profile/index")).toBe("profile");
   });
 
   it("falls back to map when route is outside the primary tabs", () => {
     expect(getActiveTabKey("/pages/login/index")).toBe("map");
+    expect(getActiveTabKey("/pages/cats/index")).toBe("map");
     expect(getActiveTabKey("")).toBe("map");
   });
 

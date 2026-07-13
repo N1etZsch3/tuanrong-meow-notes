@@ -36,6 +36,13 @@
 			}
 		},
 		{
+			"path": "pages/messages/index",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "喵息"
+			}
+		},
+		{
 			"path": "pages/cats/index",
 			"style": {
 				"navigationStyle": "custom",
@@ -249,8 +256,8 @@
 				"text": "喵图"
 			},
 			{
-				"pagePath": "pages/cats/index",
-				"text": "猫咪库"
+				"pagePath": "pages/messages/index",
+				"text": "喵息"
 			},
 			{
 				"pagePath": "pages/tasks/index",

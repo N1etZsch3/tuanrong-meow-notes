@@ -71,6 +71,7 @@ import taskIcon from "../../../素材/svg/喵记/任务.svg";
 import supplyIcon from "../../../素材/svg/喵记/物资仓库.svg";
 import landmarkIcon from "../../../素材/svg/喵记/地标.svg";
 import medicineIcon from "../../../素材/svg/喵记/药品.svg";
+import catsLibraryIcon from "../../../素材/svg/猫咪库/总计.svg";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
@@ -78,7 +79,7 @@ interface NoteBook {
   key: string;
   label: string;
   icon: string;
-  tone: "green" | "cream" | "mint" | "yellow";
+  tone: "green" | "cream" | "mint" | "yellow" | "peach";
   ribbon: boolean;
   url?: string;
 }
@@ -116,6 +117,14 @@ const noteBooks: NoteBook[] = [
     ribbon: true,
     url: "/pages/medicines/index",
   },
+  {
+    key: "cats",
+    label: "猫咪库",
+    icon: catsLibraryIcon,
+    tone: "peach",
+    ribbon: true,
+    url: "/pages/cats/index",
+  },
 ];
 
 const bookPages: NoteBook[][] = [noteBooks];
@@ -130,7 +139,7 @@ const canGoPreviousBookPage = computed(() => currentBookPage.value > 0);
 const canGoNextBookPage = computed(() => currentBookPage.value < totalBookPages.value - 1);
 
 function buildBookRows(books: NoteBook[]): NoteBook[][] {
-  return [books.slice(0, 3), books.slice(3, 4), []];
+  return [books.slice(0, 3), books.slice(3, 6), []];
 }
 
 function goPreviousBookPage() {
@@ -296,8 +305,9 @@ function openBook(book: NoteBook) {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: flex-end;
+  gap: 58rpx;
   height: auto;
   padding: 0 28rpx;
 }
@@ -417,6 +427,13 @@ function openBook(book: NoteBook) {
   --cover: #f4e3a8;
   --cover-lo: #edd894;
   --spine: #e0cb80;
+}
+
+.book--peach {
+  --cover-hi: #f8e0cd;
+  --cover: #f3d3b8;
+  --cover-lo: #ecc5a2;
+  --spine: #dfb28c;
 }
 
 .book__label {

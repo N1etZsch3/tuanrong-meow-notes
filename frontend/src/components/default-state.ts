@@ -191,7 +191,7 @@ export const DEFAULT_STATE_PRESETS: Record<DefaultStateKey, DefaultStatePreset> 
 
 export const DEFAULT_TAB_PAGE_STATES = {
   map: "under_development",
-  cats: "under_development",
+  messages: "under_development",
   tasks: "under_development",
   profile: "under_development",
 } as const;

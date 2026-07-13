@@ -5,11 +5,14 @@
     <view class="cats-inner">
       <view class="cats-fixed">
         <view class="page-title">
-          <view class="page-title-row">
-            <text class="page-title-text">猫咪库</text>
-            <image class="page-title-icon" :src="titleMascotIcon" mode="aspectFit" />
+          <button class="back-button" hover-class="button-hover" @tap="goBack">‹</button>
+          <view class="title-copy">
+            <view class="page-title-row">
+              <text class="page-title-text">猫咪库</text>
+              <image class="page-title-icon" :src="titleMascotIcon" mode="aspectFit" />
+            </view>
+            <text class="page-title-subtitle">记录校园里的每一位喵校友</text>
           </view>
-          <text class="page-title-subtitle">记录校园里的每一位喵校友</text>
         </view>
 
         <view class="stats-card">
@@ -199,8 +202,6 @@
       </view>
       </scroll-view>
     </view>
-
-    <AppTabBar active-key="cats" />
   </view>
 </template>
 
@@ -217,7 +218,6 @@ import {
   type CatSortOption,
   type CatStatsResponse,
 } from "@/api/cats";
-import AppTabBar from "@/components/AppTabBar.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
@@ -486,6 +486,10 @@ function goCatDetail(catId: string) {
   uni.navigateTo({ url: `/pages/cats/detail?id=${catId}` });
 }
 
+function goBack() {
+  uni.navigateBack();
+}
+
 onShow(() => {
   void loadCatsPage();
 });
@@ -520,7 +524,7 @@ onShow(() => {
   z-index: 1;
   box-sizing: border-box;
   height: 100vh;
-  padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx) calc(env(safe-area-inset-bottom) + 154rpx);
+  padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx) calc(env(safe-area-inset-bottom) + 44rpx);
   display: flex;
   flex-direction: column;
 }
@@ -535,6 +539,36 @@ onShow(() => {
 
 .page-title {
   margin-bottom: 28rpx;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--catmap-page-title-gap, 14rpx);
+}
+
+.back-button {
+  width: 68rpx;
+  height: 68rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.94);
+  color: #2f8037;
+  font-size: 58rpx;
+  line-height: 58rpx;
+  box-shadow: 0 10rpx 28rpx rgba(42, 63, 43, 0.12);
+}
+
+.back-button::after {
+  border: 0;
+}
+
+.button-hover {
+  transform: translateY(2rpx);
+  opacity: 0.9;
+}
+
+.title-copy {
+  min-width: 0;
 }
 
 .page-title-row {

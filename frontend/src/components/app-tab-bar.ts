@@ -1,9 +1,9 @@
-import catsIcon from "../../素材/svg/默认/猫咪库.svg";
 import mapIcon from "../../素材/svg/默认/地图.svg";
+import messagesIcon from "../../素材/svg/默认/喵息.svg";
 import profileIcon from "../../素材/svg/默认/我的.svg";
 import tasksIcon from "../../素材/svg/默认/任务.svg";
 
-export type AppTabKey = "map" | "cats" | "tasks" | "profile";
+export type AppTabKey = "map" | "messages" | "tasks" | "profile";
 
 export interface AppTabItem {
   key: AppTabKey;
@@ -22,10 +22,10 @@ export const APP_TAB_ITEMS: readonly AppTabItem[] = [
     preserveActiveIconColor: true,
   },
   {
-    key: "cats",
-    label: "猫咪库",
-    route: "/pages/cats/index",
-    icon: catsIcon,
+    key: "messages",
+    label: "喵息",
+    route: "/pages/messages/index",
+    icon: messagesIcon,
   },
   {
     key: "tasks",

@@ -41,7 +41,7 @@ describe("default state presets", () => {
   it("maps current tab placeholders to the under-development state", () => {
     expect(DEFAULT_TAB_PAGE_STATES).toEqual({
       map: "under_development",
-      cats: "under_development",
+      messages: "under_development",
       tasks: "under_development",
       profile: "under_development",
     });

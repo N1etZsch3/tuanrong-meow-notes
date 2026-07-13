@@ -40,8 +40,11 @@ describe("cats page behavior", () => {
     expect(catsPageSource).not.toContain('state="under_development"');
   });
 
-  it("keeps expected page states and bottom tab", () => {
-    expect(catsPageSource).toContain('active-key="cats"');
+  it("keeps expected page states as a bookshelf sub-page with a back control", () => {
+    expect(catsPageSource).not.toContain("AppTabBar");
+    expect(catsPageSource).not.toContain('active-key="cats"');
+    expect(catsPageSource).toContain('class="back-button"');
+    expect(catsPageSource).toContain("uni.navigateBack()");
     expect(catsPageSource).toContain("isLoading");
     expect(catsPageSource).toContain("errorMessage");
     expect(catsPageSource).toContain("empty-list");

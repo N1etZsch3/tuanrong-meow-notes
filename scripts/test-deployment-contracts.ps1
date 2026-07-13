@@ -69,6 +69,11 @@ $bootstrapScript = Read-RequiredFile (Join-Path $repoRoot "scripts/bootstrap-ser
 $nginxConfig = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap.conf")
 $frontendEnv = Read-RequiredFile (Join-Path $repoRoot "frontend/src/config/app-env.ts")
 $frontendEnvExample = Read-RequiredFile (Join-Path $repoRoot "frontend/.env.example")
+$devDeployScript = Read-RequiredFile (Join-Path $repoRoot "scripts/deploy-backend-dev.ps1")
+$devUnit = Read-RequiredFile (Join-Path $repoRoot "deploy/systemd/catmap-backend-dev.service")
+$devNginx = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap-dev.conf")
+$devNginxBootstrap = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap-dev-http-bootstrap.conf")
+$devFrontendEnvExample = Read-RequiredFile (Join-Path $repoRoot "frontend/.env.development.example")
 
 Assert-NotContains `
     -Content $deployScript `
@@ -185,5 +190,95 @@ Assert-Contains `
     -Content $frontendEnvExample `
     -Needle "VITE_API_BASE_URL=https://trmx.fun/api/v1" `
     -Message "Frontend env example must document the production HTTPS API endpoint."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle '$DeployDir = "/opt/catmap-dev/backend"' `
+    -Message "Development deployment must use its isolated backend directory."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle '$ServiceName = "catmap-backend-dev"' `
+    -Message "Development deployment must target the development systemd service."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle '$Domain = "dev-api.trmx.fun"' `
+    -Message "Development deployment must target the development HTTPS domain."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "CATMAP_TENCENT_COS_ENV_PREFIX" `
+    -Message "Development deployment must validate the object storage environment prefix."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "catmap_dev" `
+    -Message "Development deployment must validate the development database target."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "nginx -t" `
+    -Message "Development deployment must validate Nginx before reloading it."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle 'https://$Domain/api/v1/health' `
+    -Message "Development deployment must verify its HTTPS health endpoint."
+
+Assert-Contains `
+    -Content $devUnit `
+    -Needle "WorkingDirectory=/opt/catmap-dev/backend" `
+    -Message "Development systemd unit must use the isolated backend directory."
+
+Assert-Contains `
+    -Content $devUnit `
+    -Needle "EnvironmentFile=/opt/catmap-dev/backend/.env" `
+    -Message "Development systemd unit must use its own environment file."
+
+Assert-Contains `
+    -Content $devUnit `
+    -Needle "--host 127.0.0.1 --port 8001" `
+    -Message "Development systemd unit must keep port 8001 on loopback."
+
+Assert-Contains `
+    -Content $devNginxBootstrap `
+    -Needle "server_name dev-api.trmx.fun" `
+    -Message "Development certificate bootstrap must only serve the development domain."
+
+Assert-Contains `
+    -Content $devNginxBootstrap `
+    -Needle "location ^~ /.well-known/acme-challenge/" `
+    -Message "Development certificate bootstrap must serve ACME webroot challenges."
+
+Assert-NotContains `
+    -Content $devNginxBootstrap `
+    -Needle "default_server" `
+    -Message "Development certificate bootstrap must not become the default Nginx server."
+
+Assert-Contains `
+    -Content $devNginx `
+    -Needle "server_name dev-api.trmx.fun" `
+    -Message "Development Nginx config must serve the development domain."
+
+Assert-Contains `
+    -Content $devNginx `
+    -Needle "location ^~ /.well-known/acme-challenge/" `
+    -Message "Development Nginx config must retain the ACME webroot location."
+
+Assert-Contains `
+    -Content $devNginx `
+    -Needle "proxy_pass http://127.0.0.1:8001/api/v1/" `
+    -Message "Development Nginx config must proxy API requests to port 8001."
+
+Assert-NotContains `
+    -Content $devNginx `
+    -Needle "default_server" `
+    -Message "Development Nginx config must not become the default Nginx server."
+
+Assert-Contains `
+    -Content $devFrontendEnvExample `
+    -Needle "VITE_API_BASE_URL=https://dev-api.trmx.fun/api/v1" `
+    -Message "Development frontend env example must document the development HTTPS API endpoint."
 
 Write-Host "Deployment contract checks passed."

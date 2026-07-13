@@ -25,12 +25,13 @@
 
 **Step 1: 写入开发工件存在性的失败断言**
 
-在现有脚本的生产契约断言之后，增加以下四个必需文件的 `Read-RequiredFile` 调用：
+在现有脚本的生产契约断言之后，增加以下五个必需文件的 `Read-RequiredFile` 调用：
 
 ```powershell
 $devDeployScript = Read-RequiredFile -Path (Join-Path $projectRoot 'scripts/deploy-backend-dev.ps1')
 $devUnit = Read-RequiredFile -Path (Join-Path $projectRoot 'deploy/systemd/catmap-backend-dev.service')
 $devNginx = Read-RequiredFile -Path (Join-Path $projectRoot 'deploy/nginx/catmap-dev.conf')
+$devNginxBootstrap = Read-RequiredFile -Path (Join-Path $projectRoot 'deploy/nginx/catmap-dev-http-bootstrap.conf')
 $devFrontendEnv = Read-RequiredFile -Path (Join-Path $projectRoot 'frontend/.env.development.example')
 ```
 
@@ -42,7 +43,7 @@ Expected: FAIL，错误明确指出缺少 `deploy-backend-dev.ps1`，而不是 P
 
 **Step 3: 添加开发隔离的静态契约断言**
 
-为未来实现写入精确断言：开发脚本必须包含开发目录、服务名、开发域名、8001、`catmap_dev` 和 `CATMAP_TENCENT_COS_ENV_PREFIX` 的拒绝式校验；不得将 `catmap-backend`、`/opt/catmap/backend` 或生产 Nginx 文件名作为目标。断言开发 unit 的 `WorkingDirectory`、`EnvironmentFile` 和 `--port 8001`；断言 Nginx 的开发 `server_name`、反向代理端口、非 `default_server` 以及 ACME challenge 位置；断言前端环境显式给出 `https://dev-api.trmx.fun/api/v1`。
+为未来实现写入精确断言：开发脚本必须包含开发目录、服务名、开发域名、8001、`catmap_dev` 和 `CATMAP_TENCENT_COS_ENV_PREFIX` 的拒绝式校验；不得将 `catmap-backend`、`/opt/catmap/backend` 或生产 Nginx 文件名作为目标。断言开发 unit 的 `WorkingDirectory`、`EnvironmentFile` 和 `--port 8001`；断言 HTTPS Nginx 和 HTTP bootstrap Nginx 都只含开发 `server_name`、非 `default_server` 和 ACME challenge 位置，且 HTTPS 配置代理至开发端口；断言前端环境显式给出 `https://dev-api.trmx.fun/api/v1`。
 
 **Step 4: 再次运行测试确认仍因工件缺失失败**
 

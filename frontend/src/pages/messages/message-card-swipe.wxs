@@ -3,7 +3,6 @@ var config = {
   actionWidthRpx: 372
 };
 
-var LONG_PRESS_SLOP_PX = 5;
 var DIRECTION_LOCK_DISTANCE_PX = 8;
 var AMBIGUOUS_DIRECTION_DISTANCE_PX = 16;
 var AXIS_LOCK_RATIO = 1.15;
@@ -62,31 +61,41 @@ function setCardOffset(ownerInstance, id, offset, animate) {
   });
 }
 
-function callOwner(ownerInstance, method, payload) {
-  if (ownerInstance && ownerInstance.callMethod) {
-    ownerInstance.callMethod(method, payload);
-  }
+function closeOpenCard(ownerInstance, animate) {
+  if (!openId) return;
+  setCardOffset(ownerInstance, openId, 0, animate);
+  openId = '';
 }
 
-function closeOpenCard(ownerInstance, animate, reason) {
-  if (!openId) return;
-  var previousId = openId;
-  setCardOffset(ownerInstance, previousId, 0, animate);
-  openId = '';
-  callOwner(ownerInstance, 'onCardSwipeViewState', {
-    id: previousId,
-    open: false,
-    reason: reason || 'close'
-  });
+function parseViewState(value) {
+  if (typeof value === 'string') {
+    var parts = value.split('|');
+    var partIndex = 0;
+    var parsedOpenId = parts[partIndex];
+    partIndex += 1;
+    var parsedRpxRatio = parts[partIndex];
+    partIndex += 1;
+    var parsedActionWidth = parts[partIndex];
+    partIndex += 1;
+    var parsedInstant = parts[partIndex];
+    return {
+      openId: parsedOpenId || '',
+      rpxRatio: parsedRpxRatio * 1,
+      actionWidthRpx: parsedActionWidth * 1,
+      instant: parsedInstant === '1'
+    };
+  }
+  return value;
 }
 
 function sync(newValue, oldValue, ownerInstance) {
-  if (!newValue) return;
-  if (newValue.rpxRatio) config.rpxRatio = newValue.rpxRatio;
-  if (newValue.actionWidthRpx) config.actionWidthRpx = newValue.actionWidthRpx;
+  var state = parseViewState(newValue);
+  if (!state) return;
+  if (state.rpxRatio) config.rpxRatio = state.rpxRatio;
+  if (state.actionWidthRpx) config.actionWidthRpx = state.actionWidthRpx;
 
-  var nextOpenId = newValue.openId || '';
-  var animate = !newValue.instant;
+  var nextOpenId = state.openId || '';
+  var animate = !state.instant;
   if (openId && openId !== nextOpenId) {
     setCardOffset(ownerInstance, openId, 0, animate);
   }
@@ -94,7 +103,7 @@ function sync(newValue, oldValue, ownerInstance) {
     setCardOffset(ownerInstance, nextOpenId, -px(config.actionWidthRpx), animate);
   }
   openId = nextOpenId;
-  if (newValue.instant && !nextOpenId) {
+  if (state.instant && !nextOpenId) {
     active = null;
   }
 }
@@ -106,7 +115,7 @@ function touchstart(event, ownerInstance) {
 
   var consume = !!(openId && openId !== id);
   if (consume) {
-    closeOpenCard(ownerInstance, true, 'foreign-card');
+    closeOpenCard(ownerInstance, true);
   }
 
   active = {
@@ -117,10 +126,7 @@ function touchstart(event, ownerInstance) {
     lastX: touch.clientX,
     lastY: touch.clientY,
     intent: consume ? 'consumed' : 'pending',
-    didMove: false,
-    startedOpen: openId === id,
-    progressNotified: false,
-    directionNotified: false
+    startedOpen: openId === id
   };
 
   setCardOffset(
@@ -129,26 +135,6 @@ function touchstart(event, ownerInstance) {
     active.startedOpen ? -px(config.actionWidthRpx) : 0,
     false
   );
-  callOwner(ownerInstance, 'onCardSwipeStart', {
-    id: id,
-    x: touch.clientX,
-    y: touch.clientY,
-    touchId: touch.identifier,
-    startedOpen: active.startedOpen,
-    consume: consume
-  });
-}
-
-function notifyProgress(ownerInstance, touch) {
-  if (!active) return;
-  callOwner(ownerInstance, 'onCardSwipeProgress', {
-    id: active.id,
-    x: touch.clientX,
-    y: touch.clientY,
-    touchId: touch.identifier,
-    intent: active.intent,
-    didMove: active.didMove
-  });
 }
 
 function touchmove(event, ownerInstance) {
@@ -160,15 +146,8 @@ function touchmove(event, ownerInstance) {
   var deltaY = touch.clientY - active.startY;
   var absX = Math.abs(deltaX);
   var absY = Math.abs(deltaY);
-  var distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
   active.lastX = touch.clientX;
   active.lastY = touch.clientY;
-
-  if (!active.didMove && distance > LONG_PRESS_SLOP_PX) {
-    active.didMove = true;
-    active.progressNotified = true;
-    notifyProgress(ownerInstance, touch);
-  }
 
   if (active.intent === 'pending') {
     var crossedThreshold =
@@ -180,10 +159,6 @@ function touchmove(event, ownerInstance) {
         active.intent = 'vertical';
       } else if (Math.max(absX, absY) >= AMBIGUOUS_DIRECTION_DISTANCE_PX) {
         active.intent = absX >= absY ? 'horizontal' : 'vertical';
-      }
-      if (active.intent !== 'pending') {
-        active.directionNotified = true;
-        notifyProgress(ownerInstance, touch);
       }
     }
   }
@@ -228,17 +203,6 @@ function finish(event, ownerInstance, cancelled) {
   );
   openId = shouldOpen ? finished.id : '';
   active = null;
-
-  callOwner(ownerInstance, 'onCardSwipeEnd', {
-    id: finished.id,
-    x: touch.clientX,
-    y: touch.clientY,
-    touchId: touch.identifier,
-    intent: finished.intent,
-    didMove: finished.didMove,
-    open: shouldOpen,
-    cancelled: !!cancelled
-  });
 }
 
 function touchend(event, ownerInstance) {
@@ -249,28 +213,10 @@ function touchcancel(event, ownerInstance) {
   finish(event, ownerInstance, true);
 }
 
-function longpress(event, ownerInstance) {
-  if (!active) return;
-  var id = messageId(event);
-  if (!id || active.id !== id || active.intent !== 'pending' || active.didMove) {
-    return;
-  }
-
-  if (openId) {
-    active.intent = 'consumed';
-    closeOpenCard(ownerInstance, true, 'longpress-on-open-card');
-    return;
-  }
-
-  active.intent = 'longpress';
-  callOwner(ownerInstance, 'onCardLongPress', { id: id });
-}
-
 module.exports = {
   sync: sync,
   touchstart: touchstart,
   touchmove: touchmove,
   touchend: touchend,
-  touchcancel: touchcancel,
-  longpress: longpress
+  touchcancel: touchcancel
 };

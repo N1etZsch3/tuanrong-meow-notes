@@ -7,6 +7,7 @@ import {
   activateCardLongPress,
   canActivateCardLongPress,
   isCardGestureOwner,
+  resolveCardSwipe,
   shouldBlockMessageRefresh,
   shouldDeferMessageListUpdate,
   shouldSuppressCardTap,
@@ -71,12 +72,12 @@ describe("message card gesture arbitration", () => {
 
   it("rejects a native long press once the finger has started drifting", () => {
     const started = startCardGesture("a", { x: 100, y: 200 });
-    const updated = updateCardGesture(started, { x: 106, y: 200 }).state;
+    const updated = updateCardGesture(started, { x: 111, y: 200 }).state;
 
-    expect(updated.intent).toBe("pending");
+    expect(updated.intent).toBe("horizontal");
     expect(updated.didMove).toBe(true);
-    expect(canActivateCardLongPress(updated, "a", { x: 106, y: 200 })).toBe(false);
-    expect(canActivateCardLongPress(started, "a", { x: 106, y: 200 })).toBe(false);
+    expect(canActivateCardLongPress(updated, "a", { x: 111, y: 200 })).toBe(false);
+    expect(canActivateCardLongPress(started, "a", { x: 111, y: 200 })).toBe(false);
     expect(shouldSuppressCardTap(updated)).toBe(true);
   });
 
@@ -88,6 +89,22 @@ describe("message card gesture arbitration", () => {
     expect(update.deltaX).toBe(-30);
     expect(canActivateCardLongPress(update.state, "a")).toBe(false);
     expect(shouldSuppressCardTap(update.state)).toBe(true);
+  });
+
+  it("resolves swipe snap state from the same end point without per-frame Vue updates", () => {
+    const closed = startCardGesture("a", { x: 300, y: 200 });
+    expect(resolveCardSwipe(closed, { x: 230, y: 202 }, 180).open).toBe(false);
+    expect(resolveCardSwipe(closed, { x: 210, y: 202 }, 180).open).toBe(true);
+
+    const opened = startCardGesture(
+      "a",
+      { x: 120, y: 200 },
+      { startedOpen: true },
+    );
+    expect(resolveCardSwipe(opened, { x: 230, y: 202 }, 180).open).toBe(false);
+    expect(resolveCardSwipe(opened, { x: 230, y: 202 }, 180, { cancelled: true }).open).toBe(
+      true,
+    );
   });
 
   it("locks vertical scrolling away from swipe and long press", () => {
@@ -342,7 +359,12 @@ describe("messages page wiring", () => {
     expect(messagesPageSource).toContain("buildMockPushes");
     expect(messagesPageSource).toContain("markAllRead");
     expect(messagesPageSource).toContain("@longpress");
-    expect(messagesPageSource).toContain("onCardLongPress");
+    expect(messagesPageSource).toContain('@longpress="handleCardLongPress(msg, $event)"');
+    expect(messagesPageSource).toContain('@touchstart="handleCardTouchStart(msg.id, $event)"');
+    expect(messagesPageSource).toContain(
+      '@touchmove.capture="handleCardTouchMove(msg.id, $event)"',
+    );
+    expect(messagesPageSource).toContain('@touchend="handleCardTouchEnd(msg.id, $event)"');
     expect(messagesPageSource).toContain('@tap="handleCardTap(msg)"');
     expect(messagesPageSource).toContain("consumeSuppressedCardTap");
     expect(messagesPageSource).toContain("canActivateCardLongPress");
@@ -380,7 +402,12 @@ describe("messages page wiring", () => {
     expect(messageCardSwipeSource).toContain("instance.setStyle({");
     expect(messageCardSwipeSource).toContain("transform: 'translateX('");
     expect(messageCardSwipeSource).toContain("function touchmove(event, ownerInstance)");
+    expect(messageCardSwipeSource).toContain("function parseViewState(value)");
+    expect(messagesPageSource).toContain('.join("|")');
     expect(messageCardSwipeSource).toContain("return false;");
+    expect(messageCardSwipeSource).not.toContain("callOwner");
+    expect(messageCardSwipeSource).not.toContain("longpress");
+    expect(messagesPageSource).not.toContain("defineExpose");
   });
 
   it("opens unread cleanup from a long press without rendering the old clear bar", () => {

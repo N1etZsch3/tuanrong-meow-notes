@@ -66,6 +66,10 @@
               v-for="msg in visibleMessages"
               :key="msg.id"
               class="swipe-cell"
+              @touchstart="handleCardTouchStart(msg.id, $event)"
+              @touchmove.capture="handleCardTouchMove(msg.id, $event)"
+              @touchend="handleCardTouchEnd(msg.id, $event)"
+              @touchcancel="handleCardTouchCancel(msg.id, $event)"
             >
               <view
                 class="swipe-actions"
@@ -105,7 +109,7 @@
                 @touchmove="messageSwipe.touchmove"
                 @touchend="messageSwipe.touchend"
                 @touchcancel="messageSwipe.touchcancel"
-                @longpress="messageSwipe.longpress"
+                @longpress="handleCardLongPress(msg, $event)"
                 @tap="handleCardTap(msg)"
               >
                 <view class="card-avatar" :class="`avatar-${channelOf(msg).tone}`">
@@ -306,8 +310,10 @@ import {
 import {
   activateCardLongPress,
   canActivateCardLongPress,
+  resolveCardSwipe,
   shouldBlockMessageRefresh,
   shouldDeferMessageListUpdate,
+  shouldSuppressCardTap,
   startCardGesture,
   updateCardGesture,
   type CardGestureState,
@@ -328,32 +334,19 @@ const LOCAL_STATE_STORAGE_KEY = "cat_map_messages_local_state_v1";
 const SWIPE_ACTIONS_WIDTH_RPX = 372;
 const TAP_SUPPRESSION_MS = 500;
 
-interface CardSwipePointPayload {
-  id: string;
-  x: number;
-  y: number;
-  touchId?: number;
+interface CardTouchPoint {
+  identifier?: number;
+  clientX?: number;
+  clientY?: number;
+  pageX?: number;
+  pageY?: number;
+  x?: number;
+  y?: number;
 }
 
-interface CardSwipeStartPayload extends CardSwipePointPayload {
-  startedOpen: boolean;
-  consume: boolean;
-}
-
-interface CardSwipeProgressPayload extends CardSwipePointPayload {
-  intent: CardGestureState["intent"];
-  didMove: boolean;
-}
-
-interface CardSwipeEndPayload extends CardSwipeProgressPayload {
-  open: boolean;
-  cancelled: boolean;
-}
-
-interface CardSwipeViewStatePayload {
-  id: string;
-  open: boolean;
-  reason?: string;
+interface CardTouchEvent {
+  touches?: ArrayLike<CardTouchPoint>;
+  changedTouches?: ArrayLike<CardTouchPoint>;
 }
 
 const CHANNEL_ICONS: Record<NotificationChannelKey, string> = {
@@ -404,13 +397,18 @@ let deferredIncomingTimer: ReturnType<typeof setTimeout> | null = null;
 const labelOptions = NOTIFICATION_LABEL_ORDER.map((key) => NOTIFICATION_LABELS[key]);
 
 const visibleMessages = computed(() => selectNotifications(messages.value, activeTab.value));
-const swipeViewState = computed(() => ({
-  openId: swipeOpenId.value,
-  rpxRatio: swipeRpxRatio,
-  actionWidthRpx: SWIPE_ACTIONS_WIDTH_RPX,
-  instant: swipeViewInstant.value,
-  revision: swipeViewRevision.value,
-}));
+// WXS change bindings are most reliable with a primitive value. In particular,
+// uni-app can leave an object binding stale after a native touch event, so use a
+// revisioned token to keep the view-layer offset aligned with Vue state.
+const swipeViewState = computed(() =>
+  [
+    swipeOpenId.value,
+    swipeRpxRatio,
+    SWIPE_ACTIONS_WIDTH_RPX,
+    swipeViewInstant.value ? 1 : 0,
+    swipeViewRevision.value,
+  ].join("|"),
+);
 const isSwipeRefreshBlocked = computed(() =>
   Boolean(
     swipeDraggingId.value ||
@@ -662,66 +660,104 @@ function closeSwipe(instant = false) {
   scheduleDeferredIncomingFlush();
 }
 
-function onCardSwipeStart(payload: CardSwipeStartPayload) {
-  pendingLongPressId = "";
-  activeCardGesture = startCardGesture(
-    payload.id,
-    { x: payload.x, y: payload.y, touchId: payload.touchId },
-    {
-      consume: payload.consume,
-      startedOpen: payload.startedOpen,
-    },
-  );
+function findCardTouch(
+  touches: ArrayLike<CardTouchPoint> | undefined,
+  touchId: number | null,
+): CardTouchPoint | null {
+  if (!touches) {
+    return null;
+  }
+  for (let index = 0; index < touches.length; index += 1) {
+    const touch = touches[index];
+    if (touchId === null || touch.identifier === undefined || touch.identifier === touchId) {
+      return touch;
+    }
+  }
+  return null;
 }
 
-function onCardSwipeProgress(payload: CardSwipeProgressPayload) {
-  if (!activeCardGesture || activeCardGesture.messageId !== payload.id) {
+function cardTouchPoint(
+  event: CardTouchEvent,
+  touchId: number | null = null,
+  preferChangedTouches = false,
+) {
+  const primary = preferChangedTouches ? event.changedTouches : event.touches;
+  const fallback = preferChangedTouches ? event.touches : event.changedTouches;
+  const touch = findCardTouch(primary, touchId) ?? findCardTouch(fallback, touchId);
+  if (!touch) {
+    return null;
+  }
+  const x = touch.clientX ?? touch.pageX ?? touch.x;
+  const y = touch.clientY ?? touch.pageY ?? touch.y;
+  if (x === undefined || y === undefined) {
+    return null;
+  }
+  return { x, y, touchId: touch.identifier };
+}
+
+function handleCardTouchStart(id: string, event: CardTouchEvent) {
+  const point = cardTouchPoint(event);
+  if (!point || activeCardGesture) {
     return;
   }
-  const update = updateCardGesture(activeCardGesture, {
-    x: payload.x,
-    y: payload.y,
-    touchId: payload.touchId,
-  });
-  activeCardGesture = {
-    ...update.state,
-    intent: payload.intent,
-    didMove: payload.didMove || update.state.didMove,
-  };
-  if (payload.intent === "horizontal") {
-    swipeDraggingId.value = payload.id;
+  const startedOpen = swipeOpenId.value === id;
+  const consume = Boolean(swipeOpenId.value && !startedOpen);
+  pendingLongPressId = "";
+  activeCardGesture = startCardGesture(
+    id,
+    point,
+    {
+      consume,
+      startedOpen,
+    },
+  );
+  swipeDraggingId.value = id;
+  if (consume) {
+    publishSwipeViewState("");
   }
 }
 
-function onCardSwipeEnd(payload: CardSwipeEndPayload) {
-  if (activeCardGesture?.messageId === payload.id) {
-    activeCardGesture = {
-      ...activeCardGesture,
-      lastX: payload.x,
-      lastY: payload.y,
-      intent: payload.intent,
-      didMove: payload.didMove,
-    };
+function handleCardTouchMove(id: string, event: CardTouchEvent) {
+  const gesture = activeCardGesture;
+  if (!gesture || gesture.messageId !== id) {
+    return;
   }
-  if (payload.intent !== "pending" || payload.didMove) {
-    suppressNextCardTap(payload.id);
+  const point = cardTouchPoint(event, gesture.touchId);
+  if (!point) {
+    return;
+  }
+  activeCardGesture = updateCardGesture(gesture, point).state;
+}
+
+function finishCardTouch(id: string, event: CardTouchEvent, cancelled: boolean) {
+  const gesture = activeCardGesture;
+  if (!gesture || gesture.messageId !== id) {
+    return;
+  }
+  const point =
+    cardTouchPoint(event, gesture.touchId, true) ?? {
+      x: gesture.lastX,
+      y: gesture.lastY,
+      touchId: gesture.touchId ?? undefined,
+    };
+  const resolution = resolveCardSwipe(gesture, point, uni.upx2px(SWIPE_ACTIONS_WIDTH_RPX), {
+    cancelled,
+  });
+  if (shouldSuppressCardTap(resolution.state)) {
+    suppressNextCardTap(id);
   }
   activeCardGesture = null;
   swipeDraggingId.value = "";
-  publishSwipeViewState(payload.open ? payload.id : "");
+  publishSwipeViewState(resolution.open ? id : "");
   scheduleDeferredIncomingFlush();
 }
 
-function onCardSwipeViewState(payload: CardSwipeViewStatePayload) {
-  if (payload.open) {
-    publishSwipeViewState(payload.id);
-    return;
-  }
-  if (!swipeOpenId.value || swipeOpenId.value === payload.id) {
-    publishSwipeViewState("");
-  }
-  swipeDraggingId.value = "";
-  scheduleDeferredIncomingFlush();
+function handleCardTouchEnd(id: string, event: CardTouchEvent) {
+  finishCardTouch(id, event, false);
+}
+
+function handleCardTouchCancel(id: string, event: CardTouchEvent) {
+  finishCardTouch(id, event, true);
 }
 
 async function handleSwipeRead(msg: NotificationView) {
@@ -780,14 +816,26 @@ function handleCardTap(msg: NotificationView) {
   }
 }
 
-function onCardLongPress(payload: { id: string }) {
-  const msg = messages.value.find((item) => item.id === payload.id);
+function handleCardLongPress(msg: NotificationView, event: CardTouchEvent) {
   const gesture = activeCardGesture;
-  if (!msg || !gesture || !canActivateCardLongPress(gesture, payload.id)) {
+  if (swipeOpenId.value) {
+    suppressNextCardTap(msg.id);
+    closeSwipe(true);
     return;
   }
-  activeCardGesture = activateCardLongPress(gesture);
+  if (!gesture || gesture.messageId !== msg.id) {
+    return;
+  }
+  const point = cardTouchPoint(event, gesture.touchId);
+  const observedGesture = point ? updateCardGesture(gesture, point).state : gesture;
+  if (!canActivateCardLongPress(observedGesture, msg.id, point)) {
+    return;
+  }
+  activeCardGesture = activateCardLongPress(observedGesture);
   suppressNextCardTap(msg.id);
+  activeCardGesture = null;
+  swipeDraggingId.value = "";
+  publishSwipeViewState("", true);
   pendingLongPressId = msg.id;
   isLabelPickerOpen.value = false;
   uni
@@ -861,14 +909,6 @@ function handleMenuDone() {
   closeActionMenu();
   uni.showToast({ title: "已完成，不再展示", icon: "none" });
 }
-
-defineExpose({
-  onCardSwipeStart,
-  onCardSwipeProgress,
-  onCardSwipeEnd,
-  onCardSwipeViewState,
-  onCardLongPress,
-});
 
 // ---- 生命周期 ----
 

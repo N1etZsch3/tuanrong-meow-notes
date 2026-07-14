@@ -29,6 +29,11 @@ export interface CardGestureUpdate {
   deltaY: number;
 }
 
+export interface CardSwipeResolution extends CardGestureUpdate {
+  open: boolean;
+  offset: number;
+}
+
 export interface CardInteractionSnapshot {
   gestureActive: boolean;
   longPressPending: boolean;
@@ -45,8 +50,8 @@ export interface CardRefreshGuardSnapshot {
   swipeDragging: boolean;
 }
 
-/** Small finger jitter is still a valid long press. */
-export const LONG_PRESS_SLOP_PX = 5;
+/** Keep normal finger jitter eligible for a native long press. */
+export const LONG_PRESS_SLOP_PX = 10;
 
 /** Wait for a deliberate move before locking the gesture axis. */
 export const DIRECTION_LOCK_DISTANCE_PX = 8;
@@ -147,6 +152,32 @@ export function updateCardGesture(
     },
     deltaX,
     deltaY,
+  };
+}
+
+export function resolveCardSwipe(
+  state: CardGestureState,
+  point: CardGesturePoint,
+  actionWidth: number,
+  options: { cancelled?: boolean; openThresholdRatio?: number } = {},
+): CardSwipeResolution {
+  const update = updateCardGesture(state, point);
+  const safeActionWidth = Math.max(0, actionWidth);
+  const baseOffset = state.startedOpen ? -safeActionWidth : 0;
+  const offset = Math.max(-safeActionWidth, Math.min(0, baseOffset + update.deltaX));
+  let open = state.startedOpen;
+
+  if (update.state.intent === "horizontal" && !options.cancelled) {
+    open = offset <= -safeActionWidth * (options.openThresholdRatio ?? 0.42);
+  }
+  if (update.state.intent === "consumed") {
+    open = false;
+  }
+
+  return {
+    ...update,
+    open,
+    offset,
   };
 }
 

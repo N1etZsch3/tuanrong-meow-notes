@@ -25,7 +25,6 @@ declare module "@vue/runtime-core" {
       touchmove: (...args: unknown[]) => void;
       touchend: (...args: unknown[]) => void;
       touchcancel: (...args: unknown[]) => void;
-      longpress: (...args: unknown[]) => void;
     };
   }
 }

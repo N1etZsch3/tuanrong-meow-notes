@@ -43,6 +43,13 @@
 			}
 		},
 		{
+			"path": "pages/messages/detail",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "消息详情"
+			}
+		},
+		{
 			"path": "pages/cats/index",
 			"style": {
 				"navigationStyle": "custom",

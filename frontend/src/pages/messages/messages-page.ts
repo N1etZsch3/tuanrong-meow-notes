@@ -9,6 +9,15 @@
  * 后端落地后在此集中调整映射即可。
  */
 
+/** 列表页与详情页共用的本地标记存储键（mock 阶段）。 */
+export const MESSAGES_LOCAL_STATE_STORAGE_KEY = "cat_map_messages_local_state_v1";
+
+/**
+ * 列表页跳转详情前写入的消息快照键：实时推送的消息不在静态 mock
+ * 数据里，详情页优先读取快照，再回退到 mock 数据查找。
+ */
+export const MESSAGES_DETAIL_SNAPSHOT_STORAGE_KEY = "cat_map_messages_detail_snapshot_v1";
+
 export type NotificationType =
   | "new_task"
   | "emergency_task"

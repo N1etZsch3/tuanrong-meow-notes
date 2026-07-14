@@ -61,11 +61,12 @@
             <text class="empty-desc">{{ emptyDesc }}</text>
           </view>
 
-          <view v-else class="message-list">
-            <view
-              v-for="msg in visibleMessages"
-              :key="msg.id"
-              class="swipe-cell"
+          <view v-else class="list-area">
+            <view class="message-list">
+              <view
+                v-for="msg in visibleMessages"
+                :key="msg.id"
+                class="swipe-cell"
               @touchstart="handleCardTouchStart(msg.id, $event)"
               @touchmove.capture="handleCardTouchMove(msg.id, $event)"
               @touchend="handleCardTouchEnd(msg.id, $event)"
@@ -78,21 +79,29 @@
                   class="swipe-action action-read"
                   @tap="handleSwipeRead(msg)"
                 >
-                  <text class="swipe-action-icon">{{ msg.is_read ? "◌" : "◉" }}</text>
-                  <text class="swipe-action-text">{{ msg.is_read ? "未读" : "已读" }}</text>
+                  <image
+                    class="swipe-action-icon"
+                    :src="msg.is_read ? actionUnreadIcon : actionReadIcon"
+                    mode="aspectFit"
+                  />
+                  <text class="swipe-action-text">{{ msg.is_read ? "标为未读" : "标为已读" }}</text>
                 </button>
                 <button
                   class="swipe-action action-pin"
                   @tap="handleSwipePin(msg)"
                 >
-                  <text class="swipe-action-icon">↑</text>
-                  <text class="swipe-action-text">{{ msg.is_pinned ? "取消" : "置顶" }}</text>
+                  <image
+                    class="swipe-action-icon"
+                    :src="msg.is_pinned ? actionUnpinIcon : actionPinIcon"
+                    mode="aspectFit"
+                  />
+                  <text class="swipe-action-text">{{ msg.is_pinned ? "取消置顶" : "置顶" }}</text>
                 </button>
                 <button
                   class="swipe-action action-done"
                   @tap="handleSwipeDone(msg)"
                 >
-                  <text class="swipe-action-icon">✓</text>
+                  <image class="swipe-action-icon" :src="actionDoneIcon" mode="aspectFit" />
                   <text class="swipe-action-text">完成</text>
                 </button>
               </view>
@@ -142,6 +151,8 @@
                 </view>
                 <view v-if="msg.is_pinned" class="pin-fold" />
               </view>
+            </view>
+
             </view>
 
             <view class="list-footer">
@@ -283,6 +294,8 @@ import {
 import { useUserStore } from "@/stores/user";
 
 import {
+  MESSAGES_DETAIL_SNAPSHOT_STORAGE_KEY,
+  MESSAGES_LOCAL_STATE_STORAGE_KEY,
   NOTIFICATION_LABELS,
   NOTIFICATION_LABEL_ORDER,
   countUnread,
@@ -329,8 +342,13 @@ import medicineChannelIcon from "../../../素材/svg/喵息/药品.svg";
 import supplyChannelIcon from "../../../素材/svg/喵记/物资仓库.svg";
 import memberChannelIcon from "../../../素材/svg/喵息/消息.svg";
 import catChannelIcon from "../../../素材/svg/默认/猫咪库.svg";
+import actionReadIcon from "../../../素材/svg/喵息/标为已读.svg";
+import actionUnreadIcon from "../../../素材/svg/喵息/标为未读.svg";
+import actionPinIcon from "../../../素材/svg/喵息/置顶.svg";
+import actionUnpinIcon from "../../../素材/svg/喵息/取消置顶.svg";
+import actionDoneIcon from "../../../素材/svg/喵息/完成.svg";
 
-const LOCAL_STATE_STORAGE_KEY = "cat_map_messages_local_state_v1";
+const LOCAL_STATE_STORAGE_KEY = MESSAGES_LOCAL_STATE_STORAGE_KEY;
 const SWIPE_ACTIONS_WIDTH_RPX = 372;
 const TAP_SUPPRESSION_MS = 500;
 
@@ -814,6 +832,13 @@ function handleCardTap(msg: NotificationView) {
   if (!msg.is_read) {
     applyMessages(markRead(messages.value, msg.id));
   }
+  try {
+    const snapshot = messages.value.find((item) => item.id === msg.id) ?? msg;
+    uni.setStorageSync(MESSAGES_DETAIL_SNAPSHOT_STORAGE_KEY, snapshot);
+  } catch {
+    // 快照写失败时详情页回退到 mock 数据查找。
+  }
+  uni.navigateTo({ url: `/pages/messages/detail?id=${encodeURIComponent(msg.id)}` });
 }
 
 function handleCardLongPress(msg: NotificationView, event: CardTouchEvent) {
@@ -1169,19 +1194,29 @@ onUnload(() => {
   text-align: center;
 }
 
-/* ---- 消息列表 ---- */
+/* ---- 消息列表：整块通栏面板，行间只用发丝线分隔（飞书移动端风格） ---- */
 
-.message-list {
+.list-area {
   display: flex;
   flex-direction: column;
-  gap: 18rpx;
+}
+
+.message-list {
+  overflow: hidden;
+  border: 2rpx solid rgba(216, 229, 209, 0.85);
+  border-radius: 24rpx;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14rpx 34rpx rgba(39, 76, 42, 0.06);
 }
 
 .swipe-cell {
   position: relative;
   overflow: hidden;
-  border-radius: 28rpx;
   animation: cardIn 0.26s ease both;
+}
+
+.swipe-cell + .swipe-cell {
+  border-top: 2rpx solid rgba(228, 236, 224, 0.9);
 }
 
 .swipe-actions {
@@ -1189,8 +1224,6 @@ onUnload(() => {
   inset: 0 0 0 auto;
   z-index: 0;
   width: 372rpx;
-  border-radius: 28rpx;
-  overflow: hidden;
   display: flex;
 }
 
@@ -1206,7 +1239,7 @@ onUnload(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8rpx;
+  gap: 10rpx;
 }
 
 .swipe-action::after {
@@ -1214,26 +1247,27 @@ onUnload(() => {
 }
 
 .swipe-action-icon {
-  font-size: 34rpx;
-  line-height: 1;
+  width: 40rpx;
+  height: 40rpx;
 }
 
 .swipe-action-text {
-  font-size: 22rpx;
-  font-weight: 900;
+  font-size: 21rpx;
+  font-weight: 800;
   line-height: 1;
+  letter-spacing: 1rpx;
 }
 
 .action-read {
-  background: #6f9a54;
+  background: #5c82a6;
 }
 
 .action-pin {
-  background: #d9a441;
+  background: #d8963c;
 }
 
 .action-done {
-  background: #2f7d3a;
+  background: #3f8a46;
 }
 
 .message-card {
@@ -1241,14 +1275,11 @@ onUnload(() => {
   z-index: 1;
   box-sizing: border-box;
   min-height: 150rpx;
-  border: 2rpx solid rgba(197, 230, 193, 0.78);
-  border-radius: 28rpx;
-  padding: 26rpx 26rpx 26rpx 24rpx;
-  background: #fbfdf8;
-  box-shadow: 0 15rpx 38rpx rgba(39, 76, 42, 0.08);
+  padding: 28rpx 30rpx;
+  background: #ffffff;
   display: flex;
   align-items: flex-start;
-  gap: 20rpx;
+  gap: 22rpx;
   overflow: hidden;
   width: 100%;
   transform: translateX(0);
@@ -1258,12 +1289,22 @@ onUnload(() => {
 }
 
 .message-card.is-unread {
-  border-color: rgba(226, 127, 111, 0.5);
-  background: #fffdfa;
+  background: #fffefb;
+}
+
+.message-card.is-unread .card-content {
+  color: #414c58;
+  font-weight: 700;
 }
 
 .message-card.is-pinned {
-  border-color: rgba(217, 164, 65, 0.55);
+  background: #f5f9f1;
+}
+
+/* 长按悬浮预览沿用卡片结构，浮层单独恢复圆角与描边 */
+.press-ghost .message-card {
+  border: 2rpx solid rgba(216, 229, 209, 0.9);
+  border-radius: 24rpx;
 }
 
 @keyframes cardIn {
@@ -1282,7 +1323,7 @@ onUnload(() => {
   width: 92rpx;
   height: 92rpx;
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: 26rpx;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1447,16 +1488,20 @@ onUnload(() => {
   box-shadow: 0 0 0 5rpx rgba(226, 87, 76, 0.14);
 }
 
-/* 置顶：右上角折角书签 */
+/* 置顶：左侧竖向琥珀色强调条 */
 .pin-fold {
   position: absolute;
-  top: 0;
-  right: 0;
-  width: 0;
-  height: 0;
-  border-style: solid;
-  border-width: 0 44rpx 44rpx 0;
-  border-color: transparent #e3bd72 transparent transparent;
+  top: 22rpx;
+  bottom: 22rpx;
+  left: 0;
+  width: 6rpx;
+  border-radius: 0 6rpx 6rpx 0;
+  background: linear-gradient(180deg, #e6b45a 0%, #d8963c 100%);
+}
+
+.press-ghost .pin-fold {
+  top: 26rpx;
+  bottom: 26rpx;
 }
 
 .list-footer {

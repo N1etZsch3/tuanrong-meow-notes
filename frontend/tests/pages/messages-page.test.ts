@@ -1,7 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import messagesPageSource from "../../src/pages/messages/index.vue?raw";
+import messageCardSwipeSource from "../../src/pages/messages/message-card-swipe.wxs?raw";
 import pagesJson from "../../src/pages.json?raw";
+import {
+  activateCardLongPress,
+  canActivateCardLongPress,
+  isCardGestureOwner,
+  shouldBlockMessageRefresh,
+  shouldDeferMessageListUpdate,
+  shouldSuppressCardTap,
+  startCardGesture,
+  updateCardGesture,
+} from "@/pages/messages/message-card-gesture";
 import {
   NOTIFICATION_LABELS,
   countUnread,
@@ -46,6 +57,112 @@ function buildView(overrides: Partial<NotificationView> = {}): NotificationView 
     ...overrides,
   };
 }
+
+describe("message card gesture arbitration", () => {
+  it("keeps ordinary finger jitter eligible for a long press and a tap", () => {
+    const started = startCardGesture("a", { x: 100, y: 200 });
+    const updated = updateCardGesture(started, { x: 103, y: 202 }).state;
+
+    expect(updated.intent).toBe("pending");
+    expect(updated.didMove).toBe(false);
+    expect(canActivateCardLongPress(updated, "a", { x: 103, y: 202 })).toBe(true);
+    expect(shouldSuppressCardTap(updated)).toBe(false);
+  });
+
+  it("rejects a native long press once the finger has started drifting", () => {
+    const started = startCardGesture("a", { x: 100, y: 200 });
+    const updated = updateCardGesture(started, { x: 106, y: 200 }).state;
+
+    expect(updated.intent).toBe("pending");
+    expect(updated.didMove).toBe(true);
+    expect(canActivateCardLongPress(updated, "a", { x: 106, y: 200 })).toBe(false);
+    expect(canActivateCardLongPress(started, "a", { x: 106, y: 200 })).toBe(false);
+    expect(shouldSuppressCardTap(updated)).toBe(true);
+  });
+
+  it("locks a deliberate horizontal move to swipe and suppresses tap", () => {
+    const started = startCardGesture("a", { x: 180, y: 300 });
+    const update = updateCardGesture(started, { x: 150, y: 303 });
+
+    expect(update.state.intent).toBe("horizontal");
+    expect(update.deltaX).toBe(-30);
+    expect(canActivateCardLongPress(update.state, "a")).toBe(false);
+    expect(shouldSuppressCardTap(update.state)).toBe(true);
+  });
+
+  it("locks vertical scrolling away from swipe and long press", () => {
+    const started = startCardGesture("a", { x: 180, y: 300 });
+    const update = updateCardGesture(started, { x: 183, y: 330 });
+
+    expect(update.state.intent).toBe("vertical");
+    expect(canActivateCardLongPress(update.state, "a")).toBe(false);
+    expect(shouldSuppressCardTap(update.state)).toBe(true);
+  });
+
+  it("consumes the first touch on another card when a swipe is already open", () => {
+    const consumed = startCardGesture(
+      "b",
+      { x: 120, y: 220 },
+      { consume: true, startedOpen: false },
+    );
+    const updated = updateCardGesture(consumed, { x: 80, y: 220 }).state;
+
+    expect(updated.intent).toBe("consumed");
+    expect(canActivateCardLongPress(updated, "b")).toBe(false);
+    expect(shouldSuppressCardTap(updated)).toBe(true);
+  });
+
+  it("makes an accepted long press exclusive from the following tap", () => {
+    const started = startCardGesture("a", { x: 100, y: 200 });
+    const longPressed = activateCardLongPress(started);
+
+    expect(longPressed.intent).toBe("longpress");
+    expect(canActivateCardLongPress(longPressed, "a")).toBe(false);
+    expect(shouldSuppressCardTap(longPressed)).toBe(true);
+  });
+
+  it("keeps one touch bound to its original message card", () => {
+    const started = startCardGesture("a", { x: 100, y: 200, touchId: 7 });
+
+    expect(isCardGestureOwner(started, "a", 7)).toBe(true);
+    expect(isCardGestureOwner(started, "b", 7)).toBe(false);
+    expect(isCardGestureOwner(started, "a", 8)).toBe(false);
+  });
+
+  it("keeps live list updates deferred while swipe actions stay open", () => {
+    expect(
+      shouldDeferMessageListUpdate({
+        gestureActive: false,
+        longPressPending: false,
+        menuOpen: false,
+        swipeOpen: true,
+        swipeDragging: false,
+      }),
+    ).toBe(true);
+    expect(
+      shouldDeferMessageListUpdate({
+        gestureActive: false,
+        longPressPending: false,
+        menuOpen: false,
+        swipeOpen: false,
+        swipeDragging: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("blocks pull-to-refresh only for card-owned horizontal interactions", () => {
+    const base = {
+      longPressPending: false,
+      menuOpen: false,
+      swipeOpen: false,
+      swipeDragging: false,
+    };
+
+    expect(shouldBlockMessageRefresh({ ...base, gestureIntent: "horizontal" })).toBe(true);
+    expect(shouldBlockMessageRefresh({ ...base, gestureIntent: "vertical" })).toBe(false);
+    expect(shouldBlockMessageRefresh({ ...base, gestureIntent: null, swipeOpen: true })).toBe(true);
+  });
+});
 
 describe("messages page notification model", () => {
   it("maps notification types to display channels with badges", () => {
@@ -223,9 +340,23 @@ describe("messages page wiring", () => {
     expect(messagesPageSource).toContain("connectNotificationChannel");
     expect(messagesPageSource).toContain('mode: "mock"');
     expect(messagesPageSource).toContain("buildMockPushes");
-    expect(messagesPageSource).toContain("清除全部未读");
     expect(messagesPageSource).toContain("markAllRead");
     expect(messagesPageSource).toContain("@longpress");
+    expect(messagesPageSource).toContain("onCardLongPress");
+    expect(messagesPageSource).toContain('@tap="handleCardTap(msg)"');
+    expect(messagesPageSource).toContain("consumeSuppressedCardTap");
+    expect(messagesPageSource).toContain("canActivateCardLongPress");
+    expect(messagesPageSource).toContain("deferredIncomingNotifications");
+    expect(messagesPageSource).toContain("hasBlockingCardInteraction()");
+    expect(messagesPageSource).toContain("messageSwipe.touchmove");
+    expect(messagesPageSource).toContain("scroll-y");
+    expect(messagesPageSource).toContain(':enhanced="true"');
+    expect(messagesPageSource).toContain(':refresher-enabled="!isSwipeRefreshBlocked"');
+    expect(messagesPageSource).toContain("mergeIncomingNotifications(messages.value, base)");
+    expect(messagesPageSource).toContain("async function applySwipeListMutation");
+    expect(messagesPageSource).toContain("await nextTick()");
+    expect(messagesPageSource).toContain("swipeMutationPending");
+    expect(messagesPageSource).toContain(".messages-scroll::-webkit-scrollbar");
     expect(messagesPageSource).toContain("标为未读");
     expect(messagesPageSource).toContain("置顶");
     expect(messagesPageSource).toContain("标签");
@@ -234,6 +365,33 @@ describe("messages page wiring", () => {
     expect(messagesPageSource).toContain("swipe-action");
     expect(messagesPageSource).toContain("消息空荡荡的.svg");
     expect(messagesPageSource).toContain("暂无消息");
+  });
+
+  it("pre-renders swipe actions and moves the foreground card in the WXS view layer", () => {
+    expect(messagesPageSource).toContain(
+      '<script module="messageSwipe" lang="wxs" src="./message-card-swipe.wxs"></script>',
+    );
+    expect(messagesPageSource).toContain(':change:swipeViewState="messageSwipe.sync"');
+    expect(messagesPageSource).toContain('class="swipe-actions"');
+    expect(messagesPageSource).not.toContain('v-if="isCellSwiping(msg.id)"');
+    expect(messagesPageSource).not.toContain(':disabled="!canUseSwipeAction(msg.id)"');
+    expect(messagesPageSource).not.toContain("swipeActionsReadyId");
+    expect(messagesPageSource).not.toContain("swipeDragX");
+    expect(messageCardSwipeSource).toContain("instance.setStyle({");
+    expect(messageCardSwipeSource).toContain("transform: 'translateX('");
+    expect(messageCardSwipeSource).toContain("function touchmove(event, ownerInstance)");
+    expect(messageCardSwipeSource).toContain("return false;");
+  });
+
+  it("opens unread cleanup from a long press without rendering the old clear bar", () => {
+    expect(messagesPageSource).toContain('@longpress="openClearConfirm"');
+    expect(messagesPageSource).toContain('class="unread-sheet-overlay"');
+    expect(messagesPageSource).toContain("确定清除全部未读消息");
+    expect(messagesPageSource).toContain("清除未读");
+    expect(messagesPageSource).toContain('activeTab.value !== "unread"');
+    expect(messagesPageSource).not.toContain('class="clear-bar"');
+    expect(messagesPageSource).not.toContain("clear-bar-button");
+    expect(messagesPageSource).not.toContain("clearSweepIcon");
   });
 
   it("uses the prepared 喵息 channel avatars", () => {

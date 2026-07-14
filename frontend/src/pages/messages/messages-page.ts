@@ -294,7 +294,7 @@ export function dismissNotification(items: NotificationView[], id: string): Noti
   );
 }
 
-/** 全部标记已读（“清除全部未读”按未读状态保留，仅清红点提醒）。 */
+/** 将所有未完成的未读消息标记为已读，消息记录仍保留。 */
 export function markAllRead(items: NotificationView[]): NotificationView[] {
   const now = new Date().toISOString();
   return items.map((item) =>

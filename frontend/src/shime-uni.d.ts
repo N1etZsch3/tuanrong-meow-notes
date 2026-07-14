@@ -19,5 +19,13 @@ declare module "@vue/runtime-core" {
       sync: (...args: unknown[]) => void;
       toggle: (...args: unknown[]) => void;
     };
+    messageSwipe: {
+      sync: (...args: unknown[]) => void;
+      touchstart: (...args: unknown[]) => void;
+      touchmove: (...args: unknown[]) => void;
+      touchend: (...args: unknown[]) => void;
+      touchcancel: (...args: unknown[]) => void;
+      longpress: (...args: unknown[]) => void;
+    };
   }
 }

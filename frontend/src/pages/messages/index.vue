@@ -1,5 +1,9 @@
 <template>
-  <view class="messages-page">
+  <view
+    class="messages-page"
+    :swipeViewState="swipeViewState"
+    :change:swipeViewState="messageSwipe.sync"
+  >
     <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
 
     <view class="messages-inner" :class="{ 'is-dimmed': isOverlayActive }">
@@ -31,6 +35,7 @@
               class="segment-item"
               :class="{ 'is-active': activeTab === 'unread' }"
               @tap="switchTab('unread')"
+              @longpress="openClearConfirm"
             >
               <text>未读</text>
               <text v-if="unreadCount > 0" class="segment-badge">{{ unreadCount }}</text>
@@ -38,19 +43,13 @@
           </view>
         </view>
 
-        <view class="clear-bar" :class="{ 'is-visible': showClearBar }">
-          <button class="clear-bar-button" hover-class="clear-bar-hover" @tap="openClearConfirm">
-            <image class="clear-bar-icon" :src="clearSweepIcon" mode="aspectFit" />
-            <text class="clear-bar-text">清除全部未读</text>
-            <text class="clear-bar-count">共 {{ unreadCount }} 条</text>
-          </button>
-        </view>
       </view>
 
       <scroll-view
         class="messages-scroll"
         scroll-y
-        refresher-enabled
+        :enhanced="true"
+        :refresher-enabled="!isSwipeRefreshBlocked"
         :refresher-triggered="isRefreshing"
         :show-scrollbar="false"
         @refresherrefresh="refreshMessages"
@@ -67,18 +66,28 @@
               v-for="msg in visibleMessages"
               :key="msg.id"
               class="swipe-cell"
-              :class="{ 'is-swiping': isCellSwiping(msg.id) }"
             >
-              <view v-if="isCellSwiping(msg.id)" class="swipe-actions">
-                <button class="swipe-action action-read" @tap="handleSwipeRead(msg)">
+              <view
+                class="swipe-actions"
+              >
+                <button
+                  class="swipe-action action-read"
+                  @tap="handleSwipeRead(msg)"
+                >
                   <text class="swipe-action-icon">{{ msg.is_read ? "◌" : "◉" }}</text>
                   <text class="swipe-action-text">{{ msg.is_read ? "未读" : "已读" }}</text>
                 </button>
-                <button class="swipe-action action-pin" @tap="handleSwipePin(msg)">
+                <button
+                  class="swipe-action action-pin"
+                  @tap="handleSwipePin(msg)"
+                >
                   <text class="swipe-action-icon">↑</text>
                   <text class="swipe-action-text">{{ msg.is_pinned ? "取消" : "置顶" }}</text>
                 </button>
-                <button class="swipe-action action-done" @tap="handleSwipeDone(msg)">
+                <button
+                  class="swipe-action action-done"
+                  @tap="handleSwipeDone(msg)"
+                >
                   <text class="swipe-action-icon">✓</text>
                   <text class="swipe-action-text">完成</text>
                 </button>
@@ -86,18 +95,17 @@
 
               <view
                 :id="`msg-card-${msg.id}`"
+                :data-message-id="msg.id"
                 class="message-card"
                 :class="{
                   'is-unread': !msg.is_read,
                   'is-pinned': msg.is_pinned,
-                  'is-dragging': swipeDraggingId === msg.id,
                 }"
-                :style="cardTransformStyle(msg.id)"
-                @touchstart="onCardTouchStart(msg.id, $event)"
-                @touchmove="onCardTouchMove(msg.id, $event)"
-                @touchend="onCardTouchEnd(msg.id)"
-                @touchcancel="onCardTouchEnd(msg.id)"
-                @longpress="openActionMenu(msg)"
+                @touchstart="messageSwipe.touchstart"
+                @touchmove="messageSwipe.touchmove"
+                @touchend="messageSwipe.touchend"
+                @touchcancel="messageSwipe.touchcancel"
+                @longpress="messageSwipe.longpress"
                 @tap="handleCardTap(msg)"
               >
                 <view class="card-avatar" :class="`avatar-${channelOf(msg).tone}`">
@@ -222,23 +230,32 @@
       </view>
     </view>
 
-    <view v-if="isClearConfirmVisible" class="confirm-overlay" @tap="closeClearConfirm">
-      <view class="confirm-card" @tap.stop>
-        <view class="confirm-icon-ring">
-          <image class="confirm-icon" :src="clearSweepIcon" mode="aspectFit" />
-        </view>
-        <text class="confirm-title">清除全部未读</text>
-        <text class="confirm-desc">
-          将 {{ unreadCount }} 条未读消息标记为已读，红点提醒会一并清除，消息仍会保留。
-        </text>
-        <view class="confirm-actions">
-          <button class="confirm-button confirm-cancel" hover-class="confirm-button-hover" @tap="closeClearConfirm">
-            取消
-          </button>
-          <button class="confirm-button confirm-primary" hover-class="confirm-button-hover" @tap="handleClearAllUnread">
+    <view
+      v-if="isClearConfirmVisible"
+      class="unread-sheet-overlay"
+      @tap="closeClearConfirm"
+      @touchmove.stop.prevent
+    >
+      <view class="unread-sheet" @tap.stop>
+        <view class="unread-sheet-panel">
+          <text class="unread-sheet-desc">
+            确定清除全部未读消息？消息仍会保留在“消息”列表中。
+          </text>
+          <button
+            class="unread-sheet-clear"
+            hover-class="unread-sheet-button-hover"
+            @tap="handleClearAllUnread"
+          >
             清除未读
           </button>
         </view>
+        <button
+          class="unread-sheet-cancel"
+          hover-class="unread-sheet-button-hover"
+          @tap="closeClearConfirm"
+        >
+          取消
+        </button>
       </view>
     </view>
 
@@ -246,8 +263,10 @@
   </view>
 </template>
 
+<script module="messageSwipe" lang="wxs" src="./message-card-swipe.wxs"></script>
+
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, nextTick, ref } from "vue";
 import { onHide, onShow, onUnload } from "@dcloudio/uni-app";
 
 import AppTabBar from "@/components/AppTabBar.vue";
@@ -284,12 +303,20 @@ import {
   type NotificationView,
   type StoredLocalState,
 } from "./messages-page";
+import {
+  activateCardLongPress,
+  canActivateCardLongPress,
+  shouldBlockMessageRefresh,
+  shouldDeferMessageListUpdate,
+  startCardGesture,
+  updateCardGesture,
+  type CardGestureState,
+} from "./message-card-gesture";
 import { MOCK_NOTIFICATIONS, buildMockPushes } from "./mock-notifications";
 
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 import titleMascotIcon from "../../../素材/svg/萌猫/奶牛猫.svg";
 import emptyMessagesIllustration from "../../../素材/svg/缺省页/消息空荡荡的.svg";
-import clearSweepIcon from "../../../素材/svg/猫咪库/删除.svg";
 import taskChannelIcon from "../../../素材/svg/喵记/任务.svg";
 import feedingChannelIcon from "../../../素材/svg/喵息/猫粮盆.svg";
 import medicineChannelIcon from "../../../素材/svg/喵息/药品.svg";
@@ -298,6 +325,36 @@ import memberChannelIcon from "../../../素材/svg/喵息/消息.svg";
 import catChannelIcon from "../../../素材/svg/默认/猫咪库.svg";
 
 const LOCAL_STATE_STORAGE_KEY = "cat_map_messages_local_state_v1";
+const SWIPE_ACTIONS_WIDTH_RPX = 372;
+const TAP_SUPPRESSION_MS = 500;
+
+interface CardSwipePointPayload {
+  id: string;
+  x: number;
+  y: number;
+  touchId?: number;
+}
+
+interface CardSwipeStartPayload extends CardSwipePointPayload {
+  startedOpen: boolean;
+  consume: boolean;
+}
+
+interface CardSwipeProgressPayload extends CardSwipePointPayload {
+  intent: CardGestureState["intent"];
+  didMove: boolean;
+}
+
+interface CardSwipeEndPayload extends CardSwipeProgressPayload {
+  open: boolean;
+  cancelled: boolean;
+}
+
+interface CardSwipeViewStatePayload {
+  id: string;
+  open: boolean;
+  reason?: string;
+}
 
 const CHANNEL_ICONS: Record<NotificationChannelKey, string> = {
   task: taskChannelIcon,
@@ -330,19 +387,39 @@ const isClearConfirmVisible = ref(false);
 
 const swipeOpenId = ref("");
 const swipeDraggingId = ref("");
-const swipeDragX = ref(0);
+const swipeMutationPending = ref(false);
+const swipeViewRevision = ref(0);
+const swipeViewInstant = ref(false);
+const swipeRpxRatio = uni.getSystemInfoSync().windowWidth / 750;
 
 let channelHandle: NotificationChannelHandle | null = null;
 let clockTimer: ReturnType<typeof setInterval> | null = null;
-let touchStartX = 0;
-let touchStartY = 0;
-let touchDirection: "none" | "horizontal" | "vertical" = "none";
+let activeCardGesture: CardGestureState | null = null;
+let pendingLongPressId = "";
+let suppressedTapId = "";
+let suppressedTapUntil = 0;
+let deferredIncomingNotifications: NotificationItemDto[] = [];
+let deferredIncomingTimer: ReturnType<typeof setTimeout> | null = null;
 
 const labelOptions = NOTIFICATION_LABEL_ORDER.map((key) => NOTIFICATION_LABELS[key]);
 
 const visibleMessages = computed(() => selectNotifications(messages.value, activeTab.value));
+const swipeViewState = computed(() => ({
+  openId: swipeOpenId.value,
+  rpxRatio: swipeRpxRatio,
+  actionWidthRpx: SWIPE_ACTIONS_WIDTH_RPX,
+  instant: swipeViewInstant.value,
+  revision: swipeViewRevision.value,
+}));
+const isSwipeRefreshBlocked = computed(() =>
+  Boolean(
+    swipeDraggingId.value ||
+      swipeOpenId.value ||
+      swipeMutationPending.value ||
+      menuTarget.value,
+  ),
+);
 const unreadCount = computed(() => countUnread(messages.value));
-const showClearBar = computed(() => activeTab.value === "unread" && unreadCount.value > 0);
 const socketStatusLabel = computed(() => SOCKET_STATUS_LABELS[socketStatus.value]);
 const isOverlayActive = computed(() => Boolean(menuTarget.value) || isClearConfirmVisible.value);
 
@@ -437,8 +514,60 @@ function loadInitialMessages() {
   messages.value = mergeIncomingNotifications(base, []);
 }
 
+function hasBlockingCardInteraction(): boolean {
+  return (
+    swipeMutationPending.value ||
+    shouldDeferMessageListUpdate({
+      gestureActive: Boolean(activeCardGesture),
+      longPressPending: Boolean(pendingLongPressId),
+      menuOpen: Boolean(menuTarget.value),
+      swipeOpen: Boolean(swipeOpenId.value),
+      swipeDragging: Boolean(swipeDraggingId.value),
+    })
+  );
+}
+
+function hasBlockingMessageRefresh(): boolean {
+  return (
+    swipeMutationPending.value ||
+    shouldBlockMessageRefresh({
+      gestureIntent: activeCardGesture?.intent ?? null,
+      longPressPending: Boolean(pendingLongPressId),
+      menuOpen: Boolean(menuTarget.value),
+      swipeOpen: Boolean(swipeOpenId.value),
+      swipeDragging: Boolean(swipeDraggingId.value),
+    })
+  );
+}
+
 function handleIncomingNotification(dto: NotificationItemDto) {
+  if (hasBlockingCardInteraction()) {
+    deferredIncomingNotifications.push(dto);
+    return;
+  }
   messages.value = mergeIncomingNotifications(messages.value, [dto]);
+}
+
+function flushDeferredIncomingNotifications() {
+  if (deferredIncomingNotifications.length === 0 || hasBlockingCardInteraction()) {
+    return;
+  }
+  const incoming = deferredIncomingNotifications;
+  deferredIncomingNotifications = [];
+  messages.value = mergeIncomingNotifications(messages.value, incoming);
+}
+
+function scheduleDeferredIncomingFlush() {
+  if (deferredIncomingNotifications.length === 0) {
+    return;
+  }
+  if (deferredIncomingTimer) {
+    clearTimeout(deferredIncomingTimer);
+  }
+  deferredIncomingTimer = setTimeout(() => {
+    deferredIncomingTimer = null;
+    flushDeferredIncomingNotifications();
+  }, 0);
 }
 
 function openChannel() {
@@ -462,10 +591,14 @@ function closeChannel() {
 }
 
 async function refreshMessages() {
+  if (hasBlockingMessageRefresh()) {
+    isRefreshing.value = false;
+    return;
+  }
   isRefreshing.value = true;
   const locals = loadStoredLocalStates();
   const base = MOCK_NOTIFICATIONS.map((dto) => toNotificationView(dto, locals[dto.id]));
-  messages.value = mergeIncomingNotifications(base, []);
+  messages.value = mergeIncomingNotifications(messages.value, base);
   setTimeout(() => {
     isRefreshing.value = false;
   }, 420);
@@ -475,13 +608,15 @@ async function refreshMessages() {
 
 function switchTab(tab: MessagesTabKey) {
   activeTab.value = tab;
+  activeCardGesture = null;
   closeSwipe();
 }
 
 function openClearConfirm() {
-  if (unreadCount.value === 0) {
+  if (activeTab.value !== "unread" || unreadCount.value === 0) {
     return;
   }
+  closeSwipe();
   isClearConfirmVisible.value = true;
 }
 
@@ -497,99 +632,145 @@ function handleClearAllUnread() {
 
 // ---- 左滑操作 ----
 
-function rpx(value: number): number {
-  return uni.upx2px(value);
+function publishSwipeViewState(openId: string, instant = false) {
+  swipeOpenId.value = openId;
+  swipeViewInstant.value = instant;
+  swipeViewRevision.value += 1;
 }
 
-const SWIPE_ACTIONS_WIDTH_RPX = 372;
-
-function isCellSwiping(id: string): boolean {
-  return swipeOpenId.value === id || swipeDraggingId.value === id;
-}
-
-function cardTransformStyle(id: string): string {
-  const isOpen = swipeOpenId.value === id;
-  const isDragging = swipeDraggingId.value === id;
-  if (!isOpen && !isDragging) {
-    return "";
-  }
-  const offset = isDragging ? swipeDragX.value : -rpx(SWIPE_ACTIONS_WIDTH_RPX);
-  return `transform: translateX(${offset}px);`;
-}
-
-function closeSwipe() {
-  swipeOpenId.value = "";
+async function applySwipeListMutation(id: string, mutation: () => void): Promise<boolean> {
+  swipeMutationPending.value = true;
   swipeDraggingId.value = "";
-  swipeDragX.value = 0;
+  publishSwipeViewState("", true);
+
+  try {
+    // 先让 WXS 在视图层把原卡无动画复位，再变更会重排/移除节点的数据。
+    await nextTick();
+    await new Promise<void>((resolve) => setTimeout(resolve, 34));
+    mutation();
+    return true;
+  } finally {
+    swipeMutationPending.value = false;
+    scheduleDeferredIncomingFlush();
+  }
 }
 
-function onCardTouchStart(id: string, event: TouchEvent) {
-  const touch = event.touches?.[0];
-  if (!touch) {
-    return;
-  }
-  touchStartX = touch.clientX;
-  touchStartY = touch.clientY;
-  touchDirection = "none";
-  if (swipeOpenId.value && swipeOpenId.value !== id) {
-    closeSwipe();
-  }
-}
-
-function onCardTouchMove(id: string, event: TouchEvent) {
-  const touch = event.touches?.[0];
-  if (!touch || menuTarget.value) {
-    return;
-  }
-  const deltaX = touch.clientX - touchStartX;
-  const deltaY = touch.clientY - touchStartY;
-
-  if (touchDirection === "none") {
-    if (Math.abs(deltaX) < 8 && Math.abs(deltaY) < 8) {
-      return;
-    }
-    touchDirection = Math.abs(deltaX) > Math.abs(deltaY) ? "horizontal" : "vertical";
-  }
-  if (touchDirection !== "horizontal") {
-    return;
-  }
-
-  const baseOffset = swipeOpenId.value === id ? -rpx(SWIPE_ACTIONS_WIDTH_RPX) : 0;
-  const next = Math.min(0, Math.max(-rpx(SWIPE_ACTIONS_WIDTH_RPX), baseOffset + deltaX));
-  swipeDraggingId.value = id;
-  swipeDragX.value = next;
-}
-
-function onCardTouchEnd(id: string) {
-  if (swipeDraggingId.value !== id) {
-    return;
-  }
-  const threshold = -rpx(SWIPE_ACTIONS_WIDTH_RPX) * 0.42;
-  swipeOpenId.value = swipeDragX.value <= threshold ? id : "";
+function closeSwipe(instant = false) {
   swipeDraggingId.value = "";
-  swipeDragX.value = 0;
-  touchDirection = "none";
+  activeCardGesture = null;
+  publishSwipeViewState("", instant);
+  scheduleDeferredIncomingFlush();
 }
 
-function handleSwipeRead(msg: NotificationView) {
-  applyMessages(msg.is_read ? markUnread(messages.value, msg.id) : markRead(messages.value, msg.id));
-  closeSwipe();
+function onCardSwipeStart(payload: CardSwipeStartPayload) {
+  pendingLongPressId = "";
+  activeCardGesture = startCardGesture(
+    payload.id,
+    { x: payload.x, y: payload.y, touchId: payload.touchId },
+    {
+      consume: payload.consume,
+      startedOpen: payload.startedOpen,
+    },
+  );
 }
 
-function handleSwipePin(msg: NotificationView) {
-  applyMessages(togglePinned(messages.value, msg.id));
-  closeSwipe();
+function onCardSwipeProgress(payload: CardSwipeProgressPayload) {
+  if (!activeCardGesture || activeCardGesture.messageId !== payload.id) {
+    return;
+  }
+  const update = updateCardGesture(activeCardGesture, {
+    x: payload.x,
+    y: payload.y,
+    touchId: payload.touchId,
+  });
+  activeCardGesture = {
+    ...update.state,
+    intent: payload.intent,
+    didMove: payload.didMove || update.state.didMove,
+  };
+  if (payload.intent === "horizontal") {
+    swipeDraggingId.value = payload.id;
+  }
 }
 
-function handleSwipeDone(msg: NotificationView) {
-  applyMessages(dismissNotification(messages.value, msg.id));
-  closeSwipe();
-  uni.showToast({ title: "已完成，不再展示", icon: "none" });
+function onCardSwipeEnd(payload: CardSwipeEndPayload) {
+  if (activeCardGesture?.messageId === payload.id) {
+    activeCardGesture = {
+      ...activeCardGesture,
+      lastX: payload.x,
+      lastY: payload.y,
+      intent: payload.intent,
+      didMove: payload.didMove,
+    };
+  }
+  if (payload.intent !== "pending" || payload.didMove) {
+    suppressNextCardTap(payload.id);
+  }
+  activeCardGesture = null;
+  swipeDraggingId.value = "";
+  publishSwipeViewState(payload.open ? payload.id : "");
+  scheduleDeferredIncomingFlush();
+}
+
+function onCardSwipeViewState(payload: CardSwipeViewStatePayload) {
+  if (payload.open) {
+    publishSwipeViewState(payload.id);
+    return;
+  }
+  if (!swipeOpenId.value || swipeOpenId.value === payload.id) {
+    publishSwipeViewState("");
+  }
+  swipeDraggingId.value = "";
+  scheduleDeferredIncomingFlush();
+}
+
+async function handleSwipeRead(msg: NotificationView) {
+  await applySwipeListMutation(msg.id, () => {
+    const target = messages.value.find((item) => item.id === msg.id) ?? msg;
+    applyMessages(
+      target.is_read ? markUnread(messages.value, msg.id) : markRead(messages.value, msg.id),
+    );
+  });
+}
+
+async function handleSwipePin(msg: NotificationView) {
+  await applySwipeListMutation(msg.id, () => {
+    applyMessages(togglePinned(messages.value, msg.id));
+  });
+}
+
+async function handleSwipeDone(msg: NotificationView) {
+  const applied = await applySwipeListMutation(msg.id, () => {
+    applyMessages(dismissNotification(messages.value, msg.id));
+  });
+  if (applied) {
+    uni.showToast({ title: "已完成，不再展示", icon: "none" });
+  }
 }
 
 // ---- 点按与长按菜单 ----
 
+function suppressNextCardTap(id: string) {
+  suppressedTapId = id;
+  suppressedTapUntil = Date.now() + TAP_SUPPRESSION_MS;
+}
+
+function consumeSuppressedCardTap(id: string): boolean {
+  const shouldSuppress = suppressedTapId === id && Date.now() <= suppressedTapUntil;
+  if (suppressedTapId === id || Date.now() > suppressedTapUntil) {
+    suppressedTapId = "";
+    suppressedTapUntil = 0;
+  }
+  return shouldSuppress;
+}
+
 function handleCardTap(msg: NotificationView) {
+  if (consumeSuppressedCardTap(msg.id)) {
+    return;
+  }
+  if (activeCardGesture && activeCardGesture.messageId === msg.id) {
+    return;
+  }
   if (swipeOpenId.value) {
     closeSwipe();
     return;
@@ -599,18 +780,27 @@ function handleCardTap(msg: NotificationView) {
   }
 }
 
-function openActionMenu(msg: NotificationView) {
-  if (swipeOpenId.value || swipeDraggingId.value) {
-    closeSwipe();
+function onCardLongPress(payload: { id: string }) {
+  const msg = messages.value.find((item) => item.id === payload.id);
+  const gesture = activeCardGesture;
+  if (!msg || !gesture || !canActivateCardLongPress(gesture, payload.id)) {
     return;
   }
+  activeCardGesture = activateCardLongPress(gesture);
+  suppressNextCardTap(msg.id);
+  pendingLongPressId = msg.id;
   isLabelPickerOpen.value = false;
   uni
     .createSelectorQuery()
     .select(`#msg-card-${msg.id}`)
     .boundingClientRect((rect) => {
+      if (pendingLongPressId !== msg.id) {
+        return;
+      }
       const box = Array.isArray(rect) ? rect[0] : rect;
       if (!box || box.width === undefined) {
+        pendingLongPressId = "";
+        scheduleDeferredIncomingFlush();
         return;
       }
       ghostRect.value = {
@@ -619,15 +809,17 @@ function openActionMenu(msg: NotificationView) {
         width: box.width ?? 0,
         height: box.height ?? 0,
       };
-      menuTarget.value = msg;
+      menuTarget.value = messages.value.find((item) => item.id === msg.id) ?? msg;
     })
     .exec();
 }
 
 function closeActionMenu() {
+  pendingLongPressId = "";
   menuTarget.value = null;
   ghostRect.value = null;
   isLabelPickerOpen.value = false;
+  scheduleDeferredIncomingFlush();
 }
 
 function handleMenuPin() {
@@ -670,6 +862,14 @@ function handleMenuDone() {
   uni.showToast({ title: "已完成，不再展示", icon: "none" });
 }
 
+defineExpose({
+  onCardSwipeStart,
+  onCardSwipeProgress,
+  onCardSwipeEnd,
+  onCardSwipeViewState,
+  onCardLongPress,
+});
+
 // ---- 生命周期 ----
 
 onShow(async () => {
@@ -689,8 +889,18 @@ onShow(async () => {
 
 onHide(() => {
   closeChannel();
+  activeCardGesture = null;
+  suppressedTapId = "";
+  suppressedTapUntil = 0;
+  swipeMutationPending.value = false;
+  deferredIncomingNotifications = [];
+  if (deferredIncomingTimer) {
+    clearTimeout(deferredIncomingTimer);
+    deferredIncomingTimer = null;
+  }
   closeActionMenu();
-  closeSwipe();
+  closeClearConfirm();
+  closeSwipe(true);
   if (clockTimer) {
     clearInterval(clockTimer);
     clockTimer = null;
@@ -699,6 +909,9 @@ onHide(() => {
 
 onUnload(() => {
   closeChannel();
+  suppressedTapId = "";
+  suppressedTapUntil = 0;
+  swipeMutationPending.value = false;
   if (clockTimer) {
     clearInterval(clockTimer);
     clockTimer = null;
@@ -750,6 +963,15 @@ onUnload(() => {
   flex: 1;
   min-height: 0;
   margin-top: 24rpx;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.messages-scroll::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+  color: transparent;
 }
 
 .messages-body {
@@ -907,66 +1129,6 @@ onUnload(() => {
   text-align: center;
 }
 
-/* “清除全部未读”栏：切到未读页时展开滑入 */
-.clear-bar {
-  max-height: 0;
-  overflow: hidden;
-  opacity: 0;
-  transform: translateY(-8rpx);
-  transition: max-height 0.3s ease, opacity 0.26s ease, transform 0.26s ease;
-}
-
-.clear-bar.is-visible {
-  max-height: 120rpx;
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.clear-bar-button {
-  width: 100%;
-  height: 76rpx;
-  box-sizing: border-box;
-  margin: 20rpx 0 0;
-  padding: 0 26rpx;
-  border: 2rpx dashed rgba(194, 86, 74, 0.4);
-  border-radius: 22rpx;
-  background: rgba(255, 251, 248, 0.92);
-  display: flex;
-  align-items: center;
-  gap: 14rpx;
-  box-shadow: 0 10rpx 24rpx rgba(120, 53, 45, 0.06);
-}
-
-.clear-bar-button::after {
-  border: 0;
-}
-
-.clear-bar-hover {
-  background: rgba(253, 240, 236, 0.96);
-}
-
-.clear-bar-icon {
-  width: 34rpx;
-  height: 34rpx;
-  filter: brightness(0) saturate(100%) invert(41%) sepia(31%) saturate(1497%) hue-rotate(324deg)
-    brightness(92%) contrast(88%);
-}
-
-.clear-bar-text {
-  color: #bb4a3e;
-  font-size: 26rpx;
-  font-weight: 900;
-  line-height: 1;
-}
-
-.clear-bar-count {
-  margin-left: auto;
-  color: #a5776f;
-  font-size: 22rpx;
-  font-weight: 700;
-  line-height: 1;
-}
-
 /* ---- 消息列表 ---- */
 
 .message-list {
@@ -977,17 +1139,15 @@ onUnload(() => {
 
 .swipe-cell {
   position: relative;
+  overflow: hidden;
   border-radius: 28rpx;
   animation: cardIn 0.26s ease both;
-}
-
-.swipe-cell.is-swiping {
-  overflow: hidden;
 }
 
 .swipe-actions {
   position: absolute;
   inset: 0 0 0 auto;
+  z-index: 0;
   width: 372rpx;
   border-radius: 28rpx;
   overflow: hidden;
@@ -1050,11 +1210,11 @@ onUnload(() => {
   align-items: flex-start;
   gap: 20rpx;
   overflow: hidden;
+  width: 100%;
+  transform: translateX(0);
+  will-change: transform;
+  backface-visibility: hidden;
   transition: transform 0.26s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.message-card.is-dragging {
-  transition: none;
 }
 
 .message-card.is-unread {
@@ -1472,106 +1632,96 @@ onUnload(() => {
   color: #2c8136;
 }
 
-/* ---- 清除未读确认弹层 ---- */
+/* ---- 长按“未读”后的底部操作框 ---- */
 
-.confirm-overlay {
+.unread-sheet-overlay {
   position: fixed;
   inset: 0;
   z-index: 50;
-  background: rgba(36, 52, 38, 0.4);
-  backdrop-filter: blur(20rpx);
+  box-sizing: border-box;
+  padding: 0 34rpx calc(env(safe-area-inset-bottom) + 176rpx);
+  background: rgba(24, 31, 25, 0.5);
+  backdrop-filter: blur(18rpx);
   display: flex;
-  align-items: center;
-  justify-content: center;
-  animation: overlayIn 0.22s ease both;
+  align-items: flex-end;
+  animation: overlayIn 0.2s ease both;
 }
 
-.confirm-card {
-  width: 570rpx;
-  box-sizing: border-box;
-  border: 2rpx solid rgba(231, 240, 226, 0.92);
-  border-radius: 40rpx;
-  padding: 46rpx 40rpx 36rpx;
-  background: rgba(255, 255, 255, 0.97);
-  box-shadow: 0 30rpx 74rpx rgba(23, 46, 27, 0.3);
+.unread-sheet {
+  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  animation: menuPop 0.26s cubic-bezier(0.34, 1.35, 0.5, 1) both;
-  transform-origin: center;
+  gap: 18rpx;
+  animation: unreadSheetIn 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
-.confirm-icon-ring {
-  width: 108rpx;
-  height: 108rpx;
-  border-radius: 50%;
-  background: #fdecec;
+@keyframes unreadSheetIn {
+  0% {
+    opacity: 0;
+    transform: translateY(36rpx);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.unread-sheet-panel {
+  overflow: hidden;
+  border: 2rpx solid rgba(225, 231, 225, 0.92);
+  border-radius: 32rpx;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 24rpx 58rpx rgba(18, 29, 20, 0.22);
+}
+
+.unread-sheet-desc {
+  min-height: 142rpx;
+  box-sizing: border-box;
+  padding: 30rpx 38rpx;
+  color: #7f8791;
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 1.55;
+  text-align: center;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.confirm-icon {
-  width: 52rpx;
-  height: 52rpx;
-  filter: brightness(0) saturate(100%) invert(41%) sepia(31%) saturate(1497%) hue-rotate(324deg)
-    brightness(92%) contrast(88%);
-}
-
-.confirm-title {
-  margin-top: 26rpx;
-  color: #1c2a20;
-  font-size: 36rpx;
-  font-weight: 900;
-  letter-spacing: 2rpx;
-}
-
-.confirm-desc {
-  margin-top: 18rpx;
-  color: #67707b;
-  font-size: 25rpx;
-  font-weight: 600;
-  line-height: 1.55;
-}
-
-.confirm-actions {
+.unread-sheet-clear,
+.unread-sheet-cancel {
   width: 100%;
-  margin-top: 40rpx;
-  display: flex;
-  gap: 20rpx;
-}
-
-.confirm-button {
-  flex: 1;
-  height: 84rpx;
+  height: 98rpx;
+  box-sizing: border-box;
   margin: 0;
   padding: 0;
-  border-radius: 24rpx;
-  font-size: 28rpx;
+  border: 0;
+  background: rgba(255, 255, 255, 0.98);
+  font-size: 32rpx;
   font-weight: 900;
-  line-height: 84rpx;
+  line-height: 98rpx;
 }
 
-.confirm-button::after {
+.unread-sheet-clear::after,
+.unread-sheet-cancel::after {
   border: 0;
 }
 
-.confirm-button-hover {
-  transform: translateY(2rpx);
-  opacity: 0.92;
+.unread-sheet-clear {
+  border-top: 2rpx solid rgba(226, 230, 226, 0.92);
+  border-radius: 0;
+  color: #e3453f;
 }
 
-.confirm-cancel {
-  border: 2rpx solid rgba(191, 217, 184, 0.85);
-  background: rgba(255, 255, 255, 0.85);
-  color: #4c5a50;
+.unread-sheet-cancel {
+  border: 2rpx solid rgba(225, 231, 225, 0.92);
+  border-radius: 28rpx;
+  color: #20252a;
+  box-shadow: 0 20rpx 46rpx rgba(18, 29, 20, 0.18);
 }
 
-.confirm-primary {
-  border: 0;
-  background: linear-gradient(90deg, #338a32 0%, #28772d 100%);
-  color: #ffffff;
-  box-shadow: 0 14rpx 28rpx rgba(45, 122, 45, 0.22);
+.unread-sheet-button-hover {
+  opacity: 0.9;
 }
 </style>

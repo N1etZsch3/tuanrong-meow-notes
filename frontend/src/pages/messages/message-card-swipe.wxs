@@ -1,0 +1,276 @@
+var config = {
+  rpxRatio: 0.5,
+  actionWidthRpx: 372
+};
+
+var LONG_PRESS_SLOP_PX = 5;
+var DIRECTION_LOCK_DISTANCE_PX = 8;
+var AMBIGUOUS_DIRECTION_DISTANCE_PX = 16;
+var AXIS_LOCK_RATIO = 1.15;
+var OPEN_THRESHOLD_RATIO = 0.42;
+var SNAP_TRANSITION = 'transform 0.22s cubic-bezier(0.22, 1, 0.36, 1)';
+
+var openId = '';
+var active = null;
+
+function px(rpx) {
+  return rpx * config.rpxRatio;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function messageId(event) {
+  var dataset = event && event.currentTarget && event.currentTarget.dataset;
+  var id = dataset && (dataset.messageId || dataset.messageid || dataset['message-id']);
+  if (id) return id;
+  var currentTargetId = event && event.currentTarget && event.currentTarget.id;
+  return currentTargetId && currentTargetId.indexOf('msg-card-') === 0
+    ? currentTargetId.substring(9)
+    : '';
+}
+
+function findTouch(touches, touchId) {
+  if (!touches) return null;
+  for (var index = 0; index < touches.length; index += 1) {
+    var touch = touches[index];
+    if (touch && (touchId === null || touchId === undefined || touch.identifier === touchId)) {
+      return touch;
+    }
+  }
+  return null;
+}
+
+function gestureTouch(event, touchId, preferChangedTouches) {
+  var primary = preferChangedTouches ? event.changedTouches : event.touches;
+  var fallback = preferChangedTouches ? event.touches : event.changedTouches;
+  return findTouch(primary, touchId) || findTouch(fallback, touchId);
+}
+
+function card(ownerInstance, id) {
+  if (!ownerInstance || !id) return null;
+  return ownerInstance.selectComponent('#msg-card-' + id);
+}
+
+function setCardOffset(ownerInstance, id, offset, animate) {
+  var instance = card(ownerInstance, id);
+  if (!instance) return;
+  instance.setStyle({
+    transform: 'translateX(' + offset + 'px)',
+    transition: animate ? SNAP_TRANSITION : 'none'
+  });
+}
+
+function callOwner(ownerInstance, method, payload) {
+  if (ownerInstance && ownerInstance.callMethod) {
+    ownerInstance.callMethod(method, payload);
+  }
+}
+
+function closeOpenCard(ownerInstance, animate, reason) {
+  if (!openId) return;
+  var previousId = openId;
+  setCardOffset(ownerInstance, previousId, 0, animate);
+  openId = '';
+  callOwner(ownerInstance, 'onCardSwipeViewState', {
+    id: previousId,
+    open: false,
+    reason: reason || 'close'
+  });
+}
+
+function sync(newValue, oldValue, ownerInstance) {
+  if (!newValue) return;
+  if (newValue.rpxRatio) config.rpxRatio = newValue.rpxRatio;
+  if (newValue.actionWidthRpx) config.actionWidthRpx = newValue.actionWidthRpx;
+
+  var nextOpenId = newValue.openId || '';
+  var animate = !newValue.instant;
+  if (openId && openId !== nextOpenId) {
+    setCardOffset(ownerInstance, openId, 0, animate);
+  }
+  if (nextOpenId) {
+    setCardOffset(ownerInstance, nextOpenId, -px(config.actionWidthRpx), animate);
+  }
+  openId = nextOpenId;
+  if (newValue.instant && !nextOpenId) {
+    active = null;
+  }
+}
+
+function touchstart(event, ownerInstance) {
+  var id = messageId(event);
+  var touch = gestureTouch(event, null, false);
+  if (!id || !touch || active) return;
+
+  var consume = !!(openId && openId !== id);
+  if (consume) {
+    closeOpenCard(ownerInstance, true, 'foreign-card');
+  }
+
+  active = {
+    id: id,
+    touchId: touch.identifier,
+    startX: touch.clientX,
+    startY: touch.clientY,
+    lastX: touch.clientX,
+    lastY: touch.clientY,
+    intent: consume ? 'consumed' : 'pending',
+    didMove: false,
+    startedOpen: openId === id,
+    progressNotified: false,
+    directionNotified: false
+  };
+
+  setCardOffset(
+    ownerInstance,
+    id,
+    active.startedOpen ? -px(config.actionWidthRpx) : 0,
+    false
+  );
+  callOwner(ownerInstance, 'onCardSwipeStart', {
+    id: id,
+    x: touch.clientX,
+    y: touch.clientY,
+    touchId: touch.identifier,
+    startedOpen: active.startedOpen,
+    consume: consume
+  });
+}
+
+function notifyProgress(ownerInstance, touch) {
+  if (!active) return;
+  callOwner(ownerInstance, 'onCardSwipeProgress', {
+    id: active.id,
+    x: touch.clientX,
+    y: touch.clientY,
+    touchId: touch.identifier,
+    intent: active.intent,
+    didMove: active.didMove
+  });
+}
+
+function touchmove(event, ownerInstance) {
+  if (!active) return;
+  var touch = gestureTouch(event, active.touchId, false);
+  if (!touch) return;
+
+  var deltaX = touch.clientX - active.startX;
+  var deltaY = touch.clientY - active.startY;
+  var absX = Math.abs(deltaX);
+  var absY = Math.abs(deltaY);
+  var distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+  active.lastX = touch.clientX;
+  active.lastY = touch.clientY;
+
+  if (!active.didMove && distance > LONG_PRESS_SLOP_PX) {
+    active.didMove = true;
+    active.progressNotified = true;
+    notifyProgress(ownerInstance, touch);
+  }
+
+  if (active.intent === 'pending') {
+    var crossedThreshold =
+      absX >= DIRECTION_LOCK_DISTANCE_PX || absY >= DIRECTION_LOCK_DISTANCE_PX;
+    if (crossedThreshold) {
+      if (absX >= absY * AXIS_LOCK_RATIO) {
+        active.intent = 'horizontal';
+      } else if (absY >= absX * AXIS_LOCK_RATIO) {
+        active.intent = 'vertical';
+      } else if (Math.max(absX, absY) >= AMBIGUOUS_DIRECTION_DISTANCE_PX) {
+        active.intent = absX >= absY ? 'horizontal' : 'vertical';
+      }
+      if (active.intent !== 'pending') {
+        active.directionNotified = true;
+        notifyProgress(ownerInstance, touch);
+      }
+    }
+  }
+
+  if (active.intent !== 'horizontal') return;
+
+  var baseOffset = active.startedOpen ? -px(config.actionWidthRpx) : 0;
+  var offset = clamp(baseOffset + deltaX, -px(config.actionWidthRpx), 0);
+  setCardOffset(ownerInstance, active.id, offset, false);
+  return false;
+}
+
+function finish(event, ownerInstance, cancelled) {
+  if (!active) return;
+  var touch = gestureTouch(event, active.touchId, true);
+  if (!touch) {
+    touch = {
+      clientX: active.lastX,
+      clientY: active.lastY,
+      identifier: active.touchId
+    };
+  }
+
+  var finished = active;
+  var deltaX = touch.clientX - finished.startX;
+  var baseOffset = finished.startedOpen ? -px(config.actionWidthRpx) : 0;
+  var offset = clamp(baseOffset + deltaX, -px(config.actionWidthRpx), 0);
+  var shouldOpen = finished.startedOpen;
+
+  if (finished.intent === 'horizontal' && !cancelled) {
+    shouldOpen = offset <= -px(config.actionWidthRpx) * OPEN_THRESHOLD_RATIO;
+  }
+  if (finished.intent === 'consumed') {
+    shouldOpen = false;
+  }
+
+  setCardOffset(
+    ownerInstance,
+    finished.id,
+    shouldOpen ? -px(config.actionWidthRpx) : 0,
+    true
+  );
+  openId = shouldOpen ? finished.id : '';
+  active = null;
+
+  callOwner(ownerInstance, 'onCardSwipeEnd', {
+    id: finished.id,
+    x: touch.clientX,
+    y: touch.clientY,
+    touchId: touch.identifier,
+    intent: finished.intent,
+    didMove: finished.didMove,
+    open: shouldOpen,
+    cancelled: !!cancelled
+  });
+}
+
+function touchend(event, ownerInstance) {
+  finish(event, ownerInstance, false);
+}
+
+function touchcancel(event, ownerInstance) {
+  finish(event, ownerInstance, true);
+}
+
+function longpress(event, ownerInstance) {
+  if (!active) return;
+  var id = messageId(event);
+  if (!id || active.id !== id || active.intent !== 'pending' || active.didMove) {
+    return;
+  }
+
+  if (openId) {
+    active.intent = 'consumed';
+    closeOpenCard(ownerInstance, true, 'longpress-on-open-card');
+    return;
+  }
+
+  active.intent = 'longpress';
+  callOwner(ownerInstance, 'onCardLongPress', { id: id });
+}
+
+module.exports = {
+  sync: sync,
+  touchstart: touchstart,
+  touchmove: touchmove,
+  touchend: touchend,
+  touchcancel: touchcancel,
+  longpress: longpress
+};

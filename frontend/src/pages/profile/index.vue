@@ -68,6 +68,11 @@
             <text class="menu-label">账号设置</text>
             <text class="menu-chevron">›</text>
           </button>
+          <button class="menu-row" @tap="goPublicHome">
+            <image class="menu-icon-image" :src="publicHomeIcon" mode="aspectFit" />
+            <text class="menu-label">协会公开主页</text>
+            <text class="menu-chevron">›</text>
+          </button>
           <button class="menu-row" @tap="showPendingToast('消息通知')">
             <image class="menu-icon-image" :src="profileMenuIconMap.notifications" mode="aspectFit" />
             <text class="menu-label">消息通知</text>
@@ -102,7 +107,7 @@ import { onShow } from "@dcloudio/uni-app";
 import { resolveUserAvatarContentUrl } from "@/api/files";
 import { getMeDashboard, type MeDashboardResponse } from "@/api/me";
 import AppTabBar from "@/components/AppTabBar.vue";
-import { LOGIN_ROUTE } from "@/services/app-startup";
+import { LOGIN_ROUTE, PUBLIC_HOME_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
 import {
@@ -123,6 +128,7 @@ import notificationsIcon from "../../../素材/svg/用户页/通知.svg";
 import feedbackIcon from "../../../素材/svg/用户页/帮助和反馈.svg";
 import observationIcon from "../../../素材/登录页素材/密码-显示.svg";
 import adminIcon from "../../../素材/svg/登录页/修改密码.svg";
+import publicHomeIcon from "../../../素材/svg/登录页/猫爪1.svg";
 
 const userStore = useUserStore();
 const dashboard = ref<MeDashboardResponse | null>(null);
@@ -194,6 +200,10 @@ function goProfileDetail() {
 
 function goAccountSettings() {
   uni.navigateTo({ url: "/pages/profile/settings" });
+}
+
+function goPublicHome() {
+  uni.navigateTo({ url: PUBLIC_HOME_ROUTE });
 }
 
 function goRecord(type: ProfileRecordType) {

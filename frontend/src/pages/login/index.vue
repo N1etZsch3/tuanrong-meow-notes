@@ -87,6 +87,11 @@
           <text class="help-icon">?</text>
           <text>如无法登录，请联系管理员</text>
         </view>
+
+        <view class="guest-entry" @tap="goPublicHome">
+          <text class="guest-entry-text">先随便逛逛</text>
+          <text class="guest-entry-arrow">→</text>
+        </view>
       </view>
 
       <view class="agreement">
@@ -155,7 +160,7 @@
 import { onMounted, reactive, ref, watch } from "vue";
 
 import { getCaptcha, type LoginResponse } from "@/api/auth";
-import { CHANGE_PASSWORD_ROUTE, HOME_ROUTE, PROFILE_SETUP_ROUTE } from "@/services/app-startup";
+import { CHANGE_PASSWORD_ROUTE, HOME_ROUTE, PROFILE_SETUP_ROUTE, PUBLIC_HOME_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { requestWechatLoginCode } from "@/services/wechat-auth";
 import { useUserStore } from "@/stores/user";
@@ -204,6 +209,10 @@ const openModal = (title: string) => {
 const closeModal = () => {
   showModal.value = false;
 };
+
+function goPublicHome() {
+  uni.reLaunch({ url: PUBLIC_HOME_ROUTE });
+}
 
 function onAgreementChange(e: any) {
   form.agreed = e.detail.value.length > 0;
@@ -621,6 +630,27 @@ watch(
   line-height: 28rpx;
   text-align: center;
   font-size: 22rpx;
+}
+
+.guest-entry {
+  margin-top: 22rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+}
+
+.guest-entry-text {
+  color: #33823b;
+  font-size: 26rpx;
+  font-weight: 700;
+  letter-spacing: 2rpx;
+}
+
+.guest-entry-arrow {
+  color: #33823b;
+  font-size: 26rpx;
+  font-weight: 700;
 }
 
 .agreement {

@@ -39,7 +39,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 
 import {
-  LOGIN_ROUTE,
+  PUBLIC_HOME_ROUTE,
   resolveStartupRoute,
   type StartupRoute,
 } from "@/services/app-startup";
@@ -126,7 +126,7 @@ onMounted(() => {
   void beginStartup().catch(async () => {
     userStore.clearSession();
     await completeLoadingProgress();
-    await navigateTo(LOGIN_ROUTE);
+    await navigateTo(PUBLIC_HOME_ROUTE);
   });
 });
 

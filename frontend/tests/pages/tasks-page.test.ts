@@ -521,6 +521,16 @@ describe("summer feeding task pages", () => {
     expect(adminCreateTaskSource).toContain("mode=edit");
   });
 
+  it("returns to and refreshes the existing task detail after saving an edit", () => {
+    const submitSource = extractFunctionSource(adminCreateTaskSource, "submitTask");
+
+    expect(submitSource).toContain("completeCreateOrEditNavigation");
+    expect(submitSource).toContain("isEditMode: isEditMode.value");
+    expect(submitSource).not.toContain("uni.redirectTo");
+    expect(taskDetailSource).toContain('import { onLoad, onShow } from "@dcloudio/uni-app"');
+    expect(taskDetailSource).toMatch(/onShow\(\(\) => \{\s*void loadTaskDetail/);
+  });
+
   it("lets admins update task completion status from the reused edit form", () => {
     expect(adminCreateTaskSource).toContain("任务完成状态");
     expect(adminCreateTaskSource).toContain("statusOptions");

@@ -73,6 +73,9 @@ $devDeployScript = Read-RequiredFile (Join-Path $repoRoot "scripts/deploy-backen
 $devEnvPreparationScript = Read-RequiredFile (
     Join-Path $repoRoot "scripts/prepare-backend-dev-env.ps1"
 )
+$devDatabaseRefreshScript = Read-RequiredFile (
+    Join-Path $repoRoot "scripts/refresh-dev-database.ps1"
+)
 $devUnit = Read-RequiredFile (Join-Path $repoRoot "deploy/systemd/catmap-backend-dev.service")
 $devNginx = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap-dev.conf")
 $devNginxBootstrap = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap-dev-http-bootstrap.conf")
@@ -240,6 +243,41 @@ Assert-Contains `
     -Content $devEnvPreparationScript `
     -Needle "CATMAP_WECHAT_CONTENT_SECURITY_MODE" `
     -Message "Development environment preparation must explicitly isolate content security."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle '[ValidateSet("clone-catmap-to-catmap_dev")]' `
+    -Message "Development database refresh must require an explicit confirmation token."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle '$ProductionDatabase = "catmap"' `
+    -Message "Development database refresh must use production only as the fixed snapshot source."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle '$DevelopmentDatabase = "catmap_dev"' `
+    -Message "Development database refresh must target only the development database."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle "pg_dump" `
+    -Message "Development database refresh must read production through a logical snapshot."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle "STAGING_DATABASE" `
+    -Message "Development database refresh must validate a staging database before switching."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle "BACKUP_DATABASE" `
+    -Message "Development database refresh must retain a rollback database."
+
+Assert-NotContains `
+    -Content $devDatabaseRefreshScript `
+    -Needle 'systemctl stop "$PRODUCTION_SERVICE"' `
+    -Message "Development database refresh must never stop the production service."
 
 Assert-Contains `
     -Content $devDeployScript `

@@ -70,6 +70,9 @@ $nginxConfig = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap.conf"
 $frontendEnv = Read-RequiredFile (Join-Path $repoRoot "frontend/src/config/app-env.ts")
 $frontendEnvExample = Read-RequiredFile (Join-Path $repoRoot "frontend/.env.example")
 $devDeployScript = Read-RequiredFile (Join-Path $repoRoot "scripts/deploy-backend-dev.ps1")
+$devEnvPreparationScript = Read-RequiredFile (
+    Join-Path $repoRoot "scripts/prepare-backend-dev-env.ps1"
+)
 $devUnit = Read-RequiredFile (Join-Path $repoRoot "deploy/systemd/catmap-backend-dev.service")
 $devNginx = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap-dev.conf")
 $devNginxBootstrap = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap-dev-http-bootstrap.conf")
@@ -212,6 +215,31 @@ Assert-Contains `
     -Content $devDeployScript `
     -Needle "CATMAP_TENCENT_COS_ENV_PREFIX" `
     -Message "Development deployment must validate the object storage environment prefix."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "CATMAP_JWT_SECRET_KEY" `
+    -Message "Development deployment must require an explicit isolated JWT secret."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "CATMAP_CAPTCHA_SECRET_KEY" `
+    -Message "Development deployment must require an explicit isolated captcha secret."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "CATMAP_WECHAT_CONTENT_SECURITY_MODE=off" `
+    -Message "Development deployment must disable production content-security callbacks."
+
+Assert-Contains `
+    -Content $devEnvPreparationScript `
+    -Needle "RandomNumberGenerator" `
+    -Message "Development environment preparation must generate cryptographic secrets."
+
+Assert-Contains `
+    -Content $devEnvPreparationScript `
+    -Needle "CATMAP_WECHAT_CONTENT_SECURITY_MODE" `
+    -Message "Development environment preparation must explicitly isolate content security."
 
 Assert-Contains `
     -Content $devDeployScript `

@@ -4,6 +4,13 @@ from app.core.config import Settings
 from app.core.errors import APIError, ErrorCode
 
 
+def object_key_belongs_to_environment(object_key: str, environment: str) -> bool:
+    normalized_environment = environment.strip().strip("/")
+    if not normalized_environment:
+        return False
+    return object_key.startswith(f"catmap/{normalized_environment}/")
+
+
 class ObjectStorage(Protocol):
     def put_object(self, *, object_key: str, body: bytes, content_type: str) -> str:
         ...
@@ -50,6 +57,7 @@ class TencentCosObjectStorage:
         )
         self._client = CosS3Client(config)
         self._bucket = settings.tencent_cos_bucket
+        self._environment = settings.tencent_cos_env_prefix
         self._base_url = (
             settings.tencent_cos_cdn_domain
             or settings.tencent_cos_domain
@@ -60,6 +68,12 @@ class TencentCosObjectStorage:
         ).rstrip("/")
 
     def put_object(self, *, object_key: str, body: bytes, content_type: str) -> str:
+        if not object_key_belongs_to_environment(object_key, self._environment):
+            raise APIError(
+                code=ErrorCode.FILE_COS_UPLOAD_FAILED,
+                message="对象存储路径不属于当前运行环境",
+                status_code=500,
+            )
         try:
             self._client.put_object(
                 Bucket=self._bucket,
@@ -76,6 +90,10 @@ class TencentCosObjectStorage:
         return f"{self._base_url}/{object_key}"
 
     def delete_object(self, object_key: str) -> None:
+        # A development database may contain read-only references cloned from
+        # production. Never let the development credential delete those keys.
+        if not object_key_belongs_to_environment(object_key, self._environment):
+            return
         try:
             self._client.delete_object(Bucket=self._bucket, Key=object_key)
         except Exception:

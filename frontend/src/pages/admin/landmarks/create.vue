@@ -144,6 +144,7 @@ import {
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import { returnToListAfterDelete } from "@/utils/delete-navigation";
+import { completeCreateOrEditNavigation } from "@/utils/save-navigation";
 import {
   HBNU_DEFAULT_LANDMARK_LOCATION,
   LANDMARK_LOCATION_STORAGE_KEY,
@@ -263,7 +264,10 @@ async function submitLandmark() {
     const landmarkId = isEditMode.value ? editLandmarkId.value : response.landmark_id;
     uni.removeStorageSync(LANDMARK_LOCATION_STORAGE_KEY);
     uni.showToast({ title: isEditMode.value ? "地标点已保存" : "地标点已发布", icon: "success" });
-    uni.redirectTo({ url: `/pages/landmarks/detail?landmark_id=${landmarkId}` });
+    completeCreateOrEditNavigation({
+      isEditMode: isEditMode.value,
+      detailUrl: `/pages/landmarks/detail?landmark_id=${landmarkId}`,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "提交失败";
     uni.showToast({ title: message, icon: "none" });

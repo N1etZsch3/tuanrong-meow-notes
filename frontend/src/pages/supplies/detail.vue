@@ -341,7 +341,7 @@
 </template>
 
 <script setup lang="ts">
-import { onLoad } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
 import { uploadImage } from "@/api/files";
@@ -766,6 +766,9 @@ function goBack() {
 onLoad((query) => {
   supplyPointId.value =
     typeof query?.supply_point_id === "string" ? query.supply_point_id : "";
+});
+
+onShow(() => {
   void loadSupplyDetail();
 });
 </script>

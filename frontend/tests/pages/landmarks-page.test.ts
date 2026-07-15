@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import adminLandmarkCreateSource from "../../src/pages/admin/landmarks/create.vue?raw";
+import landmarkDetailSource from "../../src/pages/landmarks/detail.vue?raw";
 import landmarkIndexSource from "../../src/pages/landmarks/index.vue?raw";
 import pagesJson from "../../src/pages.json?raw";
 
@@ -56,5 +57,15 @@ describe("landmark list page", () => {
 
     expect(deleteSource).toContain('returnToListAfterDelete("/pages/landmarks/index")');
     expect(deleteSource).not.toContain('uni.switchTab({ url: "/pages/index/index" })');
+  });
+
+  it("returns to and refreshes the existing landmark detail after saving an edit", () => {
+    const submitSource = extractFunctionSource(adminLandmarkCreateSource, "submitLandmark");
+
+    expect(submitSource).toContain("completeCreateOrEditNavigation");
+    expect(submitSource).toContain("isEditMode: isEditMode.value");
+    expect(submitSource).not.toContain("uni.redirectTo");
+    expect(landmarkDetailSource).toContain('import { onLoad, onShow } from "@dcloudio/uni-app"');
+    expect(landmarkDetailSource).toMatch(/onShow\(\(\) => \{\s*void loadLandmarkDetail/);
   });
 });

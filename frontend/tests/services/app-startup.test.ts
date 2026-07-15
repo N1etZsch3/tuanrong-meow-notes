@@ -5,6 +5,7 @@ import {
   HOME_ROUTE,
   LOGIN_ROUTE,
   PROFILE_SETUP_ROUTE,
+  PUBLIC_HOME_ROUTE,
   resolveStartupRoute,
   type StartupUserSession,
 } from "@/services/app-startup";
@@ -39,14 +40,14 @@ function createSession(
 }
 
 describe("app startup flow", () => {
-  it("routes to login when there is no access token", async () => {
+  it("routes a guest with no access token to the public home", async () => {
     const session = createSession("");
     const initializeResources = vi.fn();
     const requestWechatCode = vi.fn().mockResolvedValue(null);
 
     await expect(
       resolveStartupRoute(session, initializeResources, requestWechatCode),
-    ).resolves.toBe(LOGIN_ROUTE);
+    ).resolves.toBe(PUBLIC_HOME_ROUTE);
     expect(requestWechatCode).toHaveBeenCalledTimes(1);
     expect(session.loginWithWechat).not.toHaveBeenCalled();
     expect(session.refreshCurrentUser).not.toHaveBeenCalled();
@@ -71,7 +72,7 @@ describe("app startup flow", () => {
     expect(initializeResources).toHaveBeenCalledWith(currentUser);
   });
 
-  it("clears any stale session when the WeChat OpenID is unbound", async () => {
+  it("routes an unbound WeChat identity to the public home and clears any stale session", async () => {
     const session = createSession("stale-token");
     session.loginWithWechat.mockRejectedValue(
       new ApiBusinessError(40104, "微信账号尚未绑定喵喵号", "trace-unbound", null),
@@ -81,10 +82,25 @@ describe("app startup flow", () => {
 
     await expect(
       resolveStartupRoute(session, initializeResources, requestWechatCode),
-    ).resolves.toBe(LOGIN_ROUTE);
+    ).resolves.toBe(PUBLIC_HOME_ROUTE);
     expect(session.clearSession).toHaveBeenCalledTimes(1);
     expect(session.refreshCurrentUser).not.toHaveBeenCalled();
     expect(initializeResources).not.toHaveBeenCalled();
+  });
+
+  it("routes a disabled/mismatched member to the login page", async () => {
+    const session = createSession("stale-token");
+    session.loginWithWechat.mockRejectedValue(
+      new ApiBusinessError(40304, "微信与喵喵号绑定不一致", "trace-mismatch", null),
+    );
+    const initializeResources = vi.fn();
+    const requestWechatCode = vi.fn().mockResolvedValue("mismatch-code");
+
+    await expect(
+      resolveStartupRoute(session, initializeResources, requestWechatCode),
+    ).resolves.toBe(LOGIN_ROUTE);
+    expect(session.clearSession).toHaveBeenCalledTimes(1);
+    expect(session.refreshCurrentUser).not.toHaveBeenCalled();
   });
 
   it("keeps a valid local session when WeChat auto-login has a transient failure", async () => {
@@ -100,6 +116,19 @@ describe("app startup flow", () => {
     expect(session.clearSession).not.toHaveBeenCalled();
     expect(refreshCurrentUser).toHaveBeenCalledTimes(1);
     expect(initializeResources).toHaveBeenCalledWith(currentUser);
+  });
+
+  it("routes a guest to the public home when auto-login fails with no local session", async () => {
+    const session = createSession("");
+    session.loginWithWechat.mockRejectedValue(new Error("network unavailable"));
+    const initializeResources = vi.fn();
+    const requestWechatCode = vi.fn().mockResolvedValue("wechat-code-1");
+
+    await expect(
+      resolveStartupRoute(session, initializeResources, requestWechatCode),
+    ).resolves.toBe(PUBLIC_HOME_ROUTE);
+    expect(session.refreshCurrentUser).not.toHaveBeenCalled();
+    expect(initializeResources).not.toHaveBeenCalled();
   });
 
   it("refreshes user and initializes resources before routing home", async () => {

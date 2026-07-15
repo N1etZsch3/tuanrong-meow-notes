@@ -1,0 +1,63 @@
+[
+  {
+    "post_id": "pub-post-0001",
+    "post_type": "trivia",
+    "title": "橘座“查寝”记：食堂后门的编外管理员",
+    "summary": "每天傍晚，橘座都会准时出现在一食堂后门，监督同学们排队打饭。",
+    "cover_url": "/static/public/cat-1.jpg",
+    "published_at": "2026-06-20",
+    "blocks": [
+      { "block_type": "text", "text": "每天傍晚五点半，一食堂后门就会出现一只橘色的身影——橘座。它会端坐在台阶上，目送来往的同学，偶尔对着熟悉的投喂志愿者喵一声。" },
+      { "block_type": "image", "image_url": "/static/public/cat-1.jpg" },
+      { "block_type": "text", "text": "协会的同学笑称它是“编外管理员”。其实橘座是协会最早完成绝育和健康登记的猫咪之一，也是很多新生第一次近距离接触校园猫咪的“启蒙老师”。" }
+    ]
+  },
+  {
+    "post_id": "pub-post-0002",
+    "post_type": "trivia",
+    "title": "一次成功的救助：三花的回家路",
+    "summary": "从宿舍区的流浪猫，到被学姐领养的家猫，三花用了三个月。",
+    "cover_url": "/static/public/cat-4.jpg",
+    "published_at": "2026-05-12",
+    "blocks": [
+      { "block_type": "text", "text": "三月初，协会接到同学反映，宿舍区出现一只怀孕的三花猫。志愿者持续投喂并观察，逐步取得了它的信任。" },
+      { "block_type": "text", "text": "在完成绝育、驱虫和健康检查后，协会为三花发布了领养信息。最终，一位即将毕业的学姐决定带它回家。如今，三花已经是一只幸福的家猫。" }
+    ]
+  },
+  {
+    "post_id": "pub-post-0003",
+    "post_type": "trivia",
+    "title": "夜行侠煤球：如何和一只怕人的猫做朋友",
+    "summary": "耐心，是和流浪猫建立信任唯一的捷径。",
+    "cover_url": "/static/public/cat-3.jpg",
+    "published_at": "2026-04-28",
+    "blocks": [
+      { "block_type": "text", "text": "煤球刚出现时非常怕人，只在深夜活动。协会志愿者没有强行接近，而是每天在固定地点、固定时间放好猫粮，然后远远走开。" },
+      { "block_type": "text", "text": "两个多月后，煤球终于愿意在志愿者面前进食。又过了一段时间，它接受了被诱捕笼带去做绝育。现在的煤球，会在夜巡时主动跟在熟悉的同学身后。" }
+    ]
+  },
+  {
+    "post_id": "pub-merch-0001",
+    "post_type": "merch",
+    "title": "团绒猫协·橘座帆布袋",
+    "summary": "社团活动纪念品 · 以橘座为原型的手绘帆布袋",
+    "cover_url": "/static/public/cat-1.jpg",
+    "published_at": "2026-06-01",
+    "blocks": [
+      { "block_type": "text", "text": "以协会“顶流”橘座为原型设计的手绘帆布袋，采用加厚棉布，适合日常通勤和上课携带。" },
+      { "block_type": "text", "text": "本商品为社团活动纪念品，仅用于展示与社团公益活动，不对外销售。" }
+    ]
+  },
+  {
+    "post_id": "pub-merch-0002",
+    "post_type": "merch",
+    "title": "团绒猫协·校园猫咪贴纸包",
+    "summary": "社团活动纪念品 · 六只校园明星猫贴纸",
+    "cover_url": "/static/public/cat-2.jpg",
+    "published_at": "2026-06-01",
+    "blocks": [
+      { "block_type": "text", "text": "收录橘座、奶盖、煤球、三花、灰灰、点点六只校园明星猫的手绘贴纸包，可用于装饰笔记本、水杯和电脑。" },
+      { "block_type": "text", "text": "本商品为社团活动纪念品，仅用于展示与社团公益活动，不对外销售。" }
+    ]
+  }
+]

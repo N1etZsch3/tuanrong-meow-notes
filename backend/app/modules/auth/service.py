@@ -27,6 +27,7 @@ from app.modules.auth.schemas import (
     WeChatLoginRequest,
 )
 from app.modules.auth.wechat import exchange_wechat_code_for_openid
+from app.modules.public.guest_service import record_guest_visit
 
 VALID_ROLES = {"member", "summer_volunteer", "admin"}
 VALID_STATUSES = {"active", "blocked", "left", "deleted"}
@@ -340,6 +341,7 @@ def login_with_wechat(db: Session, payload: WeChatLoginRequest) -> dict:
     openid = exchange_wechat_code_for_openid(payload.code)
     user = get_user_by_wechat_openid(db, openid)
     if user is None:
+        record_guest_visit(db, openid)
         raise APIError(
             code=ErrorCode.WECHAT_OPENID_UNBOUND,
             message="当前微信尚未绑定喵喵号",

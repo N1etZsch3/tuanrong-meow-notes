@@ -1,0 +1,93 @@
+[
+  {
+    "cat_id": "pub-cat-0001",
+    "name": "橘座",
+    "aliases": ["大橘", "橘老板"],
+    "avatar_url": "/static/public/cat-1.jpg",
+    "photos": [
+      { "file_url": "/static/public/cat-1.jpg", "caption": "食堂后门的常驻居民" },
+      { "file_url": "/static/public/cat-2.jpg", "caption": "晒太阳时间" }
+    ],
+    "coat_color": "orange",
+    "sex": "male",
+    "neuter_status": "neutered",
+    "status": "active",
+    "personality_tags": ["亲人", "贪吃", "社牛"],
+    "story": "橘座是团绒猫协最出名的一只猫，常年坐镇一食堂后门。见到穿协会马甲的同学会主动蹭腿讨饭，是新生认识校园猫咪的第一课。已完成绝育与健康检查。"
+  },
+  {
+    "cat_id": "pub-cat-0002",
+    "name": "奶盖",
+    "aliases": ["小白"],
+    "avatar_url": "/static/public/cat-2.jpg",
+    "photos": [
+      { "file_url": "/static/public/cat-2.jpg", "caption": "图书馆花坛" }
+    ],
+    "coat_color": "white",
+    "sex": "female",
+    "neuter_status": "neutered",
+    "status": "active",
+    "personality_tags": ["高冷", "优雅"],
+    "story": "奶盖是一只安静的奶牛猫，喜欢在图书馆旁的花坛里午睡。虽然高冷，但对固定投喂的同学格外信任。"
+  },
+  {
+    "cat_id": "pub-cat-0003",
+    "name": "煤球",
+    "aliases": ["小黑"],
+    "avatar_url": "/static/public/cat-3.jpg",
+    "photos": [
+      { "file_url": "/static/public/cat-3.jpg", "caption": "夜巡中" }
+    ],
+    "coat_color": "black",
+    "sex": "male",
+    "neuter_status": "neutered",
+    "status": "active",
+    "personality_tags": ["机警", "独立"],
+    "story": "煤球是校园里的“夜行侠”，白天很少露面，入夜后会在教学楼之间巡视。协会通过耐心投喂逐步取得了它的信任并完成了绝育。"
+  },
+  {
+    "cat_id": "pub-cat-0004",
+    "name": "三花",
+    "aliases": ["花花", "三姑娘"],
+    "avatar_url": "/static/public/cat-4.jpg",
+    "photos": [
+      { "file_url": "/static/public/cat-4.jpg", "caption": "宿舍区" }
+    ],
+    "coat_color": "calico",
+    "sex": "female",
+    "neuter_status": "neutered",
+    "status": "adopted",
+    "personality_tags": ["粘人", "温柔"],
+    "story": "三花曾是宿舍区的流浪猫，性格亲人，经协会救助与绝育后，已被一位毕业学姐正式领养，现在过着幸福的家猫生活。"
+  },
+  {
+    "cat_id": "pub-cat-0005",
+    "name": "灰灰",
+    "aliases": [],
+    "avatar_url": "/static/public/cat-5.jpg",
+    "photos": [
+      { "file_url": "/static/public/cat-5.jpg", "caption": "操场看台" }
+    ],
+    "coat_color": "gray",
+    "sex": "male",
+    "neuter_status": "pending",
+    "status": "watching",
+    "personality_tags": ["胆小", "谨慎"],
+    "story": "灰灰是新出现在操场看台附近的一只英短蓝猫，目前还比较怕人。协会正在持续观察它的健康状况，计划在建立信任后安排绝育。"
+  },
+  {
+    "cat_id": "pub-cat-0006",
+    "name": "点点",
+    "aliases": ["奶牛"],
+    "avatar_url": "/static/public/cat-6.jpg",
+    "photos": [
+      { "file_url": "/static/public/cat-6.jpg", "caption": "行政楼绿化带" }
+    ],
+    "coat_color": "black_white",
+    "sex": "female",
+    "neuter_status": "neutered",
+    "status": "active",
+    "personality_tags": ["活泼", "好奇"],
+    "story": "点点是一只活泼的奶牛猫，好奇心旺盛，喜欢跟着散步的同学走一段。是行政楼一带的“团宠”。"
+  }
+]

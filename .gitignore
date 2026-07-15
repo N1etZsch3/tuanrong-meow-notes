@@ -8,6 +8,8 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+!frontend/.env.development
+!frontend/.env.development.example
 
 # Local secrets
 ssl_key/

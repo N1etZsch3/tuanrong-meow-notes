@@ -21,6 +21,15 @@ describe("app env config", () => {
     expect(resolveApiBaseUrl({ DEV: true })).toBe("http://localhost:8000/api/v1");
   });
 
+  it("uses the configured HTTPS development api domain", () => {
+    expect(
+      resolveApiBaseUrl({
+        MODE: "development",
+        VITE_API_BASE_URL: "https://dev-api.trmx.fun/api/v1",
+      }),
+    ).toBe("https://dev-api.trmx.fun/api/v1");
+  });
+
   it("requires explicit api domain for production builds", () => {
     expect(() => resolveApiBaseUrl({ PROD: true })).toThrow(
       "VITE_API_BASE_URL",

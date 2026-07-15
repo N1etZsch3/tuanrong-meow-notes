@@ -239,7 +239,14 @@ describe("messages page notification model", () => {
   });
 
   it("merges websocket pushes without dropping local marks", () => {
-    const existing = buildView({ id: "a", is_pinned: true, label_key: "important" });
+    const readAt = "2026-07-15T12:20:00+08:00";
+    const existing = buildView({
+      id: "a",
+      is_read: true,
+      read_at: readAt,
+      is_pinned: true,
+      label_key: "important",
+    });
     const merged = mergeIncomingNotifications(
       [existing],
       [buildDto({ id: "a", content: "更新后的内容" }), buildDto({ id: "b" })],
@@ -247,9 +254,27 @@ describe("messages page notification model", () => {
 
     const refreshed = merged.find((item) => item.id === "a");
     expect(refreshed?.content).toBe("更新后的内容");
+    expect(refreshed?.is_read).toBe(true);
+    expect(refreshed?.read_at).toBe(readAt);
     expect(refreshed?.is_pinned).toBe(true);
     expect(refreshed?.label_key).toBe("important");
     expect(merged.map((item) => item.id).sort()).toEqual(["a", "b"]);
+  });
+
+  it("restores persisted read state when a websocket message returns after page re-entry", () => {
+    const readAt = "2026-07-15T12:21:00+08:00";
+    const stored = indexLocalStates(
+      extractLocalStates([buildView({ id: "live-a", is_read: true, read_at: readAt })]),
+    );
+
+    const merged = mergeIncomingNotifications(
+      [buildView({ id: "live-a", is_read: false, read_at: null })],
+      [buildDto({ id: "live-a", is_read: false, read_at: null })],
+      stored,
+    );
+
+    expect(merged[0].is_read).toBe(true);
+    expect(merged[0].read_at).toBe(readAt);
   });
 
   it("marks read, unread, and clears all unread while keeping dismissed intact", () => {
@@ -290,21 +315,48 @@ describe("messages page notification model", () => {
     expect(selectNotifications(dismissed, "all")).toEqual([]);
   });
 
-  it("persists only non-default local marks and restores them by id", () => {
+  it("persists read state across page re-entry together with local marks", () => {
+    const readAt = "2026-07-15T12:20:00+08:00";
     const items = [
-      buildView({ id: "a", is_pinned: true }),
+      buildView({ id: "a", is_pinned: true, is_read: true, read_at: readAt }),
       buildView({ id: "b" }),
       buildView({ id: "c", is_dismissed: true, label_key: "resolved" }),
     ];
 
     const stored = extractLocalStates(items);
-    expect(stored.map((entry) => entry.id).sort()).toEqual(["a", "c"]);
+    expect(stored.map((entry) => entry.id).sort()).toEqual(["a", "b", "c"]);
 
     const index = indexLocalStates(stored);
     expect(index.a.is_pinned).toBe(true);
+    expect(index.a.is_read).toBe(true);
+    expect(index.a.read_at).toBe(readAt);
+    expect(index.b.is_read).toBe(false);
     expect(index.c.is_dismissed).toBe(true);
     expect(index.c.label_key).toBe("resolved");
+    expect(toNotificationView(buildDto({ id: "a" }), index.a).is_read).toBe(true);
+    expect(
+      toNotificationView(buildDto({ id: "b", is_read: true, read_at: readAt }), index.b).is_read,
+    ).toBe(false);
+    const legacy = indexLocalStates([
+      {
+        id: "legacy",
+        is_pinned: true,
+        is_muted: false,
+        is_dismissed: false,
+        label_key: null,
+      },
+    ]);
+    expect(legacy.legacy).not.toHaveProperty("is_read");
+    expect(toNotificationView(buildDto({ id: "legacy", is_read: true }), legacy.legacy).is_read).toBe(
+      true,
+    );
     expect(indexLocalStates(null)).toEqual({});
+  });
+
+  it("publishes unread changes for the shared bottom tab indicator", () => {
+    expect(messagesPageSource).toContain("publishMessagesUnreadIndicator");
+    expect(messagesPageSource).toContain("publishMessagesUnreadIndicator(countUnread(next) > 0)");
+    expect(messagesPageSource).toContain("setMessages(next, true)");
   });
 
   it("formats notification times relative to now", () => {
@@ -387,6 +439,22 @@ describe("messages page wiring", () => {
     expect(messagesPageSource).toContain("swipe-action");
     expect(messagesPageSource).toContain("消息空荡荡的.svg");
     expect(messagesPageSource).toContain("暂无消息");
+  });
+
+  it("marks a tapped message read only after detail navigation succeeds", () => {
+    const handlerStart = messagesPageSource.indexOf("function handleCardTap");
+    const handlerEnd = messagesPageSource.indexOf("function handleCardLongPress", handlerStart);
+    const handlerSource = messagesPageSource.slice(handlerStart, handlerEnd);
+    const navigateIndex = handlerSource.indexOf("uni.navigateTo");
+    const successIndex = handlerSource.indexOf("success: () => {", navigateIndex);
+    const markReadIndex = handlerSource.indexOf("applyMessages(markRead", navigateIndex);
+
+    expect(handlerStart).toBeGreaterThanOrEqual(0);
+    expect(handlerEnd).toBeGreaterThan(handlerStart);
+    expect(navigateIndex).toBeGreaterThanOrEqual(0);
+    expect(successIndex).toBeGreaterThan(navigateIndex);
+    expect(markReadIndex).toBeGreaterThan(successIndex);
+    expect(handlerSource.slice(0, navigateIndex)).not.toContain("markRead");
   });
 
   it("pre-renders swipe actions and moves the foreground card in the WXS view layer", () => {

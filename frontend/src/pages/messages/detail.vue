@@ -243,7 +243,7 @@ onLoad((query) => {
   }
   const snapshot = loadSnapshot(id);
   if (snapshot) {
-    // 列表页点按即标记已读，详情始终按已读展示。
+    // 进入详情即视为已读；列表页在导航成功后再清除对应未读标记。
     message.value = { ...snapshot, is_read: true };
     return;
   }

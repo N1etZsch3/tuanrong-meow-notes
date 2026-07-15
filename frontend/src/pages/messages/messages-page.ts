@@ -67,6 +67,10 @@ export interface NotificationLocalState {
   label_key: NotificationLabelKey | null;
 }
 
+/** mock 阶段持久化的本地覆盖；真实接口接入后已读状态改由服务端返回。 */
+export type NotificationStoredOverrides = NotificationLocalState &
+  Partial<Pick<NotificationItemDto, "is_read" | "read_at">>;
+
 /** 合并后端条目与本地标记的视图模型。 */
 export interface NotificationView extends NotificationItemDto, NotificationLocalState {}
 
@@ -168,7 +172,7 @@ export function createDefaultLocalState(): NotificationLocalState {
  */
 export function toNotificationView(
   dto: NotificationItemDto,
-  local?: Partial<NotificationLocalState> | null,
+  local?: Partial<NotificationStoredOverrides> | null,
 ): NotificationView {
   return {
     ...dto,
@@ -184,6 +188,7 @@ export function toNotificationView(
 export function mergeIncomingNotifications(
   current: NotificationView[],
   incoming: NotificationItemDto[],
+  storedOverrides: Record<string, NotificationStoredOverrides> = {},
 ): NotificationView[] {
   const byId = new Map<string, NotificationView>();
   for (const item of current) {
@@ -191,17 +196,21 @@ export function mergeIncomingNotifications(
   }
   for (const dto of incoming) {
     const existing = byId.get(dto.id);
+    const stored = storedOverrides[dto.id];
     if (existing) {
+      const hasStoredReadState = typeof stored?.is_read === "boolean";
       byId.set(dto.id, {
         ...existing,
         ...dto,
+        is_read: stored?.is_read ?? existing.is_read,
+        read_at: hasStoredReadState ? (stored.read_at ?? null) : existing.read_at,
         is_pinned: existing.is_pinned,
         is_muted: existing.is_muted,
         is_dismissed: existing.is_dismissed,
         label_key: existing.label_key,
       });
     } else {
-      byId.set(dto.id, toNotificationView(dto));
+      byId.set(dto.id, toNotificationView(dto, stored));
     }
   }
   return [...byId.values()];
@@ -313,45 +322,45 @@ export function markAllRead(items: NotificationView[]): NotificationView[] {
   );
 }
 
-/**
- * 提取需持久化的本地标记（仅存偏离默认值的条目，控制存储体积）。
- */
+/** 提取 mock 阶段需持久化的已读状态与本地标记。 */
 export interface StoredLocalState extends NotificationLocalState {
   id: string;
+  is_read?: boolean;
+  read_at?: string | null;
 }
 
 export function extractLocalStates(items: NotificationView[]): StoredLocalState[] {
-  const result: StoredLocalState[] = [];
-  for (const item of items) {
-    const isDefault =
-      !item.is_pinned && !item.is_muted && !item.is_dismissed && item.label_key === null;
-    if (!isDefault) {
-      result.push({
-        id: item.id,
-        is_pinned: item.is_pinned,
-        is_muted: item.is_muted,
-        is_dismissed: item.is_dismissed,
-        label_key: item.label_key,
-      });
-    }
-  }
-  return result;
+  return items.map((item) => ({
+    id: item.id,
+    is_read: item.is_read,
+    read_at: item.read_at,
+    is_pinned: item.is_pinned,
+    is_muted: item.is_muted,
+    is_dismissed: item.is_dismissed,
+    label_key: item.label_key,
+  }));
 }
 
 export function indexLocalStates(
   stored: StoredLocalState[] | null | undefined,
-): Record<string, NotificationLocalState> {
-  const index: Record<string, NotificationLocalState> = {};
+): Record<string, NotificationStoredOverrides> {
+  const index: Record<string, NotificationStoredOverrides> = {};
   if (!stored) {
     return index;
   }
   for (const entry of stored) {
-    index[entry.id] = {
+    const state: NotificationStoredOverrides = {
       is_pinned: Boolean(entry.is_pinned),
       is_muted: Boolean(entry.is_muted),
       is_dismissed: Boolean(entry.is_dismissed),
       label_key: entry.label_key ?? null,
     };
+    // 兼容旧存储：缺少 is_read 时不覆盖 DTO 自带的服务端/mock 状态。
+    if (typeof entry.is_read === "boolean") {
+      state.is_read = entry.is_read;
+      state.read_at = entry.read_at ?? null;
+    }
+    index[entry.id] = state;
   }
   return index;
 }

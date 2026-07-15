@@ -57,4 +57,14 @@ describe("app tab bar navigation", () => {
     expect(appTabBarSource).toContain("padding: 0 24rpx 8rpx;");
     expect(appTabBarSource).not.toContain("safe-area-inset-bottom");
   });
+
+  it("shows a small red dot on Meow Messages while unread messages remain", () => {
+    expect(appTabBarSource).toContain("item.key === 'messages' && hasUnreadMessages");
+    expect(appTabBarSource).toContain('class="tab-unread-dot"');
+    expect(appTabBarSource).toContain("readMessagesUnreadIndicator");
+    expect(appTabBarSource).toContain("MESSAGES_UNREAD_INDICATOR_EVENT");
+    expect(appTabBarSource).toContain("uni.$on");
+    expect(appTabBarSource).toContain("uni.$off");
+    expect(appTabBarSource).toContain("background: #ee514c;");
+  });
 });

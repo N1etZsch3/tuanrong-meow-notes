@@ -18,6 +18,11 @@
       >
         <view class="tab-icon-shell">
           <image class="tab-icon" :src="item.icon" mode="aspectFit" />
+          <view
+            v-if="item.key === 'messages' && hasUnreadMessages"
+            class="tab-unread-dot"
+            aria-label="有未读消息"
+          />
         </view>
         <text class="tab-label">{{ item.label }}</text>
       </button>
@@ -26,7 +31,12 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+
+import {
+  MESSAGES_UNREAD_INDICATOR_EVENT,
+  readMessagesUnreadIndicator,
+} from "@/services/message-unread-indicator";
 
 import {
   APP_TAB_ITEMS,
@@ -44,13 +54,24 @@ const props = defineProps<{
 const currentActiveKey = computed(
   () => props.activeKey ?? getActiveTabKey(props.currentRoute ?? ""),
 );
+const hasUnreadMessages = ref(false);
+
+function handleMessagesUnreadChange(hasUnread: unknown) {
+  hasUnreadMessages.value = hasUnread === true;
+}
 
 onMounted(() => {
+  hasUnreadMessages.value = readMessagesUnreadIndicator();
+  uni.$on(MESSAGES_UNREAD_INDICATOR_EVENT, handleMessagesUnreadChange);
   uni.hideTabBar({
     fail: () => {
       // Ignore error if the current context isn't considered a tab bar page yet
     },
   });
+});
+
+onBeforeUnmount(() => {
+  uni.$off(MESSAGES_UNREAD_INDICATOR_EVENT, handleMessagesUnreadChange);
 });
 
 function handleTabTap(tabKey: AppTabKey) {
@@ -124,6 +145,7 @@ function handleTabTap(tabKey: AppTabKey) {
 }
 
 .tab-icon-shell {
+  position: relative;
   width: 52rpx;
   height: 52rpx;
   border-radius: 22rpx;
@@ -131,6 +153,19 @@ function handleTabTap(tabKey: AppTabKey) {
   align-items: center;
   justify-content: center;
   transition: transform 0.24s ease, background 0.24s ease, box-shadow 0.24s ease;
+}
+
+.tab-unread-dot {
+  position: absolute;
+  top: -2rpx;
+  right: -8rpx;
+  box-sizing: border-box;
+  width: 16rpx;
+  height: 16rpx;
+  border: 3rpx solid #ffffff;
+  border-radius: 50%;
+  background: #ee514c;
+  box-shadow: 0 3rpx 9rpx rgba(213, 55, 50, 0.28);
 }
 
 .tab-icon {

@@ -286,6 +286,7 @@ import { onHide, onShow, onUnload } from "@dcloudio/uni-app";
 
 import AppTabBar from "@/components/AppTabBar.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
+import { publishMessagesUnreadIndicator } from "@/services/message-unread-indicator";
 import {
   connectNotificationChannel,
   type NotificationChannelHandle,
@@ -508,9 +509,16 @@ function persistLocalStates() {
   }
 }
 
-function applyMessages(next: NotificationView[]) {
+function setMessages(next: NotificationView[], persist = false) {
   messages.value = next;
-  persistLocalStates();
+  if (persist) {
+    persistLocalStates();
+  }
+  publishMessagesUnreadIndicator(countUnread(next) > 0);
+}
+
+function applyMessages(next: NotificationView[]) {
+  setMessages(next, true);
 }
 
 // ---- 数据装载与实时通道 ----
@@ -527,7 +535,7 @@ async function resolveAccessToken() {
 function loadInitialMessages() {
   const locals = loadStoredLocalStates();
   const base = MOCK_NOTIFICATIONS.map((dto) => toNotificationView(dto, locals[dto.id]));
-  messages.value = mergeIncomingNotifications(base, []);
+  setMessages(mergeIncomingNotifications(base, []));
 }
 
 function hasBlockingCardInteraction(): boolean {
@@ -561,7 +569,9 @@ function handleIncomingNotification(dto: NotificationItemDto) {
     deferredIncomingNotifications.push(dto);
     return;
   }
-  messages.value = mergeIncomingNotifications(messages.value, [dto]);
+  setMessages(
+    mergeIncomingNotifications(messages.value, [dto], loadStoredLocalStates()),
+  );
 }
 
 function flushDeferredIncomingNotifications() {
@@ -570,7 +580,13 @@ function flushDeferredIncomingNotifications() {
   }
   const incoming = deferredIncomingNotifications;
   deferredIncomingNotifications = [];
-  messages.value = mergeIncomingNotifications(messages.value, incoming);
+  setMessages(
+    mergeIncomingNotifications(
+      messages.value,
+      incoming,
+      loadStoredLocalStates(),
+    ),
+  );
 }
 
 function scheduleDeferredIncomingFlush() {
@@ -614,7 +630,7 @@ async function refreshMessages() {
   isRefreshing.value = true;
   const locals = loadStoredLocalStates();
   const base = MOCK_NOTIFICATIONS.map((dto) => toNotificationView(dto, locals[dto.id]));
-  messages.value = mergeIncomingNotifications(messages.value, base);
+  setMessages(mergeIncomingNotifications(messages.value, base));
   setTimeout(() => {
     isRefreshing.value = false;
   }, 420);
@@ -829,16 +845,21 @@ function handleCardTap(msg: NotificationView) {
     closeSwipe();
     return;
   }
-  if (!msg.is_read) {
-    applyMessages(markRead(messages.value, msg.id));
-  }
   try {
     const snapshot = messages.value.find((item) => item.id === msg.id) ?? msg;
     uni.setStorageSync(MESSAGES_DETAIL_SNAPSHOT_STORAGE_KEY, snapshot);
   } catch {
     // 快照写失败时详情页回退到 mock 数据查找。
   }
-  uni.navigateTo({ url: `/pages/messages/detail?id=${encodeURIComponent(msg.id)}` });
+  uni.navigateTo({
+    url: `/pages/messages/detail?id=${encodeURIComponent(msg.id)}`,
+    success: () => {
+      const target = messages.value.find((item) => item.id === msg.id);
+      if (target && !target.is_read) {
+        applyMessages(markRead(messages.value, msg.id));
+      }
+    },
+  });
 }
 
 function handleCardLongPress(msg: NotificationView, event: CardTouchEvent) {

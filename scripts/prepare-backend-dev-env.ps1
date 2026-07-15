@@ -27,7 +27,7 @@ function Set-EnvValue {
         [string] $Value
     )
 
-    $pattern = "(?m)^$([regex]::Escape($Name))=[^\r\n]*$"
+    $pattern = "(?m)^$([regex]::Escape($Name))=[^\r\n]*\r?$"
     $matches = [regex]::Matches($Content, $pattern)
     if ($matches.Count -gt 1) {
         throw "Development EnvFile must not define $Name more than once."
@@ -38,6 +38,18 @@ function Set-EnvValue {
 
     $separator = if ($Content.EndsWith("`n")) { "" } else { "`r`n" }
     return "$Content$separator$Name=$Value`r`n"
+}
+
+function Remove-EnvValues {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Content,
+        [Parameter(Mandatory = $true)]
+        [string] $Name
+    )
+
+    $pattern = "(?m)^$([regex]::Escape($Name))=[^\r\n]*(?:\r?\n|$)"
+    return [regex]::Replace($Content, $pattern, "")
 }
 
 function Get-OptionalEnvValue {
@@ -82,7 +94,9 @@ foreach ($name in @("CATMAP_JWT_SECRET_KEY", "CATMAP_CAPTCHA_SECRET_KEY")) {
 }
 
 $content = Set-EnvValue `
-    -Content $content `
+    -Content (Remove-EnvValues `
+        -Content $content `
+        -Name "CATMAP_WECHAT_CONTENT_SECURITY_MODE") `
     -Name "CATMAP_WECHAT_CONTENT_SECURITY_MODE" `
     -Value "off"
 

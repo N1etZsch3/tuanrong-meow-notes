@@ -245,6 +245,11 @@ Assert-Contains `
     -Message "Development environment preparation must explicitly isolate content security."
 
 Assert-Contains `
+    -Content $devEnvPreparationScript `
+    -Needle "Remove-EnvValues" `
+    -Message "Development environment preparation must normalize duplicate non-secret mode keys."
+
+Assert-Contains `
     -Content $devDatabaseRefreshScript `
     -Needle '[ValidateSet("clone-catmap-to-catmap_dev")]' `
     -Message "Development database refresh must require an explicit confirmation token."

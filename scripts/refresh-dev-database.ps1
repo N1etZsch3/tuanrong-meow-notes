@@ -211,6 +211,9 @@ chmod 600 "$HOST_DEVELOPMENT_DUMP"
 
 docker exec "$DATABASE_CONTAINER" pg_dump \
     -U "$PRODUCTION_DATABASE_ROLE" -Fc --no-owner --no-acl \
+    --exclude-schema=tiger \
+    --exclude-schema=tiger_data \
+    --exclude-schema=topology \
     -d "$PRODUCTION_DATABASE" -f "$CONTAINER_PRODUCTION_DUMP"
 
 docker exec "$DATABASE_CONTAINER" createdb \

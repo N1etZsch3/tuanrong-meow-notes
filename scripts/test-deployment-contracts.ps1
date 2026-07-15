@@ -266,6 +266,11 @@ Assert-Contains `
 
 Assert-Contains `
     -Content $devDatabaseRefreshScript `
+    -Needle "--exclude-schema=tiger" `
+    -Message "Development database refresh must let fresh PostGIS extensions own their schemas."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
     -Needle "STAGING_DATABASE" `
     -Message "Development database refresh must validate a staging database before switching."
 

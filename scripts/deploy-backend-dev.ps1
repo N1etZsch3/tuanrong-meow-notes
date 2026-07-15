@@ -331,7 +331,7 @@ if [ "$(grep -Ec '^CATMAP_DATABASE_URL=' "$ENV_UPLOAD")" -ne 1 ]; then
     exit 1
 fi
 
-if ! grep -Eq '^CATMAP_DATABASE_URL=.*\/catmap_dev([?[:space:]]|$)' "$ENV_UPLOAD"; then
+if ! grep -Eq '^CATMAP_DATABASE_URL=.*/catmap_dev([?[:space:]]|$)' "$ENV_UPLOAD"; then
     echo 'Development environment file must target catmap_dev.' >&2
     exit 1
 fi

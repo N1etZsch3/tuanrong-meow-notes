@@ -530,10 +530,14 @@ describe("summer feeding task pages", () => {
   });
 
   it("shows a soft delete action on the admin task edit page", () => {
+    const deleteSource = extractFunctionSource(adminCreateTaskSource, "deleteTask");
+
     expect(adminCreateTaskSource).toContain("删除任务");
     expect(adminCreateTaskSource).toContain("deleteSummerFeedingTask");
     expect(adminCreateTaskSource).toContain("confirmDeleteTask");
     expect(adminCreateTaskSource).toContain('v-if="isEditMode"');
+    expect(deleteSource).toContain('returnToListAfterDelete("/pages/tasks/list")');
+    expect(deleteSource).not.toContain('uni.switchTab({ url: "/pages/tasks/index" })');
   });
 
   it("starts map-page navigation from the task detail navigation button", () => {

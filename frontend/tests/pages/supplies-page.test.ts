@@ -68,6 +68,13 @@ describe("supply point detail page", () => {
     expect(formReadSource).toContain("uni.removeStorageSync(SUPPLY_LOCATION_STORAGE_KEY)");
   });
 
+  it("returns to the supply list after deleting a supply point", () => {
+    const deleteSource = extractFunctionSource(adminSupplyCreateSource, "deleteCurrentSupplyPoint");
+
+    expect(deleteSource).toContain('returnToListAfterDelete("/pages/supplies/index")');
+    expect(deleteSource).not.toContain('uni.switchTab({ url: "/pages/index/index" })');
+  });
+
   it("starts and resets supply point selection at the current user location", () => {
     const resetSource = extractFunctionSource(adminSupplyLocationSource, "resetLocation");
 

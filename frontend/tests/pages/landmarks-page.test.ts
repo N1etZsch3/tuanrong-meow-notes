@@ -1,7 +1,32 @@
 import { describe, expect, it } from "vitest";
 
+import adminLandmarkCreateSource from "../../src/pages/admin/landmarks/create.vue?raw";
 import landmarkIndexSource from "../../src/pages/landmarks/index.vue?raw";
 import pagesJson from "../../src/pages.json?raw";
+
+function extractFunctionSource(source: string, functionName: string): string {
+  const normalStart = source.indexOf(`function ${functionName}`);
+  const asyncStart = source.indexOf(`async function ${functionName}`);
+  const start = normalStart >= 0 ? normalStart : asyncStart;
+  expect(start).toBeGreaterThanOrEqual(0);
+  const bodyStart = source.indexOf("{", start);
+  expect(bodyStart).toBeGreaterThan(start);
+
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === "{") {
+      depth += 1;
+    } else if (char === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return source.slice(start);
+}
 
 describe("landmark list page", () => {
   it("registers and renders a searchable campus landmark list page", () => {
@@ -24,5 +49,12 @@ describe("landmark list page", () => {
     expect(landmarkIndexSource).toContain("/pages/admin/landmarks/create");
     expect(landmarkIndexSource).not.toContain("<AppTabBar");
     expect(landmarkIndexSource).not.toContain('class="filter-card"');
+  });
+
+  it("returns to the landmark list after deleting a landmark", () => {
+    const deleteSource = extractFunctionSource(adminLandmarkCreateSource, "deleteCurrentLandmark");
+
+    expect(deleteSource).toContain('returnToListAfterDelete("/pages/landmarks/index")');
+    expect(deleteSource).not.toContain('uni.switchTab({ url: "/pages/index/index" })');
   });
 });

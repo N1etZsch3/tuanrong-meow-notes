@@ -223,6 +223,7 @@ import {
 } from "@/api/supplies";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import { returnToListAfterDelete } from "@/utils/delete-navigation";
 import {
   HBNU_DEFAULT_SUPPLY_LOCATION,
   SUPPLY_LOCATION_STORAGE_KEY,
@@ -440,7 +441,7 @@ async function deleteCurrentSupplyPoint() {
     await deleteSupplyPoint(token, editSupplyPointId.value);
     uni.removeStorageSync(SUPPLY_LOCATION_STORAGE_KEY);
     uni.showToast({ title: "物资点已删除", icon: "success" });
-    uni.switchTab({ url: "/pages/index/index" });
+    returnToListAfterDelete("/pages/supplies/index");
   } catch (error) {
     const message = error instanceof Error ? error.message : "删除失败";
     uni.showToast({ title: message, icon: "none" });

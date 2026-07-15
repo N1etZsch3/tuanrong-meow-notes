@@ -280,6 +280,7 @@ import {
 } from "@/api/tasks";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import { returnToListAfterDelete } from "@/utils/delete-navigation";
 import {
   TASK_PUBLISH_LOCATION_STORAGE_KEY,
   buildSummerFeedingTaskPayload,
@@ -574,7 +575,7 @@ async function deleteTask() {
     await deleteSummerFeedingTask(token, editTaskId.value);
     uni.removeStorageSync(TASK_PUBLISH_LOCATION_STORAGE_KEY);
     uni.showToast({ title: "任务已删除", icon: "success" });
-    uni.switchTab({ url: "/pages/tasks/index" });
+    returnToListAfterDelete("/pages/tasks/list");
   } catch (error) {
     const message = error instanceof Error ? error.message : "删除失败";
     uni.showToast({ title: message, icon: "none" });

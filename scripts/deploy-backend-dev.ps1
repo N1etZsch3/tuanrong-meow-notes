@@ -94,12 +94,17 @@ function Get-RequiredEnvValue {
         [string] $Name
     )
 
-    $match = [regex]::Match($Content, "(?m)^$([regex]::Escape($Name))=(?<value>[^\r\n]*)\s*$")
-    if (-not $match.Success -or [string]::IsNullOrWhiteSpace($match.Groups['value'].Value)) {
+    $matches = [regex]::Matches($Content, "(?m)^$([regex]::Escape($Name))=(?<value>[^\r\n]*)\s*$")
+    if ($matches.Count -ne 1) {
+        throw "Development EnvFile must define $Name exactly once."
+    }
+
+    $value = $matches[0].Groups['value'].Value.Trim()
+    if ([string]::IsNullOrWhiteSpace($value)) {
         throw "Development EnvFile must define a non-empty $Name value."
     }
 
-    return $match.Groups['value'].Value.Trim()
+    return $value
 }
 
 if (
@@ -130,6 +135,70 @@ if (-not (Test-Path -LiteralPath $nginxConfig)) {
 if (-not (Test-Path -LiteralPath $systemdService)) {
     throw "Development systemd service not found: $systemdService"
 }
+
+$nginxContent = Get-Content -LiteralPath $nginxConfig -Raw -Encoding UTF8
+$serverNameMatches = [regex]::Matches(
+    $nginxContent,
+    "(?m)^\s*server_name\s+(?<value>[^;]+);\s*`r?$"
+)
+$unexpectedServerNames = @(
+    $serverNameMatches | Where-Object { $_.Groups['value'].Value.Trim() -ne $Domain }
+)
+if ($serverNameMatches.Count -ne 2 -or $unexpectedServerNames.Count -gt 0) {
+    throw "Development Nginx config must contain only the two expected $Domain server_name entries."
+}
+
+$proxyPassMatches = [regex]::Matches(
+    $nginxContent,
+    "(?m)^\s*proxy_pass\s+(?<value>[^;]+);\s*`r?$"
+)
+$unexpectedProxyTargets = @(
+    $proxyPassMatches | Where-Object {
+        $_.Groups['value'].Value.Trim() -notmatch '^http://127\.0\.0\.1:8001(?:/|$)'
+    }
+)
+if ($proxyPassMatches.Count -eq 0 -or $unexpectedProxyTargets.Count -gt 0) {
+    throw "Development Nginx config must proxy only to the loopback development port 8001."
+}
+if ($nginxContent -match '(?m)\bdefault_server\b') {
+    throw "Development Nginx config must not become the default server."
+}
+
+$systemdContent = Get-Content -LiteralPath $systemdService -Raw -Encoding UTF8
+$requiredSystemdLines = @(
+    "User=catmap-dev",
+    "Group=catmap-dev",
+    "WorkingDirectory=/opt/catmap-dev/backend",
+    "EnvironmentFile=/opt/catmap-dev/backend/.env",
+    "ExecStart=/opt/catmap-dev/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001"
+)
+foreach ($requiredLine in $requiredSystemdLines) {
+    if ($systemdContent -notmatch "(?m)^$([regex]::Escape($requiredLine))`r?$") {
+        throw "Development systemd template is missing a required isolated runtime setting."
+    }
+}
+if (
+    $systemdContent.Contains($ProductionDeployDir) -or
+    $systemdContent -match '(?m)^User=root\s*$' -or
+    $systemdContent.Contains('--port 8000')
+) {
+    throw "Development systemd template references a production runtime target."
+}
+
+$deploymentSourcePaths = @(
+    "backend",
+    "deploy/nginx/$NginxConfigName",
+    "deploy/systemd/$SystemdUnitName",
+    "scripts/deploy-backend-dev.ps1"
+)
+$sourceStatus = & git -C $repoRoot status --porcelain=v1 --untracked-files=all -- @deploymentSourcePaths
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not verify the development deployment source baseline."
+}
+if ($sourceStatus) {
+    throw "Development deployment requires committed backend, template, and deployment-script sources."
+}
+
 if (-not (Test-Path -LiteralPath $SshKeyPath)) {
     throw "SSH key not found: $SshKeyPath. Run scripts/bootstrap-server-ssh-key.ps1 first."
 }
@@ -174,11 +243,11 @@ if (-not $SkipLocalChecks) {
     }
 }
 
-$tempDir = Join-Path ([IO.Path]::GetTempPath()) ("catmap-dev-deploy-" + (Get-Date -Format "yyyyMMddHHmmss"))
+$deploymentId = [Guid]::NewGuid().ToString("N")
+$tempDir = Join-Path ([IO.Path]::GetTempPath()) "catmap-dev-deploy-$deploymentId"
 New-Item -ItemType Directory -Path $tempDir | Out-Null
 $archivePath = Join-Path $tempDir "catmap-dev-backend.tar"
 $remoteScriptPath = Join-Path $tempDir "catmap-dev-remote-deploy.sh"
-$deploymentId = [Guid]::NewGuid().ToString("N")
 $remoteTempDir = "/opt/catmap-dev/.deploy-$deploymentId"
 
 try {
@@ -207,6 +276,7 @@ ARCHIVE="$DEPLOY_TMP/backend.tar"
 ENV_UPLOAD="$DEPLOY_TMP/backend.env"
 NGINX_UPLOAD="$DEPLOY_TMP/catmap-dev.conf"
 SERVICE_UPLOAD="$DEPLOY_TMP/catmap-backend-dev.service"
+EXTRACT_DIR="$DEPLOY_TMP/backend-new"
 
 EXPECTED_DEPLOY_DIR='/opt/catmap-dev/backend'
 EXPECTED_SERVICE_NAME='catmap-backend-dev'
@@ -225,7 +295,7 @@ if [ "$DEPLOY_DIR" = '/opt/catmap/backend' ] || [ "$SERVICE_NAME" = 'catmap-back
 fi
 
 cleanup() {
-    rm -rf "$DEPLOY_TMP" /tmp/catmap-dev-backend-new
+    rm -rf "$DEPLOY_TMP"
 }
 trap cleanup EXIT
 
@@ -239,6 +309,11 @@ if [ ! -f "$ENV_UPLOAD" ]; then
     exit 1
 fi
 
+if [ "$(grep -Ec '^CATMAP_DATABASE_URL=' "$ENV_UPLOAD")" -ne 1 ]; then
+    echo 'Development database URL must be defined exactly once.' >&2
+    exit 1
+fi
+
 if ! grep -Eq '^CATMAP_DATABASE_URL=.*\/catmap_dev([?[:space:]]|$)' "$ENV_UPLOAD"; then
     echo 'Development environment file must target catmap_dev.' >&2
     exit 1
@@ -249,8 +324,49 @@ if ! grep -Eq "^CATMAP_DATABASE_URL=[a-zA-Z0-9+]+://${DEVELOPMENT_DATABASE_ROLE}
     exit 1
 fi
 
+if [ "$(grep -Ec '^CATMAP_TENCENT_COS_ENV_PREFIX=' "$ENV_UPLOAD")" -ne 1 ]; then
+    echo 'Development object storage prefix must be defined exactly once.' >&2
+    exit 1
+fi
+
 if ! grep -Eq '^CATMAP_TENCENT_COS_ENV_PREFIX=dev[[:space:]]*$' "$ENV_UPLOAD"; then
     echo 'Development object storage prefix must be dev.' >&2
+    exit 1
+fi
+
+if [ "$(grep -Ec '^[[:space:]]*server_name[[:space:]]+dev-api\.trmx\.fun;[[:space:]]*$' "$NGINX_UPLOAD")" -ne 2 ] || \
+   grep -Eq 'default_server|127\.0\.0\.1:8000|/opt/catmap/backend' "$NGINX_UPLOAD"; then
+    echo 'Development Nginx upload references an unexpected runtime target.' >&2
+    exit 1
+fi
+
+if grep -E '^[[:space:]]*server_name[[:space:]]+' "$NGINX_UPLOAD" | \
+   grep -Evq '^[[:space:]]*server_name[[:space:]]+dev-api\.trmx\.fun;[[:space:]]*$'; then
+    echo 'Development Nginx upload contains a non-development server name.' >&2
+    exit 1
+fi
+
+if ! grep -Eq '^[[:space:]]*proxy_pass[[:space:]]+http://127\.0\.0\.1:8001(/|;)' "$NGINX_UPLOAD" || \
+   grep -E '^[[:space:]]*proxy_pass[[:space:]]+' "$NGINX_UPLOAD" | \
+   grep -Evq '^[[:space:]]*proxy_pass[[:space:]]+http://127\.0\.0\.1:8001(/[^;]*)?;[[:space:]]*$'; then
+    echo 'Development Nginx upload must proxy only to port 8001.' >&2
+    exit 1
+fi
+
+for required_setting in \
+    'User=catmap-dev' \
+    'Group=catmap-dev' \
+    'WorkingDirectory=/opt/catmap-dev/backend' \
+    'EnvironmentFile=/opt/catmap-dev/backend/.env' \
+    'ExecStart=/opt/catmap-dev/backend/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8001'; do
+    if ! grep -Fqx "$required_setting" "$SERVICE_UPLOAD"; then
+        echo 'Development systemd upload is missing an isolated runtime setting.' >&2
+        exit 1
+    fi
+done
+
+if grep -Eq '/opt/catmap/backend|^User=root[[:space:]]*$|--port 8000([[:space:]]|$)' "$SERVICE_UPLOAD"; then
+    echo 'Development systemd upload references a production runtime target.' >&2
     exit 1
 fi
 
@@ -307,9 +423,8 @@ restore_nginx_target() {
     fi
 }
 
-rm -rf /tmp/catmap-dev-backend-new
-mkdir -p /tmp/catmap-dev-backend-new
-tar -xf "$ARCHIVE" -C /tmp/catmap-dev-backend-new
+install -d -m 700 "$EXTRACT_DIR"
+tar -xf "$ARCHIVE" -C "$EXTRACT_DIR"
 
 mkdir -p "$(dirname "$DEPLOY_DIR")" "$DEPLOY_DIR"
 find "$DEPLOY_DIR" -mindepth 1 -maxdepth 1 \
@@ -317,7 +432,7 @@ find "$DEPLOY_DIR" -mindepth 1 -maxdepth 1 \
     ! -name '.venv' \
     ! -name 'uploads' \
     -exec rm -rf {} +
-cp -a /tmp/catmap-dev-backend-new/. "$DEPLOY_DIR"/
+cp -a "$EXTRACT_DIR"/. "$DEPLOY_DIR"/
 install -m 600 "$ENV_UPLOAD" "$DEPLOY_DIR/.env"
 
 cd "$DEPLOY_DIR"

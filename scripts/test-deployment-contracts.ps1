@@ -215,6 +215,11 @@ Assert-Contains `
 
 Assert-Contains `
     -Content $devDeployScript `
+    -Needle "must define `$Name exactly once" `
+    -Message "Development deployment must reject duplicate protected environment keys."
+
+Assert-Contains `
+    -Content $devDeployScript `
     -Needle "catmap_dev" `
     -Message "Development deployment must validate the development database target."
 
@@ -232,6 +237,31 @@ Assert-Contains `
     -Content $devDeployScript `
     -Needle "install -d -m 700" `
     -Message "Development deployment must place uploaded environment files in a root-only temporary directory."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "status --porcelain=v1 --untracked-files=all" `
+    -Message "Development deployment must reject uncommitted deployment sources."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle 'EXTRACT_DIR="$DEPLOY_TMP/backend-new"' `
+    -Message "Development deployment must extract code inside its protected per-deployment directory."
+
+Assert-NotContains `
+    -Content $devDeployScript `
+    -Needle "/tmp/catmap-dev-backend-new" `
+    -Message "Development deployment must not use a shared predictable extraction directory."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "Development Nginx upload references an unexpected runtime target." `
+    -Message "Development deployment must revalidate the uploaded Nginx target before installation."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "Development systemd upload references a production runtime target." `
+    -Message "Development deployment must revalidate the uploaded systemd target before installation."
 
 Assert-Contains `
     -Content $devDeployScript `

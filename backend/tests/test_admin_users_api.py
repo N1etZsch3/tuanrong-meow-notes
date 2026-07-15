@@ -1,6 +1,8 @@
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from app.core.errors import ErrorCode
+from app.core.security import verify_password
 from app.modules.auth.models import AdminOperationLog, User
 from tests.test_auth_api import create_captcha, create_token, create_user
 
@@ -128,6 +130,163 @@ def test_admin_create_member_without_initial_profile_leaves_fields_empty(api_cli
     assert user.profile.nickname == ""
     assert user.profile.real_name is None
     assert user.profile.department is None
+
+
+def test_admin_create_member_reports_deleted_account_conflict(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    member = create_user(
+        db_session,
+        student_no="trmx1234",
+        password="OldPassword123",
+        must_change_password=False,
+    )
+    member.profile.nickname = "团团"
+    db_session.commit()
+    token = create_token(admin)
+
+    delete_response = api_client.delete(
+        f"/api/v1/admin/users/{member.id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert delete_response.status_code == 200
+
+    response = api_client.post(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "meow_no": "trmx1234",
+            "initial_password": "NewPassword123",
+            "role": "member",
+            "profile": {"nickname": "新昵称", "department": "活动部"},
+            "must_change_password": True,
+        },
+    )
+
+    assert response.status_code == 409
+    payload = response.json()
+    assert payload["code"] == int(ErrorCode.DELETED_ACCOUNT_EXISTS)
+    assert payload["message"] == "该喵喵号曾被使用，可重新启用原账号"
+    assert payload["data"] == {
+        "conflict_type": "deleted_account",
+        "user_id": str(member.id),
+        "meow_no": "trmx1234",
+        "nickname": "团团",
+        "deleted_at": delete_response.json()["data"]["deleted_at"],
+        "can_restore": True,
+    }
+    assert db_session.query(User).filter_by(student_no="trmx1234").count() == 1
+
+
+def test_admin_can_restore_deleted_member_account(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    member = create_user(
+        db_session,
+        student_no="trmx1234",
+        password="OldPassword123",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    member.profile.nickname = "团团"
+    member.profile.department = "宣传部"
+    member.wechat_openid = "openid-deleted-member"
+    member.wechat_bound_at = datetime.now(tz=UTC)
+    member.last_wechat_login_at = datetime.now(tz=UTC)
+    member.login_failed_count = 4
+    member.locked_until = datetime.now(tz=UTC) + timedelta(minutes=15)
+    db_session.commit()
+    old_member_token = create_token(member)
+    admin_token = create_token(admin)
+
+    delete_response = api_client.delete(
+        f"/api/v1/admin/users/{member.id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert delete_response.status_code == 200
+    db_session.refresh(member)
+    deleted_token_version = member.token_version
+
+    response = api_client.post(
+        f"/api/v1/admin/users/{member.id}/restore",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"initial_password": "NewPassword123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["message"] == "成员账号已重新启用"
+    assert response.json()["data"] == {
+        "id": str(member.id),
+        "student_no": "trmx1234",
+        "meow_no": "trmx1234",
+        "nickname": "团团",
+        "role": "member",
+        "status": "active",
+        "must_change_password": True,
+        "wechat_bound": False,
+    }
+
+    db_session.refresh(member)
+    assert member.deleted_at is None
+    assert member.status == "active"
+    assert member.must_change_password is True
+    assert verify_password("NewPassword123", member.password_hash)
+    assert member.password_updated_at is not None
+    assert member.login_failed_count == 0
+    assert member.locked_until is None
+    assert member.token_version == deleted_token_version + 1
+    assert member.wechat_openid is None
+    assert member.wechat_bound_at is None
+    assert member.last_wechat_login_at is None
+    assert member.profile.nickname == "团团"
+    assert member.profile.department == "宣传部"
+
+    old_session_response = api_client.get(
+        "/api/v1/auth/me",
+        headers={"Authorization": f"Bearer {old_member_token}"},
+    )
+    assert old_session_response.status_code == 401
+    assert old_session_response.json()["code"] == int(ErrorCode.TOKEN_INVALID)
+
+    restore_log = (
+        db_session.query(AdminOperationLog)
+        .filter_by(operation_type="user_restore", target_id=member.id)
+        .one()
+    )
+    assert restore_log.after_data["status"] == "active"
+    assert restore_log.after_data["wechat_bound"] is False
+
+
+def test_admin_cannot_restore_an_active_account(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    member = create_user(db_session, student_no="trmx1234", must_change_password=False)
+    token = create_token(admin)
+
+    response = api_client.post(
+        f"/api/v1/admin/users/{member.id}/restore",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"initial_password": "NewPassword123"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["code"] == int(ErrorCode.RESOURCE_EXISTS)
+    assert response.json()["message"] == "账号已经处于启用状态"
 
 
 def test_member_cannot_create_member_account(api_client, db_session):

@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   clearAdminUserWechatBinding,
   createAdminUser,
+  restoreAdminUser,
 } from "@/api/admin-users";
 
 describe("admin users api", () => {
@@ -91,6 +92,53 @@ describe("admin users api", () => {
       expect.objectContaining({
         method: "DELETE",
         url: expect.stringContaining("/admin/users/u1/wechat-binding"),
+        header: expect.objectContaining({ Authorization: "Bearer admin-token" }),
+      }),
+    );
+  });
+
+  it("restores a deleted member through /admin/users/{id}/restore", async () => {
+    const requestMock = vi.fn((options: UniNamespace.RequestOptions) => {
+      options.success?.({
+        statusCode: 200,
+        data: {
+          code: 0,
+          message: "成员账号已重新启用",
+          data: {
+            id: "u-deleted",
+            student_no: "trmx1234",
+            meow_no: "trmx1234",
+            nickname: "团团",
+            role: "member",
+            status: "active",
+            must_change_password: true,
+            wechat_bound: false,
+          },
+          trace_id: "trace-restore-user",
+        },
+        header: {},
+        cookies: [],
+      } as UniNamespace.RequestSuccessCallbackResult);
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await expect(
+      restoreAdminUser("admin-token", "u-deleted", {
+        initial_password: "NewPassword123",
+      }),
+    ).resolves.toMatchObject({
+      id: "u-deleted",
+      meow_no: "trmx1234",
+      nickname: "团团",
+      status: "active",
+      wechat_bound: false,
+    });
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "POST",
+        url: expect.stringContaining("/admin/users/u-deleted/restore"),
+        data: { initial_password: "NewPassword123" },
         header: expect.objectContaining({ Authorization: "Bearer admin-token" }),
       }),
     );

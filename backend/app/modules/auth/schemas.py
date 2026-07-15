@@ -130,6 +130,10 @@ class AdminCreateUserRequest(BaseModel):
         return self.meow_no or self.student_no
 
 
+class AdminRestoreUserRequest(BaseModel):
+    initial_password: str | None = Field(default=None, min_length=8, max_length=20)
+
+
 class AdminUserItem(BaseModel):
     id: UUID
     student_no: str

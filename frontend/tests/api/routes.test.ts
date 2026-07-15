@@ -23,6 +23,9 @@ describe("api routes", () => {
     expect(API_ENDPOINTS.admin.mapPoint("point 1/2")).toBe(
       "/admin/map/points/point%201%2F2",
     );
+    expect(API_ENDPOINTS.admin.userRestore("user 1/2")).toBe(
+      "/admin/users/user%201%2F2/restore",
+    );
     expect(API_ENDPOINTS.medicines.detail("medicine 1/2")).toBe(
       "/medicines/medicine%201%2F2",
     );

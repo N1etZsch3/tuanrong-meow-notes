@@ -81,10 +81,28 @@ describe("admin entry pages", () => {
 
   it("creates member accounts through the admin users api", () => {
     expect(adminCreateUserSource).toContain("createAdminUser");
+    expect(adminCreateUserSource).toContain("restoreAdminUser");
+    expect(adminCreateUserSource).toContain("parseDeletedAccountConflict");
     expect(adminCreateUserSource).toContain("新增成员");
     expect(adminCreateUserSource).toContain("喵喵号");
     expect(adminCreateUserSource).toContain("initial_password");
     expect(adminCreateUserSource).toContain("must_change_password");
+  });
+
+  it("uses a designed modal to offer restoring a deleted meow account", () => {
+    expect(adminCreateUserSource).toContain('v-if="restoreConflict"');
+    expect(adminCreateUserSource).toContain('class="restore-modal-mask"');
+    expect(adminCreateUserSource).toContain('class="restore-modal-card"');
+    expect(adminCreateUserSource).toContain("这个喵喵号用过啦");
+    expect(adminCreateUserSource).toContain("历史昵称");
+    expect(adminCreateUserSource).toContain("重新启用原账号");
+    expect(adminCreateUserSource).toContain("保留原资料和历史记录");
+    expect(adminCreateUserSource).toContain("不会使用本页新填写的昵称、部门和角色");
+    expect(adminCreateUserSource).toContain('@tap="confirmRestoreAccount"');
+    expect(adminCreateUserSource).toContain('@tap="closeRestoreModal"');
+    expect(adminCreateUserSource).toContain('class="restore-modal-confirm"');
+    expect(adminCreateUserSource).toContain("backdrop-filter: blur(10rpx)");
+    expect(adminCreateUserSource).toContain("animation: restore-modal-in");
   });
 
   it("offers summer volunteer accounts and the trmx sequence placeholder", () => {

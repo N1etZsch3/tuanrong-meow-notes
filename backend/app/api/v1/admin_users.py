@@ -11,6 +11,7 @@ from app.modules.auth.models import User
 from app.modules.auth.schemas import (
     AdminCreateUserRequest,
     AdminResetPasswordRequest,
+    AdminRestoreUserRequest,
     AdminUpdateRoleRequest,
     AdminUpdateStatusRequest,
     AdminUpdateUserRequest,
@@ -128,6 +129,36 @@ def delete_user(
         data={"user_id": user.id, "status": user.status, "deleted_at": user.deleted_at},
         trace_id=request.state.trace_id,
         message="成员已退出",
+    )
+
+
+@router.post("/{user_id}/restore", summary="Restore a soft-deleted member account")
+def restore_user(
+    user_id: UUID,
+    payload: AdminRestoreUserRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    user = service.restore_user(
+        db,
+        admin=admin,
+        user_id=user_id,
+        payload=payload,
+    )
+    return api_success(
+        data={
+            "id": user.id,
+            "student_no": user.student_no,
+            "meow_no": user.student_no,
+            "nickname": user.profile.nickname if user.profile else "",
+            "role": user.role,
+            "status": user.status,
+            "must_change_password": user.must_change_password,
+            "wechat_bound": bool(user.wechat_openid),
+        },
+        trace_id=request.state.trace_id,
+        message="成员账号已重新启用",
     )
 
 

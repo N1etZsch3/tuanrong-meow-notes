@@ -34,6 +34,15 @@ export interface AdminCreateUserResponse {
   must_change_password: boolean;
 }
 
+export interface AdminRestoreUserPayload {
+  initial_password?: string;
+}
+
+export interface AdminRestoreUserResponse extends AdminCreateUserResponse {
+  nickname: string;
+  wechat_bound: boolean;
+}
+
 export interface AdminUserProfileDto {
   nickname: string;
   avatar_url: string | null;
@@ -113,6 +122,19 @@ export function createAdminUser(
 ): Promise<AdminCreateUserResponse> {
   return request<AdminCreateUserResponse, AdminCreateUserPayload & Record<string, unknown>>({
     url: API_ENDPOINTS.admin.users,
+    method: "POST",
+    data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function restoreAdminUser(
+  accessToken: string,
+  userId: string,
+  payload: AdminRestoreUserPayload,
+): Promise<AdminRestoreUserResponse> {
+  return request<AdminRestoreUserResponse, AdminRestoreUserPayload & Record<string, unknown>>({
+    url: API_ENDPOINTS.admin.userRestore(userId),
     method: "POST",
     data: { ...payload },
     token: accessToken,

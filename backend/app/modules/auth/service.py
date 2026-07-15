@@ -4,6 +4,7 @@ from uuid import UUID
 
 from fastapi.encoders import jsonable_encoder
 from sqlalchemy import or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
@@ -19,6 +20,7 @@ from app.modules.auth.models import AdminOperationLog, AuthCaptcha, User, UserPr
 from app.modules.auth.schemas import (
     AdminCreateUserRequest,
     AdminResetPasswordRequest,
+    AdminRestoreUserRequest,
     AdminUpdateRoleRequest,
     AdminUpdateStatusRequest,
     AdminUpdateUserRequest,
@@ -174,6 +176,14 @@ def get_user_by_student_no(db: Session, student_no: str) -> User | None:
         select(User)
         .options(selectinload(User.profile))
         .where(User.student_no == student_no, User.deleted_at.is_(None))
+    )
+
+
+def get_user_by_student_no_including_deleted(db: Session, student_no: str) -> User | None:
+    return db.scalar(
+        select(User)
+        .options(selectinload(User.profile))
+        .where(User.student_no == student_no)
     )
 
 
@@ -478,14 +488,39 @@ def admin_user_log_payload(user: User) -> dict:
     return jsonable_encoder(admin_user_payload(user))
 
 
+def existing_account_error(user: User) -> APIError:
+    if user.deleted_at is not None:
+        return APIError(
+            code=ErrorCode.DELETED_ACCOUNT_EXISTS,
+            message="该喵喵号曾被使用，可重新启用原账号",
+            status_code=409,
+            data={
+                "conflict_type": "deleted_account",
+                "user_id": str(user.id),
+                "meow_no": user.student_no,
+                "nickname": clean_initial_display_text(
+                    user.profile.nickname if user.profile else None
+                ),
+                "deleted_at": user.deleted_at.isoformat(),
+                "can_restore": True,
+            },
+        )
+    return APIError(
+        code=ErrorCode.RESOURCE_EXISTS,
+        message="喵喵号已存在",
+        status_code=409,
+    )
+
+
 def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequest) -> User:
     if payload.role not in VALID_ROLES:
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
     account_no = payload.account_no or generate_next_meow_no(db)
     initial_password = payload.initial_password or account_no
     validate_password_strength(initial_password)
-    if get_user_by_student_no(db, account_no):
-        raise APIError(code=ErrorCode.RESOURCE_EXISTS, message="喵喵号已存在", status_code=409)
+    existing_user = get_user_by_student_no_including_deleted(db, account_no)
+    if existing_user is not None:
+        raise existing_account_error(existing_user)
 
     user = User(
         student_no=account_no,
@@ -496,7 +531,14 @@ def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequ
         token_version=1,
     )
     db.add(user)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        existing_user = get_user_by_student_no_including_deleted(db, account_no)
+        if existing_user is not None:
+            raise existing_account_error(existing_user) from exc
+        raise
     db.add(
         UserProfile(
             user_id=user.id,
@@ -741,6 +783,67 @@ def soft_delete_user(
         after_data={
             "status": user.status,
             "deleted_at": user.deleted_at.isoformat(),
+        },
+    )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def restore_user(
+    db: Session,
+    *,
+    admin: User,
+    user_id: UUID,
+    payload: AdminRestoreUserRequest,
+) -> User:
+    user = db.scalar(
+        select(User)
+        .options(selectinload(User.profile))
+        .where(User.id == user_id)
+        .with_for_update()
+    )
+    if user is None:
+        raise APIError(code=ErrorCode.RESOURCE_NOT_FOUND, message="用户不存在", status_code=404)
+    if user.deleted_at is None:
+        raise APIError(
+            code=ErrorCode.RESOURCE_EXISTS,
+            message="账号已经处于启用状态",
+            status_code=409,
+        )
+    ensure_target_is_editable(user)
+
+    initial_password = payload.initial_password or user.student_no
+    validate_password_strength(initial_password)
+    before = {
+        **admin_user_log_payload(user),
+        "deleted_at": user.deleted_at.isoformat(),
+    }
+    current_time = now_utc()
+    user.status = "active"
+    user.deleted_at = None
+    user.password_hash = hash_password(initial_password)
+    user.password_updated_at = current_time
+    user.must_change_password = True
+    user.login_failed_count = 0
+    user.locked_until = None
+    user.wechat_openid = None
+    user.wechat_bound_at = None
+    user.last_wechat_login_at = None
+    user.token_version += 1
+    log_admin_operation(
+        db,
+        admin=admin,
+        operation_type="user_restore",
+        target_id=user.id,
+        summary=f"重新启用成员账号 {user.student_no}",
+        before_data=before,
+        after_data={
+            "status": user.status,
+            "deleted_at": None,
+            "must_change_password": user.must_change_password,
+            "wechat_bound": False,
+            "token_version": user.token_version,
         },
     )
     db.commit()

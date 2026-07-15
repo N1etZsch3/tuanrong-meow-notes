@@ -53,6 +53,8 @@ export const API_ENDPOINTS = {
   admin: {
     users: "/admin/users",
     user: (userId: ApiPathParam) => `/admin/users/${encodePathParam(userId)}`,
+    userRestore: (userId: ApiPathParam) =>
+      `/admin/users/${encodePathParam(userId)}/restore`,
     userResetPassword: (userId: ApiPathParam) =>
       `/admin/users/${encodePathParam(userId)}/reset-password`,
     userWechatBinding: (userId: ApiPathParam) =>

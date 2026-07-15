@@ -271,6 +271,11 @@ Assert-Contains `
 
 Assert-Contains `
     -Content $devDatabaseRefreshScript `
+    -Needle "--exclude-table-data=spatial_ref_sys" `
+    -Message "Development database refresh must retain the fresh PostGIS reference table."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
     -Needle "STAGING_DATABASE" `
     -Message "Development database refresh must validate a staging database before switching."
 

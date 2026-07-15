@@ -214,6 +214,7 @@ docker exec "$DATABASE_CONTAINER" pg_dump \
     --exclude-schema=tiger \
     --exclude-schema=tiger_data \
     --exclude-schema=topology \
+    --exclude-table-data=spatial_ref_sys \
     -d "$PRODUCTION_DATABASE" -f "$CONTAINER_PRODUCTION_DUMP"
 
 docker exec "$DATABASE_CONTAINER" createdb \

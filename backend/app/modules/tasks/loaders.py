@@ -26,7 +26,9 @@ def task_detail_load_options():
         selectinload(Task.map_point),
         selectinload(Task.publisher).selectinload(User.profile),
         selectinload(Task.photos).selectinload(TaskPhoto.file_asset),
-        selectinload(Task.execution_dates).selectinload(TaskExecutionDate.completed_user),
+        selectinload(Task.execution_dates)
+        .selectinload(TaskExecutionDate.completed_user)
+        .selectinload(User.profile),
         selectinload(Task.activities)
         .selectinload(TaskActivityLog.actor)
         .selectinload(User.profile),
@@ -46,7 +48,9 @@ def task_list_load_options():
     return (
         selectinload(Task.map_point),
         selectinload(Task.photos).selectinload(TaskPhoto.file_asset),
-        selectinload(Task.execution_dates).selectinload(TaskExecutionDate.completed_user),
+        selectinload(Task.execution_dates)
+        .selectinload(TaskExecutionDate.completed_user)
+        .selectinload(User.profile),
     )
 
 

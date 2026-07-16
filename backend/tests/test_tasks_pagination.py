@@ -318,3 +318,37 @@ def test_sync_due_task_lifecycles_is_the_only_writer_in_list_path(
         .count()
     )
     assert remaining == 0
+
+
+def test_lifecycle_sync_covers_due_tasks_outside_the_request_filters(
+    api_client, db_session, monkeypatch
+):
+    # Intended semantics of the decoupled sync: a due task transitions on any list GET,
+    # even when the request's filters would not select it beforehand. A status=archived
+    # query therefore already sees a task whose archive became due, instead of showing
+    # stale state until some broader request happens to normalize it.
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    member = create_user(db_session)
+    campus = seed_campus(db_session)
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 3))
+    monkeypatch.setattr(
+        task_service, "_now", lambda: datetime(2026, 7, 3, 8, 0, tzinfo=UTC)
+    )
+    task_id = _publish_at(
+        api_client, admin, campus, title="到期归档任务", lng=115.05, lat=30.20,
+        execute_dates=["2026-07-03"],
+    )
+
+    monkeypatch.setattr(task_service, "_today", lambda: date(2026, 7, 10))
+    monkeypatch.setattr(
+        task_service, "_now", lambda: datetime(2026, 7, 10, 8, 0, tzinfo=UTC)
+    )
+    archived_only = api_client.get(
+        "/api/v1/tasks?status=archived",
+        headers=auth_headers(member),
+    ).json()["data"]
+    assert [item["task_id"] for item in archived_only["items"]] == [task_id]
+    assert archived_only["total"] == 1
+
+    db_session.expire_all()
+    assert db_session.get(Task, UUID(task_id)).status == "archived"

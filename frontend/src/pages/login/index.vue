@@ -601,7 +601,7 @@ watch(
 
 .checkbox-label {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6rpx;
 }
 

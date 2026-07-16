@@ -52,6 +52,12 @@ describe("login agreement memory", () => {
     expect(loginPageSource).not.toContain("骗你的，其实什么也没有");
   });
 
+  it("vertically centers the agreement checkbox with its privacy copy", () => {
+    expect(loginPageSource).toMatch(
+      /\.checkbox-label\s*{[^}]*align-items:\s*center;/s,
+    );
+  });
+
   it("uses a conditional login confirmation modal instead of a WeChat binding checkbox", () => {
     expect(loginPageSource).toContain(
       "登录后，当前微信将自动与该喵喵号绑定，用于后续自动登录和账号保护。如需更换微信，请联系管理员解绑。",

@@ -11,9 +11,10 @@ import {
   buildSummerFeedingTaskPayload,
   buildUploadedTaskPhoto,
   buildTaskDateFilterQuery,
-  getTaskPhotoDisplayUrl,
   createDefaultFeedingTaskDraft,
+  formatChinaDateTime,
   formatExecutionDateSummary,
+  getTaskPhotoDisplayUrl,
   getTaskDetailActionState,
   getTaskListStatusLabel,
   getTaskStatusTone,
@@ -237,14 +238,20 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain(":circular=\"true\"");
   });
 
-  it("opens task detail photos in the shared in-app zoom preview modal", () => {
-    expect(taskDetailSource).toContain("ImagePreviewModal");
-    expect(taskDetailSource).toContain(":visible=\"imagePreviewVisible\"");
-    expect(taskDetailSource).toContain("@close=\"closeImagePreview\"");
+  it("lets admins drag task point photos to change the cover order", () => {
+    expect(adminCreateTaskSource).toContain("SortableImageGrid");
+    expect(adminCreateTaskSource).toContain('@reorder="reorderTaskPhoto"');
+    expect(adminCreateTaskSource).toContain("moveArrayItem(form.photos");
+  });
+
+  it("opens task detail photos with the native image preview", () => {
     expect(taskDetailSource).toContain("@tap=\"openTaskPhotoPreview(photo.photo_id)\"");
     expect(taskDetailSource).toContain("@tap=\"openRecordDetailPhotoPreview(photo)\"");
     expect(taskDetailSource).toContain("openImagePreview");
-    expect(taskDetailSource).not.toContain("uni.previewImage");
+    expect(taskDetailSource).toContain("uni.previewImage({");
+    expect(taskDetailSource).toContain("urls: resolvedUrls");
+    expect(taskDetailSource).not.toContain("ImagePreviewModal");
+    expect(taskDetailSource).not.toContain("imagePreviewVisible");
   });
 
   it("uploads record photos inside the record modal and renders them in the dynamic record detail", () => {
@@ -278,6 +285,10 @@ describe("summer feeding task pages", () => {
     expect(taskDetailSource).toContain('class="task-edit-button"');
     expect(taskDetailSource).toContain("goEditTask");
     expect(taskDetailSource).toContain("/pages/admin/tasks/create?mode=edit&task_id=");
+    expect(taskDetailSource).toContain("&execution_date_id=${executionDateId.value}");
+    expect(adminCreateTaskSource).toContain("updateSummerFeedingTaskExecutionStatus");
+    expect(adminCreateTaskSource).toContain("本次子任务完成状态");
+    expect(adminCreateTaskSource).toContain("execution_date_id: editExecutionDateId.value");
   });
 
   it("retries transient task detail loading failures and exposes manual retry", () => {
@@ -384,6 +395,14 @@ describe("summer feeding task pages", () => {
     expect(buildTaskDateFilterQuery("specific", "2026-07-16", baseDate)).toEqual({
       execute_date: "2026-07-16",
     });
+  });
+
+  it("formats task activity timestamps in China Standard Time", () => {
+    expect(formatChinaDateTime("2026-07-16T04:13:00Z")).toBe("2026-07-16 12:13");
+    expect(formatChinaDateTime("2026-07-16T04:13:00+00:00")).toBe("2026-07-16 12:13");
+    expect(formatChinaDateTime("2026-07-16T12:13:00+08:00")).toBe("2026-07-16 12:13");
+    expect(formatChinaDateTime("2026-07-16T04:13:00")).toBe("2026-07-16 12:13");
+    expect(taskDetailSource).toContain("formatChinaDateTime(value)");
   });
 
   it("uses three task detail bottom action states", () => {

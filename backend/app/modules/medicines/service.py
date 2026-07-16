@@ -208,6 +208,19 @@ def _create_catalog_photos(
         )
 
 
+def _active_catalog_photo_urls(db: Session, medicine_id: UUID) -> list[str]:
+    return list(
+        db.scalars(
+            select(MedicinePhoto.file_url)
+            .where(
+                MedicinePhoto.medicine_id == medicine_id,
+                MedicinePhoto.deleted_at.is_(None),
+            )
+            .order_by(MedicinePhoto.sort_order.asc(), MedicinePhoto.created_at.asc())
+        ).all()
+    )
+
+
 def _user_payload(user: User | None) -> dict | None:
     if user is None:
         return None
@@ -596,6 +609,8 @@ def _catalog_summary_payload(
         (holding.last_operation_at for holding in holdings if holding.last_operation_at),
         None,
     )
+    photo_urls = _active_catalog_photo_urls(db, catalog.id)
+    cover_image_url = photo_urls[0] if photo_urls else catalog.cover_image_url
     payload = {
         "medicine_id": str(catalog.id),
         "name": catalog.name,
@@ -608,7 +623,8 @@ def _catalog_summary_payload(
         "specification": catalog.specification,
         "unit": catalog.unit,
         "description": catalog.description,
-        "cover_image_url": catalog.cover_image_url,
+        "cover_image_url": cover_image_url,
+        "photo_urls": photo_urls or ([cover_image_url] if cover_image_url else []),
         "status": catalog.status,
         "total_current_quantity": _quantity(total_current),
         "total_in_quantity": _quantity(total_in),
@@ -1682,7 +1698,34 @@ def update_catalog(
         catalog.description = payload.description
     if payload.usage_notes is not None:
         catalog.usage_notes = payload.usage_notes
-    if payload.cover_image_url is not None:
+    if payload.photo_urls is not None:
+        requested_urls = _catalog_photo_urls(
+            cover_image_url=payload.cover_image_url,
+            photo_urls=payload.photo_urls,
+        )
+        resolved_urls = _resolve_catalog_photo_urls(
+            db,
+            photo_urls=requested_urls,
+            user=admin,
+        )
+        replacement_time = _now()
+        active_photos = db.scalars(
+            select(MedicinePhoto).where(
+                MedicinePhoto.medicine_id == catalog.id,
+                MedicinePhoto.deleted_at.is_(None),
+            )
+        ).all()
+        for photo in active_photos:
+            photo.deleted_at = replacement_time
+        catalog.cover_image_url = resolved_urls[0] if resolved_urls else None
+        _create_catalog_photos(
+            db,
+            catalog=catalog,
+            photo_urls=resolved_urls,
+            user=admin,
+            now=replacement_time,
+        )
+    elif payload.cover_image_url is not None:
         resolved_urls = _resolve_catalog_photo_urls(
             db,
             photo_urls=[payload.cover_image_url],

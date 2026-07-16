@@ -693,18 +693,18 @@ describe("map page shell behavior", () => {
     expect(indexPageSource).not.toContain("公共地点：{{ associatedPoi.name }}");
   });
 
-  it("renders selected task point thumbnails after the avatar image and opens an in-app preview modal", () => {
+  it("renders selected task point thumbnails after the avatar image and opens the native image preview", () => {
     expect(indexPageSource).toContain("summaryAvatarUrl");
     expect(indexPageSource).toContain("summaryPreviewPhotos");
     expect(indexPageSource).toContain('class="summary-avatar-image"');
     expect(indexPageSource).toContain('class="summary-photo-strip"');
     expect(indexPageSource).toContain('class="summary-photo-grid"');
     expect(indexPageSource).toContain("@tap=\"previewSummaryPhoto(photo)\"");
-    expect(indexPageSource).toContain("ImagePreviewModal");
-    expect(indexPageSource).toContain(":visible=\"imagePreviewVisible\"");
     expect(indexPageSource).toContain("openImagePreview");
     expect(indexPageSource).toContain(".slice(1, 4)");
-    expect(indexPageSource).not.toContain("uni.previewImage");
+    expect(indexPageSource).toContain("uni.previewImage({");
+    expect(indexPageSource).not.toContain("ImagePreviewModal");
+    expect(indexPageSource).not.toContain("imagePreviewVisible");
   });
 
   it("uses a taller selected point preview photo strip", () => {
@@ -1148,15 +1148,15 @@ describe("map page shell behavior", () => {
     expect(layerIndex).toBeLessThan(drawerIndex);
   });
 
-  it("hides the filter cover layer without unmounting it while the image preview is open", () => {
+  it("closes the filter menu before opening the native image preview", () => {
     const previewSource = extractFunctionSource("openImagePreview");
 
-    expect(indexPageSource).not.toContain('v-if="!imagePreviewVisible"');
-    expect(indexPageSource).toContain(
-      "'map-filter-layer--preview-open': imagePreviewVisible",
-    );
-    expect(indexPageSource).toContain(".map-filter-layer--preview-open");
     expect(previewSource).toContain("filterMenuOpen.value = false");
+    expect(previewSource).toContain("uniqueUrls.includes(current)");
+    expect(previewSource).toContain("uni.previewImage({");
+    expect(previewSource).toContain("current,");
+    expect(previewSource).toContain("urls: resolvedUrls");
+    expect(indexPageSource).not.toContain("map-filter-layer--preview-open");
   });
 
   it("keeps native marker size aligned with main branch", () => {

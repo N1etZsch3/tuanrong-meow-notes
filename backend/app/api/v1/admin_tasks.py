@@ -12,6 +12,7 @@ from app.modules.tasks import service
 from app.modules.tasks.schemas import (
     SummerFeedingTaskCreateRequest,
     SummerFeedingTaskUpdateRequest,
+    TaskExecutionStatusUpdateRequest,
     TaskStatusUpdateRequest,
 )
 
@@ -107,6 +108,28 @@ def update_task_status(
 ):
     data = service.update_task_status(db, task_id=task_id, admin=admin, payload=payload)
     return api_success(data=data, trace_id=request.state.trace_id, message="任务状态已更新")
+
+
+@router.patch(
+    "/{task_id}/execution-dates/{execution_date_id}",
+    summary="Update one summer feeding task execution status",
+)
+def update_task_execution_status(
+    task_id: UUID,
+    execution_date_id: UUID,
+    payload: TaskExecutionStatusUpdateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    admin: User = Depends(require_admin),
+):
+    data = service.update_task_execution_status(
+        db,
+        task_id=task_id,
+        execution_date_id=execution_date_id,
+        admin=admin,
+        payload=payload,
+    )
+    return api_success(data=data, trace_id=request.state.trace_id, message="子任务状态已更新")
 
 
 @router.delete("/{task_id}", summary="Soft delete a summer feeding task")

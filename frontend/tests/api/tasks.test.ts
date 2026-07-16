@@ -8,6 +8,7 @@ import {
   getTaskDetail,
   getTasks,
   publishSummerFeedingTask,
+  updateSummerFeedingTaskExecutionStatus,
   updateSummerFeedingTaskStatus,
   updateSummerFeedingTask,
 } from "@/api/tasks";
@@ -257,6 +258,38 @@ describe("tasks api", () => {
         data: {
           status: "completed",
           reason: "管理员在任务编辑页手动调整完成状态",
+        },
+      }),
+    );
+  });
+
+  it("updates one child execution status from the child edit flow", async () => {
+    const requestMock = mockSuccess({
+      task_id: "task-1",
+      task_status: "in_progress",
+      execution_date: { execution_date_id: "execution-1", status: "completed" },
+    });
+    vi.stubGlobal("uni", { request: requestMock });
+
+    await updateSummerFeedingTaskExecutionStatus(
+      "admin-token",
+      "task-1",
+      "execution-1",
+      {
+        status: "completed",
+        reason: "管理员确认本次任务完成",
+      },
+    );
+
+    expect(requestMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: "PATCH",
+        url: expect.stringContaining(
+          "/admin/tasks/task-1/execution-dates/execution-1",
+        ),
+        data: {
+          status: "completed",
+          reason: "管理员确认本次任务完成",
         },
       }),
     );

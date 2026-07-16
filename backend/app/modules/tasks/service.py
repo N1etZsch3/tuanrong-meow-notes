@@ -37,6 +37,7 @@ from app.modules.tasks.schemas import (
     SummerFeedingTaskCreateRequest,
     SummerFeedingTaskUpdateRequest,
     TaskCheckinRequest,
+    TaskExecutionStatusUpdateRequest,
     TaskPhotoRequest,
     TaskStatusUpdateRequest,
     UploadedFileRef,
@@ -48,6 +49,13 @@ TASK_STATUS_LABELS = {
     "completed": "已完成",
     "cancelled": "已取消",
     "archived": "已归档",
+}
+
+EXECUTION_STATUS_LABELS = {
+    "pending": "未完成",
+    "completed": "已完成",
+    "cancelled": "已取消",
+    "skipped": "已跳过",
 }
 
 TASK_ERROR_PARAM = 62001
@@ -1437,6 +1445,118 @@ def update_summer_feeding_task(
     _normalize_task_lifecycle(task)
     db.commit()
     return {"task_id": task.id, "updated_at": task.updated_at}
+
+
+def update_task_execution_status(
+    db: Session,
+    *,
+    task_id: UUID,
+    execution_date_id: UUID,
+    admin: User,
+    payload: TaskExecutionStatusUpdateRequest,
+) -> dict:
+    task = get_task_or_raise(db, task_id, include_private=True)
+    execution = next(
+        (
+            item
+            for item in task.execution_dates
+            if item.id == execution_date_id and item.deleted_at is None
+        ),
+        None,
+    )
+    if execution is None:
+        raise APIError(
+            code=TASK_ERROR_EXECUTION_NOT_FOUND,
+            message="执行日期不存在",
+            status_code=404,
+        )
+    if task.status in {"cancelled", "archived"} and payload.status in {
+        "pending",
+        "completed",
+    }:
+        raise APIError(
+            code=TASK_ERROR_STATUS_CONFLICT,
+            message="请先恢复父任务，再调整子任务状态",
+            status_code=409,
+        )
+
+    now = _now()
+    previous_status = execution.status
+    execution.status = payload.status
+    execution.updated_at = now
+    if payload.remark is not None:
+        execution.remark = payload.remark or None
+
+    if payload.status == "completed":
+        execution.completed_by = admin.id
+        execution.completed_at = now
+        execution.cancelled_by = None
+        execution.cancelled_at = None
+        execution.cancel_reason = None
+    elif payload.status == "pending":
+        execution.completed_by = None
+        execution.completed_at = None
+        execution.checkin_id = None
+        execution.cancelled_by = None
+        execution.cancelled_at = None
+        execution.cancel_reason = None
+    else:
+        execution.completed_by = None
+        execution.completed_at = None
+        execution.checkin_id = None
+        execution.cancelled_by = admin.id
+        execution.cancelled_at = now
+        execution.cancel_reason = payload.reason
+
+    status_label = EXECUTION_STATUS_LABELS[payload.status]
+    activity = TaskActivityLog(
+        task_id=task.id,
+        task_execution_date_id=execution.id,
+        activity_type=f"execution_{payload.status}",
+        title=f"子任务{status_label}",
+        content=(
+            payload.reason
+            or f"管理员将 {execution.execute_date.isoformat()} 的子任务调整为{status_label}"
+        ),
+        actor_id=admin.id,
+        activity_metadata={
+            "execute_date": execution.execute_date.isoformat(),
+            "previous_status": previous_status,
+            "status": payload.status,
+            "reason": payload.reason,
+        },
+        created_at=now,
+    )
+    db.add(activity)
+
+    task.updated_at = now
+    _normalize_task_lifecycle(task)
+    _sync_task_map_point_status(db, task=task, admin=admin, now=now)
+    db.add(
+        AdminOperationLog(
+            admin_id=admin.id,
+            operation_type="update_status",
+            target_type="task_execution_date",
+            target_id=execution.id,
+            summary=(
+                f"调整子任务 {execution.execute_date.isoformat()} 状态："
+                f"{EXECUTION_STATUS_LABELS.get(previous_status, previous_status)} -> {status_label}"
+            ),
+            before_data={"status": previous_status},
+            after_data={
+                "status": payload.status,
+                "reason": payload.reason,
+                "remark": execution.remark,
+            },
+        )
+    )
+    db.commit()
+    return {
+        "task_id": task.id,
+        "task_status": task.status,
+        "execution_date": _execution_payload(execution, today=_today()),
+        "activity": _activity_payload(activity),
+    }
 
 
 def update_task_status(

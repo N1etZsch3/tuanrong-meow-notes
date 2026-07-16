@@ -287,6 +287,18 @@
             </view>
           </view>
           <view class="field-group">
+            <text class="field-label">药品图片</text>
+            <SortableImageGrid
+              :images="editPhotoItems"
+              :uploading="isUploadingEditImage"
+              :show-add="editRemainingImageSlots > 0"
+              :limit="MEDICINE_IMAGE_LIMIT"
+              @add="chooseEditMedicineImage"
+              @remove="removeEditMedicineImage"
+              @reorder="reorderEditMedicineImage"
+            />
+          </view>
+          <view class="field-group">
             <text class="field-label">功能主治</text>
             <textarea
               v-model.trim="editDraft.description"
@@ -324,6 +336,7 @@
 import { onLoad } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
+import { uploadImage } from "@/api/files";
 import {
   getMedicineCategories,
   getMedicineDetail,
@@ -333,7 +346,9 @@ import {
   type MedicineDetailDto,
   type MedicineStockLogDto,
 } from "@/api/medicines";
+import SortableImageGrid from "@/components/SortableImageGrid.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
+import { moveArrayItem } from "@/utils/array-order";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
 import {
@@ -354,6 +369,7 @@ import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 type LoadState = "idle" | "loading" | "ready" | "error";
 type PickerChangeEvent = { detail: { value: string | number } };
 const EDIT_CUSTOM_CATEGORY_VALUE = "__custom__";
+const MEDICINE_IMAGE_LIMIT = 5;
 type EditDraft = {
   name: string;
   category_id: string;
@@ -363,6 +379,7 @@ type EditDraft = {
   description: string;
   usage_notes: string;
   cover_image_url: string;
+  photo_urls: string[];
 };
 
 const userStore = useUserStore();
@@ -375,6 +392,7 @@ const logFilter = ref<MedicineLogFilterValue>("all");
 const viewingLog = ref<MedicineStockLogDto | null>(null);
 const editCatalogVisible = ref(false);
 const isSubmittingEdit = ref(false);
+const isUploadingEditImage = ref(false);
 const isEditCustomCategory = ref(false);
 const editDraft = ref<EditDraft>({
   name: "",
@@ -385,6 +403,7 @@ const editDraft = ref<EditDraft>({
   description: "",
   usage_notes: "",
   cover_image_url: "",
+  photo_urls: [],
 });
 const logFilterOptions = MEDICINE_LOG_FILTER_OPTIONS;
 
@@ -415,6 +434,15 @@ const selectedEditCategoryIndex = computed(() =>
 );
 const selectedEditCategoryLabel = computed(
   () => editCategoryOptions.value[selectedEditCategoryIndex.value]?.label || "其他（默认）",
+);
+const editPhotoItems = computed(() =>
+  editDraft.value.photo_urls.map((url) => ({
+    key: url,
+    url,
+  })),
+);
+const editRemainingImageSlots = computed(() =>
+  Math.max(MEDICINE_IMAGE_LIMIT - editDraft.value.photo_urls.length, 0),
 );
 
 async function getAccessToken(): Promise<string | null> {
@@ -519,15 +547,93 @@ async function openEditCatalogModal() {
     description: medicine.value.description || "",
     usage_notes: medicine.value.usage_notes || "",
     cover_image_url: medicine.value.cover_image_url || "",
+    photo_urls: medicine.value.photo_urls?.length
+      ? [...medicine.value.photo_urls]
+      : medicine.value.cover_image_url
+        ? [medicine.value.cover_image_url]
+        : [],
   };
   isEditCustomCategory.value = false;
   editCatalogVisible.value = true;
 }
 
 function closeEditCatalogModal() {
-  if (!isSubmittingEdit.value) {
+  if (!isSubmittingEdit.value && !isUploadingEditImage.value) {
     editCatalogVisible.value = false;
   }
+}
+
+function chooseEditMedicineImage() {
+  if (editRemainingImageSlots.value <= 0) {
+    uni.showToast({ title: "最多上传 5 张图片", icon: "none" });
+    return;
+  }
+  uni.chooseImage({
+    count: editRemainingImageSlots.value,
+    sizeType: ["compressed"],
+    sourceType: ["album", "camera"],
+    success: (result) => {
+      const paths = Array.isArray(result.tempFilePaths)
+        ? result.tempFilePaths
+        : [result.tempFilePaths].filter(Boolean);
+      if (paths.length) {
+        void uploadEditMedicineImages(paths.slice(0, editRemainingImageSlots.value));
+      }
+    },
+  });
+}
+
+async function uploadEditMedicineImages(paths: string[]) {
+  const token = await getAccessToken();
+  if (!token || !paths.length) {
+    return;
+  }
+  isUploadingEditImage.value = true;
+  try {
+    const uploadedUrls: string[] = [];
+    for (const path of paths) {
+      if (editDraft.value.photo_urls.length + uploadedUrls.length >= MEDICINE_IMAGE_LIMIT) {
+        break;
+      }
+      const asset = await uploadImage(token, path, {
+        usage_type: "medicine_photo",
+        owner_type: "medicine_catalog",
+        owner_id: medicine.value?.medicine_id,
+        visibility: "internal",
+        caption: "药品图片",
+      });
+      if (asset.default_url) {
+        uploadedUrls.push(asset.default_url);
+      }
+    }
+    editDraft.value.photo_urls = [...editDraft.value.photo_urls, ...uploadedUrls].slice(
+      0,
+      MEDICINE_IMAGE_LIMIT,
+    );
+    editDraft.value.cover_image_url = editDraft.value.photo_urls[0] || "";
+    uni.showToast({ title: "图片已上传", icon: "success" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "上传失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    isUploadingEditImage.value = false;
+  }
+}
+
+function removeEditMedicineImage(index: number) {
+  editDraft.value.photo_urls = editDraft.value.photo_urls.filter(
+    (_, photoIndex) => photoIndex !== index,
+  );
+  editDraft.value.cover_image_url = editDraft.value.photo_urls[0] || "";
+}
+
+function reorderEditMedicineImage(fromIndex: number, toIndex: number) {
+  editDraft.value.photo_urls = moveArrayItem(
+    editDraft.value.photo_urls,
+    fromIndex,
+    toIndex,
+  );
+  editDraft.value.cover_image_url = editDraft.value.photo_urls[0] || "";
 }
 
 function handleEditCategoryChange(event: PickerChangeEvent) {
@@ -548,6 +654,7 @@ function buildEditPayload(): MedicineCatalogUpdatePayload {
     description: editDraft.value.description.trim() || null,
     usage_notes: editDraft.value.usage_notes.trim() || null,
     cover_image_url: editDraft.value.cover_image_url.trim() || null,
+    photo_urls: [...editDraft.value.photo_urls],
   };
   if (isEditCustomCategory.value) {
     payload.category_name = customCategory || MEDICINE_DEFAULT_CATEGORY_NAME;
@@ -562,7 +669,7 @@ function buildEditPayload(): MedicineCatalogUpdatePayload {
 }
 
 async function submitCatalogEdit() {
-  if (!medicine.value || isSubmittingEdit.value) {
+  if (!medicine.value || isSubmittingEdit.value || isUploadingEditImage.value) {
     return;
   }
   if (!editDraft.value.name.trim()) {

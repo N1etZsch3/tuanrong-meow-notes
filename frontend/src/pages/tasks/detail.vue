@@ -303,13 +303,6 @@
       </view>
     </view>
 
-    <ImagePreviewModal
-      :visible="imagePreviewVisible"
-      :images="imagePreviewUrls"
-      :current-index="imagePreviewIndex"
-      @change="setImagePreviewIndex"
-      @close="closeImagePreview"
-    />
   </view>
 </template>
 
@@ -329,12 +322,12 @@ import {
   type TaskExecutionGroupDto,
   type UploadedFileRef,
 } from "@/api/tasks";
-import ImagePreviewModal from "@/components/ImagePreviewModal.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
 import {
   buildUploadedTaskPhoto,
+  formatChinaDateTime,
   formatTaskDate,
   getExecutionDisplayLabel,
   getExecutionDisplayTone,
@@ -359,9 +352,6 @@ const isUploading = ref(false);
 const isSubmitting = ref(false);
 const pendingCheckinPhotos = ref<UploadedFileRef[]>([]);
 const failedHeroPhotoIds = ref<string[]>([]);
-const imagePreviewVisible = ref(false);
-const imagePreviewUrls = ref<string[]>([]);
-const imagePreviewIndex = ref(0);
 const recordFormVisible = ref(false);
 const recordRemark = ref("");
 const viewingRecord = ref<TaskCheckinRecordDto | null>(null);
@@ -492,7 +482,7 @@ async function getAccessToken(): Promise<string | null> {
 }
 
 function formatActivityTime(value: string): string {
-  return value ? value.replace("T", " ").slice(0, 16) : "";
+  return formatChinaDateTime(value);
 }
 
 function markHeroPhotoFailed(photoId: string) {
@@ -506,19 +496,13 @@ function openImagePreview(urls: string[], current: string) {
     return;
   }
   const uniqueUrls = Array.from(new Set(urls.filter((url) => url)));
-  const resolvedUrls = uniqueUrls.length ? uniqueUrls : [current];
-  const currentIndex = Math.max(0, resolvedUrls.indexOf(current));
-  imagePreviewUrls.value = resolvedUrls;
-  imagePreviewIndex.value = currentIndex;
-  imagePreviewVisible.value = true;
-}
-
-function closeImagePreview() {
-  imagePreviewVisible.value = false;
-}
-
-function setImagePreviewIndex(index: number) {
-  imagePreviewIndex.value = index;
+  const resolvedUrls = uniqueUrls.includes(current)
+    ? uniqueUrls
+    : [current, ...uniqueUrls];
+  uni.previewImage({
+    current,
+    urls: resolvedUrls,
+  });
 }
 
 function openTaskPhotoPreview(photoId: string) {
@@ -747,8 +731,11 @@ function goEditTask() {
   if (!task.value) {
     return;
   }
+  const executionQuery = executionDateId.value
+    ? `&execution_date_id=${executionDateId.value}`
+    : "";
   uni.navigateTo({
-    url: `/pages/admin/tasks/create?mode=edit&task_id=${task.value.task_id}`,
+    url: `/pages/admin/tasks/create?mode=edit&task_id=${task.value.task_id}${executionQuery}`,
   });
 }
 

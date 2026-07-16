@@ -2,8 +2,8 @@
     "name" : "猫协地图",
     "appid" : "wx9db9a2416527af4b",
     "description" : "校园猫协地图任务系统微信小程序",
-    "versionName" : "1.1.2",
-    "versionCode" : "112",
+    "versionName" : "1.1.3",
+    "versionCode" : "113",
     "transformPx" : false,
     /* 5+App特有相关 */
     "app-plus" : {

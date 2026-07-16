@@ -403,6 +403,62 @@ def test_cancelled_task_is_filterable_but_hidden_from_map_markers(
     assert restored_marker["business_id"] == data["task_id"]
 
 
+def test_admin_updates_only_the_selected_child_execution_status(
+    api_client,
+    db_session,
+    monkeypatch,
+):
+    freeze_task_clock(monkeypatch, date(2026, 7, 3))
+    admin = create_user(db_session, role="admin", nickname="管理员")
+    campus = seed_campus(db_session)
+    data = publish_task(api_client, admin, campus)
+
+    detail_response = api_client.get(
+        f"/api/v1/admin/tasks/{data['task_id']}?current_date=2026-07-03",
+        headers=auth_headers(admin),
+    )
+    assert detail_response.status_code == 200
+    execution_dates = detail_response.json()["data"]["execution_dates"]
+    selected = next(item for item in execution_dates if item["execute_date"] == "2026-07-09")
+    untouched = next(item for item in execution_dates if item["execute_date"] == "2026-07-16")
+
+    update_response = api_client.patch(
+        f"/api/v1/admin/tasks/{data['task_id']}/execution-dates/"
+        f"{selected['execution_date_id']}",
+        headers=auth_headers(admin),
+        json={"status": "completed", "reason": "管理员人工确认完成"},
+    )
+
+    assert update_response.status_code == 200
+    updated = update_response.json()["data"]
+    assert updated["task_status"] == "in_progress"
+    assert updated["execution_date"]["execution_date_id"] == selected["execution_date_id"]
+    assert updated["execution_date"]["status"] == "completed"
+    assert updated["activity"]["task_execution_date_id"] == selected["execution_date_id"]
+
+    refreshed_response = api_client.get(
+        f"/api/v1/admin/tasks/{data['task_id']}?current_date=2026-07-03",
+        headers=auth_headers(admin),
+    )
+    refreshed_dates = refreshed_response.json()["data"]["execution_dates"]
+    statuses = {item["execution_date_id"]: item["status"] for item in refreshed_dates}
+    assert statuses[selected["execution_date_id"]] == "completed"
+    assert statuses[untouched["execution_date_id"]] == "pending"
+
+    reopen_response = api_client.patch(
+        f"/api/v1/admin/tasks/{data['task_id']}/execution-dates/"
+        f"{selected['execution_date_id']}",
+        headers=auth_headers(admin),
+        json={"status": "pending", "reason": "撤销误操作"},
+    )
+    assert reopen_response.status_code == 200
+    reopened = reopen_response.json()["data"]["execution_date"]
+    assert reopened["status"] == "pending"
+    assert reopened["completed_by"] is None
+    assert reopened["completed_at"] is None
+    assert reopened["checkin_id"] is None
+
+
 def test_cancelled_task_stays_hidden_from_map_even_if_point_is_public(
     api_client,
     db_session,

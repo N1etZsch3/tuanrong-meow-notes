@@ -136,38 +136,22 @@
             <text v-if="activeHelp === 'photo'" class="help-bubble">
               最多上传 5 张，第一张将作为药品封面。
             </text>
-            <view class="medicine-photo-row">
-              <view
-                v-for="photo in draft.photo_urls"
-                :key="photo"
-                class="medicine-photo-card"
-              >
-                <image class="medicine-photo" :src="photo" mode="aspectFill" />
-                <button
-                  v-if="!isCatalogLinked"
-                  class="photo-remove"
-                  hover-class="button-hover"
-                  @tap="removeMedicineImage(photo)"
-                >
-                  ×
-                </button>
-              </view>
-              <button
-                v-if="!isCatalogLinked && remainingImageSlots > 0"
-                class="photo-upload"
-                :loading="isUploadingImage"
-                hover-class="button-hover"
-                @tap="chooseMedicineImage"
-              >
-                +
-              </button>
-              <text v-if="!isCatalogLinked" class="hint-line">
-                已上传 {{ draft.photo_urls.length }}/{{ MEDICINE_IMAGE_LIMIT }} 张
-              </text>
-              <text v-if="isCatalogLinked" class="hint-line">
-                图片来自已关联的药品主档，取消关联后可重新上传。
-              </text>
-            </view>
+            <SortableImageGrid
+              :images="medicinePhotoItems"
+              :uploading="isUploadingImage"
+              :disabled="isCatalogLinked"
+              :show-add="!isCatalogLinked && remainingImageSlots > 0"
+              :limit="MEDICINE_IMAGE_LIMIT"
+              @add="chooseMedicineImage"
+              @remove="removeMedicineImageAt"
+              @reorder="reorderMedicineImage"
+            />
+            <text v-if="!isCatalogLinked" class="hint-line">
+              已上传 {{ draft.photo_urls.length }}/{{ MEDICINE_IMAGE_LIMIT }} 张
+            </text>
+            <text v-if="isCatalogLinked" class="hint-line">
+              图片来自已关联的药品主档，取消关联后可重新上传。
+            </text>
           </view>
           <view class="field-group">
             <text class="field-label">功能主治</text>
@@ -311,8 +295,10 @@ import {
   type MedicineCategoryDto,
   type MedicineSearchItemDto,
 } from "@/api/medicines";
+import SortableImageGrid from "@/components/SortableImageGrid.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import { moveArrayItem } from "@/utils/array-order";
 import {
   applySelectedMedicineToDraft,
   buildMedicineCreatePayload,
@@ -352,6 +338,12 @@ const isCatalogLinked = computed(() => isMedicineCatalogLinked(draft.value));
 const canAssignHolder = computed(() => userStore.isAdmin);
 const remainingImageSlots = computed(() =>
   Math.max(MEDICINE_IMAGE_LIMIT - draft.value.photo_urls.length, 0),
+);
+const medicinePhotoItems = computed(() =>
+  draft.value.photo_urls.map((url) => ({
+    key: url,
+    url,
+  })),
 );
 const currentUserLabel = computed(() => {
   const user = userStore.currentUser;
@@ -663,6 +655,18 @@ function removeMedicineImage(photo: string) {
     draft.value.photo_urls = draft.value.photo_urls.filter((item) => item !== photo);
     draft.value.cover_image_url = draft.value.photo_urls[0] || "";
   }
+}
+
+function removeMedicineImageAt(index: number) {
+  const photo = draft.value.photo_urls[index];
+  if (photo) {
+    removeMedicineImage(photo);
+  }
+}
+
+function reorderMedicineImage(fromIndex: number, toIndex: number) {
+  draft.value.photo_urls = moveArrayItem(draft.value.photo_urls, fromIndex, toIndex);
+  draft.value.cover_image_url = draft.value.photo_urls[0] || "";
 }
 
 async function submitMedicine() {

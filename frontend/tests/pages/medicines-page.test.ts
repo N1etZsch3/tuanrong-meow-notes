@@ -96,7 +96,8 @@ describe("medicine management pages", () => {
     expect(medicineCreateSource).toContain("count: remainingImageSlots.value");
     expect(medicineCreateSource).toContain('usage_type: "medicine_photo"');
     expect(medicineCreateSource).not.toContain('usage_type: "medicine_cover"');
-    expect(medicineCreateSource).toContain('v-for="photo in draft.photo_urls"');
+    expect(medicineCreateSource).toContain("SortableImageGrid");
+    expect(medicineCreateSource).toContain('@reorder="reorderMedicineImage"');
     expect(medicineCreateSource).toContain("canAssignHolder");
     expect(medicineCreateSource).toContain("holderKeyword");
     expect(medicineCreateSource).toContain('class="holder-suggestion-list"');
@@ -119,6 +120,10 @@ describe("medicine management pages", () => {
     expect(medicineDetailSource).toContain("recent_logs");
     expect(medicineDetailSource).toContain("can_edit_catalog");
     expect(medicineDetailSource).toContain("openEditCatalogModal");
+    expect(medicineDetailSource).toContain("SortableImageGrid");
+    expect(medicineDetailSource).toContain("chooseEditMedicineImage");
+    expect(medicineDetailSource).toContain("reorderEditMedicineImage");
+    expect(medicineDetailSource).toContain("photo_urls");
     expect(medicineDetailSource).toContain('class="holder-inventory-card"');
     expect(medicineDetailSource).toContain('class="medicine-info-panel"');
     expect(medicineDetailSource).toContain("功能主治");

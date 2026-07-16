@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import landmarkDetailSource from "../../src/pages/landmarks/detail.vue?raw";
 import landmarkIndexSource from "../../src/pages/landmarks/index.vue?raw";
 import pagesJson from "../../src/pages.json?raw";
 
@@ -24,5 +25,12 @@ describe("landmark list page", () => {
     expect(landmarkIndexSource).toContain("/pages/admin/landmarks/create");
     expect(landmarkIndexSource).not.toContain("<AppTabBar");
     expect(landmarkIndexSource).not.toContain('class="filter-card"');
+  });
+
+  it("opens landmark photos with the native image preview", () => {
+    expect(landmarkDetailSource).toContain("uni.previewImage({");
+    expect(landmarkDetailSource).toContain("urls: resolvedUrls");
+    expect(landmarkDetailSource).not.toContain("ImagePreviewModal");
+    expect(landmarkDetailSource).not.toContain("imagePreviewVisible");
   });
 });

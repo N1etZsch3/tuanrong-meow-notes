@@ -263,6 +263,19 @@ export interface TaskStatusUpdateResponse {
   updated_at: string;
 }
 
+export interface TaskExecutionStatusUpdatePayload {
+  status: "pending" | "completed" | "cancelled" | "skipped";
+  reason?: string | null;
+  remark?: string | null;
+}
+
+export interface TaskExecutionStatusUpdateResponse {
+  task_id: string;
+  task_status: string;
+  execution_date: TaskExecutionDto;
+  activity: TaskActivityDto;
+}
+
 export interface TaskDeleteResponse {
   task_id: string;
   deleted_at: string;
@@ -352,6 +365,23 @@ export function updateSummerFeedingTaskStatus(
     TaskStatusUpdatePayload & Record<string, unknown>
   >({
     url: API_ENDPOINTS.admin.taskStatus(taskId),
+    method: "PATCH",
+    data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function updateSummerFeedingTaskExecutionStatus(
+  accessToken: string,
+  taskId: string,
+  executionDateId: string,
+  payload: TaskExecutionStatusUpdatePayload,
+): Promise<TaskExecutionStatusUpdateResponse> {
+  return request<
+    TaskExecutionStatusUpdateResponse,
+    TaskExecutionStatusUpdatePayload & Record<string, unknown>
+  >({
+    url: API_ENDPOINTS.admin.taskExecutionDate(taskId, executionDateId),
     method: "PATCH",
     data: { ...payload },
     token: accessToken,

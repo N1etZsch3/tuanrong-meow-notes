@@ -145,26 +145,13 @@
             <text class="step-badge">4</text>
             <text class="section-title">物资点照片</text>
           </view>
-          <view class="photo-grid">
-            <view
-              v-for="photo in form.photos"
-              :key="photo.file_id || photo.file_url"
-              class="photo-item"
-            >
-              <image class="photo-thumb" :src="photo.thumbnail_url || photo.file_url" mode="aspectFill" />
-              <button class="photo-remove" hover-class="button-hover" @tap="removePhoto(photo)">
-                ×
-              </button>
-            </view>
-            <button
-              class="photo-upload"
-              :loading="isUploading"
-              hover-class="button-hover"
-              @tap="choosePhoto"
-            >
-              +
-            </button>
-          </view>
+          <SortableImageGrid
+            :images="supplyPhotoItems"
+            :uploading="isUploading"
+            @add="choosePhoto"
+            @remove="removePhotoAt"
+            @reorder="reorderPhoto"
+          />
         </view>
 
         <view class="form-section">
@@ -221,8 +208,10 @@ import {
   type SupplyPointDetailDto,
   type UploadedFileRef,
 } from "@/api/supplies";
+import SortableImageGrid from "@/components/SortableImageGrid.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import { moveArrayItem } from "@/utils/array-order";
 import {
   HBNU_DEFAULT_SUPPLY_LOCATION,
   SUPPLY_LOCATION_STORAGE_KEY,
@@ -273,6 +262,12 @@ const pageSubtitle = computed(() =>
 );
 const submitButtonText = computed(() => (isEditMode.value ? "保存修改" : "发布物资点"));
 const selectedLocation = computed(() => form.location);
+const supplyPhotoItems = computed(() =>
+  form.photos.map((photo) => ({
+    key: photo.file_id || photo.file_url,
+    url: photo.thumbnail_url || photo.file_url,
+  })),
+);
 
 function getSupplyItemIcon(iconKey?: string | null): string {
   return iconKey ? supplyItemIcons[iconKey] || "" : "";
@@ -320,6 +315,17 @@ function removeItem(localId: string) {
 
 function removePhoto(photo: UploadedFileRef) {
   form.photos = form.photos.filter((item) => item !== photo);
+}
+
+function removePhotoAt(index: number) {
+  const photo = form.photos[index];
+  if (photo) {
+    removePhoto(photo);
+  }
+}
+
+function reorderPhoto(fromIndex: number, toIndex: number) {
+  form.photos = moveArrayItem(form.photos, fromIndex, toIndex);
 }
 
 function choosePhoto() {

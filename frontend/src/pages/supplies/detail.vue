@@ -330,13 +330,6 @@
       </view>
     </view>
 
-    <ImagePreviewModal
-      :visible="imagePreviewVisible"
-      :images="imagePreviewUrls"
-      :current-index="imagePreviewIndex"
-      @change="setImagePreviewIndex"
-      @close="closeImagePreview"
-    />
   </view>
 </template>
 
@@ -354,7 +347,6 @@ import {
   type SupplyRecordDto,
   type UploadedFileRef,
 } from "@/api/supplies";
-import ImagePreviewModal from "@/components/ImagePreviewModal.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
@@ -396,9 +388,6 @@ const recordRemark = ref("");
 const isUploadingRecordPhoto = ref(false);
 const isSubmittingRecord = ref(false);
 const viewingRecord = ref<SupplyRecordDto | null>(null);
-const imagePreviewVisible = ref(false);
-const imagePreviewUrls = ref<string[]>([]);
-const imagePreviewIndex = ref(0);
 const recordFilterOptions: Array<{ value: SupplyRecordFilterValue; label: string }> = [
   { value: "all", label: "全部" },
   { value: "month", label: "本月" },
@@ -696,18 +685,13 @@ function openImagePreview(urls: string[], current: string) {
     return;
   }
   const uniqueUrls = Array.from(new Set(urls.filter((url) => url)));
-  const resolvedUrls = uniqueUrls.length ? uniqueUrls : [current];
-  imagePreviewUrls.value = resolvedUrls;
-  imagePreviewIndex.value = Math.max(0, resolvedUrls.indexOf(current));
-  imagePreviewVisible.value = true;
-}
-
-function closeImagePreview() {
-  imagePreviewVisible.value = false;
-}
-
-function setImagePreviewIndex(index: number) {
-  imagePreviewIndex.value = index;
+  const resolvedUrls = uniqueUrls.includes(current)
+    ? uniqueUrls
+    : [current, ...uniqueUrls];
+  uni.previewImage({
+    current,
+    urls: resolvedUrls,
+  });
 }
 
 function goNavigateToSupplyPoint() {

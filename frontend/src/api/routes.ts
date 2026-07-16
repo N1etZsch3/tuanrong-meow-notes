@@ -78,6 +78,10 @@ export const API_ENDPOINTS = {
     task: (taskId: ApiPathParam) => `/admin/tasks/${encodePathParam(taskId)}`,
     taskStatus: (taskId: ApiPathParam) =>
       `/admin/tasks/${encodePathParam(taskId)}/status`,
+    taskExecutionDate: (taskId: ApiPathParam, executionDateId: ApiPathParam) =>
+      `/admin/tasks/${encodePathParam(taskId)}/execution-dates/${encodePathParam(
+        executionDateId,
+      )}`,
     mapPoint: (pointId: ApiPathParam) =>
       `/admin/map/points/${encodePathParam(pointId)}`,
     mapPointLocation: (pointId: ApiPathParam) =>

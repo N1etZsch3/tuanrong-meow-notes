@@ -1,0 +1,281 @@
+/* Public (guest) zone — "协会手记" visual system.
+ *
+ * The guest zone reads as the association's open field notebook: content sits
+ * directly on the watercolor campus-map paper (背景.jpg), separated by stitched
+ * dashed rules instead of card containers. Photos are treated as taped-in
+ * prints (white border, slight rotation, washi-tape strip on featured ones).
+ * Brand ink green #267B2F is kept as the single theme color; amber #C98F2B is
+ * reserved for washi tape and the "watching" status only.
+ *
+ * Engineering constraints baked in:
+ * - Every page: root height 100vh flex column; content scrolls inside a
+ *   scroll-view with flex:1/min-height:0 (page-level scroll is globally
+ *   disabled in App.vue).
+ * - Top bar offsets the mini-program status bar via --status-bar-height and
+ *   keeps its right side empty (WeChat capsule territory).
+ * - <button> defaults are reset (margin + ::after border).
+ * - Flex only; no CSS grid (mp WXSS compatibility).
+ */
+
+.pub-page {
+  position: relative;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f6faf0;
+  font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
+  color: #31402b;
+}
+
+.pub-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0;
+}
+
+/* Paper wash: calms the watercolor map (grid + paw prints + pins) so text and
+ * status marks always sit on quiet paper. The background still reads at the
+ * margins, but decoration never fights foreground content for legibility. */
+.pub-bg-wash {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(250, 252, 244, 0.62) 0%,
+    rgba(250, 252, 244, 0.78) 30%,
+    rgba(250, 252, 244, 0.82) 100%
+  );
+}
+
+/* ---- top bar: status-bar offset + capsule-safe (right side stays empty) ---- */
+
+.pub-topbar {
+  position: relative;
+  z-index: 2;
+  box-sizing: border-box;
+  padding: calc(var(--status-bar-height, 0px) + 16rpx) 40rpx 12rpx;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.pub-back {
+  width: 60rpx;
+  height: 60rpx;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border: 0;
+  background: transparent;
+  color: #267b2f;
+  font-size: 46rpx;
+  line-height: 1;
+}
+
+.pub-back::after {
+  border: 0;
+}
+
+.pub-topbar-title {
+  font-size: 34rpx;
+  font-weight: 800;
+  letter-spacing: 4rpx;
+  color: #31402b;
+}
+
+/* ---- scroll body ---- */
+
+.pub-body {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  min-height: 0;
+}
+
+.pub-content {
+  box-sizing: border-box;
+  padding: 8rpx 40rpx 0;
+}
+
+.pub-safe-bottom {
+  height: calc(env(safe-area-inset-bottom) + 48rpx);
+}
+
+/* ---- notebook structure devices ---- */
+
+/* stitched section divider */
+.pub-stitch {
+  border: 0;
+  border-top: 2rpx dashed rgba(38, 123, 47, 0.34);
+  margin: 44rpx 0;
+}
+
+/* TOC-style section header: 标题 …… 动作 */
+.pub-toc {
+  display: flex;
+  align-items: baseline;
+  gap: 18rpx;
+  margin-bottom: 28rpx;
+}
+
+.pub-toc-title {
+  flex: 0 0 auto;
+  font-size: 33rpx;
+  font-weight: 800;
+  letter-spacing: 3rpx;
+  color: #31402b;
+}
+
+.pub-toc-leader {
+  flex: 1;
+  min-width: 20rpx;
+  border-bottom: 3rpx dotted rgba(49, 64, 43, 0.32);
+  transform: translateY(-8rpx);
+}
+
+.pub-toc-action {
+  flex: 0 0 auto;
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #267b2f;
+}
+
+/* small eyebrow label, e.g. 档案 No.01 / 趣事 · 日期 */
+.pub-eyebrow {
+  font-size: 21rpx;
+  letter-spacing: 2rpx;
+  color: #6d7862;
+}
+
+/* taped-in photo prints */
+.pub-print {
+  position: relative;
+  box-sizing: border-box;
+  background: #fbfcf4;
+  border: 2rpx solid rgba(49, 64, 43, 0.1);
+  border-radius: 4rpx;
+  padding: 10rpx;
+  box-shadow: 0 6rpx 16rpx rgba(49, 64, 43, 0.12);
+}
+
+.pub-print-img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  background: #edf2e4;
+}
+
+.pub-tape {
+  position: absolute;
+  top: -16rpx;
+  left: 50%;
+  width: 132rpx;
+  height: 36rpx;
+  transform: translateX(-50%) rotate(-2deg);
+  background: rgba(222, 197, 138, 0.78);
+  border-left: 2rpx solid rgba(176, 148, 84, 0.5);
+  border-right: 2rpx solid rgba(176, 148, 84, 0.5);
+  box-shadow: 0 2rpx 4rpx rgba(49, 64, 43, 0.08);
+  z-index: 2;
+}
+
+/* status dot + text (replaces pill badges) */
+.pub-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8rpx;
+  font-size: 23rpx;
+  color: #78846b;
+}
+
+.pub-status-dot {
+  width: 10rpx;
+  height: 10rpx;
+  border-radius: 50%;
+  background: #267b2f;
+}
+
+.pub-status-dot.is-watching {
+  background: #c98f2b;
+}
+
+.pub-status-dot.is-adopted {
+  background: #9aa394;
+}
+
+/* tag words: 亲人 · 贪吃 · 社牛 */
+.pub-tags {
+  font-size: 23rpx;
+  letter-spacing: 1rpx;
+  color: #5f8a53;
+}
+
+/* ---- buttons (stamp-like rectangles) ---- */
+
+.pub-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 44rpx;
+  height: 80rpx;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 8rpx;
+  background: #267b2f;
+  color: #fbfcf4;
+  font-size: 28rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+}
+
+.pub-btn::after {
+  border: 0;
+}
+
+.pub-btn-ghost {
+  background: rgba(251, 252, 244, 0.7);
+  border: 2rpx solid rgba(38, 123, 47, 0.55);
+  color: #267b2f;
+}
+
+/* ---- shared states ---- */
+
+.pub-state {
+  padding: 100rpx 40rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20rpx;
+  color: #78846b;
+  font-size: 26rpx;
+  letter-spacing: 1rpx;
+}
+
+.pub-state-emoji {
+  font-size: 60rpx;
+}
+
+.pub-state .pub-btn-ghost {
+  height: 68rpx;
+  padding: 0 40rpx;
+  font-size: 25rpx;
+}
+
+/* ---- footer ---- */
+
+.pub-footer {
+  padding: 36rpx 0 8rpx;
+  text-align: center;
+  color: #7d8871;
+  font-size: 22rpx;
+  letter-spacing: 2rpx;
+}

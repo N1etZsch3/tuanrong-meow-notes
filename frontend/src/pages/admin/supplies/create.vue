@@ -224,6 +224,7 @@ import {
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import { returnToListAfterDelete } from "@/utils/delete-navigation";
+import { completeCreateOrEditNavigation } from "@/utils/save-navigation";
 import {
   HBNU_DEFAULT_SUPPLY_LOCATION,
   SUPPLY_LOCATION_STORAGE_KEY,
@@ -405,7 +406,10 @@ async function submitSupplyPoint() {
       : response.supply_point_id;
     uni.removeStorageSync(SUPPLY_LOCATION_STORAGE_KEY);
     uni.showToast({ title: isEditMode.value ? "物资点已保存" : "物资点已发布", icon: "success" });
-    uni.redirectTo({ url: `/pages/supplies/detail?supply_point_id=${supplyPointId}` });
+    completeCreateOrEditNavigation({
+      isEditMode: isEditMode.value,
+      detailUrl: `/pages/supplies/detail?supply_point_id=${supplyPointId}`,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "提交失败";
     uni.showToast({ title: message, icon: "none" });

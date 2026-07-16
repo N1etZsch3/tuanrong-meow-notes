@@ -18,6 +18,7 @@ from app.api.v1.medicine_categories import router as medicine_categories_router
 from app.api.v1.medicine_holdings import router as medicine_holdings_router
 from app.api.v1.medicines import router as medicines_router
 from app.api.v1.profile import router as profile_router
+from app.api.v1.public import router as public_router
 from app.api.v1.supplies import router as supplies_router
 from app.api.v1.tasks import router as tasks_router
 from app.api.v1.wechat_content_security import router as wechat_content_security_router
@@ -41,6 +42,7 @@ api_router.include_router(medicine_categories_router, prefix="/medicine-categori
 api_router.include_router(medicine_holdings_router, prefix="/medicine-holdings")
 api_router.include_router(medicines_router, prefix="/medicines")
 api_router.include_router(profile_router, prefix="/profile")
+api_router.include_router(public_router, prefix="/public")
 api_router.include_router(supplies_router, prefix="/supply-points")
 api_router.include_router(tasks_router, prefix="/tasks")
 api_router.include_router(wechat_content_security_router, prefix="/wechat/content-security")

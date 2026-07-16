@@ -166,6 +166,14 @@ export const API_ENDPOINTS = {
     me: "/profile/me",
     complete: "/profile/me/complete",
   },
+  public: {
+    stats: "/public/stats",
+    site: "/public/site",
+    cats: "/public/cats",
+    cat: (catId: ApiPathParam) => `/public/cats/${encodePathParam(catId)}`,
+    posts: "/public/posts",
+    post: (postId: ApiPathParam) => `/public/posts/${encodePathParam(postId)}`,
+  },
   tasks: {
     list: "/tasks",
     detail: (taskId: ApiPathParam) => `/tasks/${encodePathParam(taskId)}`,

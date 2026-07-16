@@ -130,7 +130,7 @@
 </template>
 
 <script setup lang="ts">
-import { onLoad } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
 import { getLandmarkDetail, type LandmarkDetailDto } from "@/api/landmarks";
@@ -266,6 +266,9 @@ function goBack() {
 onLoad((query) => {
   landmarkId.value =
     typeof query?.landmark_id === "string" ? query.landmark_id : "";
+});
+
+onShow(() => {
   void loadLandmarkDetail();
 });
 </script>

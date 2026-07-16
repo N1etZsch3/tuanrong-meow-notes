@@ -314,7 +314,7 @@
 </template>
 
 <script setup lang="ts">
-import { onLoad } from "@dcloudio/uni-app";
+import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
 import { deleteImageAsset, uploadImage } from "@/api/files";
@@ -766,6 +766,9 @@ onLoad((query) => {
   taskId.value = typeof query?.task_id === "string" ? query.task_id : "";
   executionDateId.value =
     typeof query?.execution_date_id === "string" ? query.execution_date_id : "";
+});
+
+onShow(() => {
   void loadTaskDetail({ retry: true });
 });
 </script>

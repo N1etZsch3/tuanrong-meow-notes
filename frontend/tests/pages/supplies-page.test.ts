@@ -75,6 +75,16 @@ describe("supply point detail page", () => {
     expect(deleteSource).not.toContain('uni.switchTab({ url: "/pages/index/index" })');
   });
 
+  it("returns to and refreshes the existing supply detail after saving an edit", () => {
+    const submitSource = extractFunctionSource(adminSupplyCreateSource, "submitSupplyPoint");
+
+    expect(submitSource).toContain("completeCreateOrEditNavigation");
+    expect(submitSource).toContain("isEditMode: isEditMode.value");
+    expect(submitSource).not.toContain("uni.redirectTo");
+    expect(supplyDetailSource).toContain('import { onLoad, onShow } from "@dcloudio/uni-app"');
+    expect(supplyDetailSource).toMatch(/onShow\(\(\) => \{\s*void loadSupplyDetail/);
+  });
+
   it("starts and resets supply point selection at the current user location", () => {
     const resetSource = extractFunctionSource(adminSupplyLocationSource, "resetLocation");
 

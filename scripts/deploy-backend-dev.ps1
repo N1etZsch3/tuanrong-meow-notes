@@ -220,8 +220,25 @@ if ($cosEnvPrefix -ne "dev") {
     throw "Development EnvFile must use CATMAP_TENCENT_COS_ENV_PREFIX=dev."
 }
 
-# Development keeps content security in the development/default mode. Production-only
-# enforced callback validation remains solely in scripts/deploy-backend.ps1.
+$insecureDevelopmentSecrets = @(
+    "dev-only-change-me-with-at-least-32-bytes",
+    "dev-captcha-secret-change-me",
+    "replace-with-at-least-32-random-bytes",
+    "replace-with-another-32-byte-secret"
+)
+foreach ($secretName in @("CATMAP_JWT_SECRET_KEY", "CATMAP_CAPTCHA_SECRET_KEY")) {
+    $secretValue = Get-RequiredEnvValue -Content $envContent -Name $secretName
+    if ($secretValue.Length -lt 32 -or $insecureDevelopmentSecrets -contains $secretValue) {
+        throw "Development EnvFile must use a dedicated random $secretName value."
+    }
+}
+
+$contentSecurityMode = Get-RequiredEnvValue `
+    -Content $envContent `
+    -Name "CATMAP_WECHAT_CONTENT_SECURITY_MODE"
+if ($contentSecurityMode -ne "off") {
+    throw "Development EnvFile must use CATMAP_WECHAT_CONTENT_SECURITY_MODE=off."
+}
 
 if (-not $SkipLocalChecks) {
     $previousContentSecurityMode = [Environment]::GetEnvironmentVariable(
@@ -314,7 +331,7 @@ if [ "$(grep -Ec '^CATMAP_DATABASE_URL=' "$ENV_UPLOAD")" -ne 1 ]; then
     exit 1
 fi
 
-if ! grep -Eq '^CATMAP_DATABASE_URL=.*\/catmap_dev([?[:space:]]|$)' "$ENV_UPLOAD"; then
+if ! grep -Eq '^CATMAP_DATABASE_URL=.*/catmap_dev([?[:space:]]|$)' "$ENV_UPLOAD"; then
     echo 'Development environment file must target catmap_dev.' >&2
     exit 1
 fi
@@ -331,6 +348,30 @@ fi
 
 if ! grep -Eq '^CATMAP_TENCENT_COS_ENV_PREFIX=dev[[:space:]]*$' "$ENV_UPLOAD"; then
     echo 'Development object storage prefix must be dev.' >&2
+    exit 1
+fi
+
+for secret_name in CATMAP_JWT_SECRET_KEY CATMAP_CAPTCHA_SECRET_KEY; do
+    if [ "$(grep -Ec "^${secret_name}=" "$ENV_UPLOAD")" -ne 1 ]; then
+        echo "Development ${secret_name} must be defined exactly once." >&2
+        exit 1
+    fi
+    secret_value="$(sed -n "s/^${secret_name}=//p" "$ENV_UPLOAD" | tr -d '\r')"
+    if [ "${#secret_value}" -lt 32 ] || \
+       [ "$secret_value" = 'dev-only-change-me-with-at-least-32-bytes' ] || \
+       [ "$secret_value" = 'dev-captcha-secret-change-me' ] || \
+       [ "$secret_value" = 'replace-with-at-least-32-random-bytes' ] || \
+       [ "$secret_value" = 'replace-with-another-32-byte-secret' ]; then
+        echo "Development ${secret_name} must use a dedicated random value." >&2
+        unset secret_value
+        exit 1
+    fi
+    unset secret_value
+done
+
+if [ "$(grep -Ec '^CATMAP_WECHAT_CONTENT_SECURITY_MODE=' "$ENV_UPLOAD")" -ne 1 ] || \
+   ! grep -Eq '^CATMAP_WECHAT_CONTENT_SECURITY_MODE=off[[:space:]]*$' "$ENV_UPLOAD"; then
+    echo 'Development content security mode must be explicitly off.' >&2
     exit 1
 fi
 

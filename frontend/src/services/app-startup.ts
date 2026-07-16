@@ -5,11 +5,13 @@ import { requestWechatLoginCode } from "@/services/wechat-auth";
 
 export { LOGIN_ROUTE };
 export const HOME_ROUTE = "/pages/index/index";
+export const PUBLIC_HOME_ROUTE = "/pages/public/home";
 export const CHANGE_PASSWORD_ROUTE = "/pages/auth/change-password";
 export const PROFILE_SETUP_ROUTE = "/pages/profile/complete";
 
 export type StartupRoute =
   | typeof LOGIN_ROUTE
+  | typeof PUBLIC_HOME_ROUTE
   | typeof CHANGE_PASSWORD_ROUTE
   | typeof PROFILE_SETUP_ROUTE
   | typeof HOME_ROUTE;
@@ -27,13 +29,14 @@ export type StartupResourceLoader = (
 
 export type WechatLoginCodeProvider = () => Promise<string | null>;
 
-const WECHAT_SESSION_REJECTED_CODES = new Set([40104, 40303, 40304, 40903]);
+// An unbound WeChat identity means the visitor is a guest -> show the public zone.
+const WECHAT_UNBOUND_CODE = 40104;
+// Anomalous member states (disabled / mismatched / already bound) are not guests;
+// route them to the member login page and its "contact admin" guidance.
+const WECHAT_SESSION_REJECTED_CODES = new Set([40303, 40304, 40903]);
 
-function shouldClearSessionAfterWechatLogin(error: unknown): boolean {
-  return (
-    error instanceof ApiBusinessError &&
-    WECHAT_SESSION_REJECTED_CODES.has(error.code)
-  );
+function wechatErrorCode(error: unknown): number | null {
+  return error instanceof ApiBusinessError ? error.code : null;
 }
 
 async function loadMapResources(): Promise<void> {
@@ -68,24 +71,40 @@ export async function resolveStartupRoute(
     try {
       await session.loginWithWechat(wechatCode);
     } catch (error) {
-      if (shouldClearSessionAfterWechatLogin(error)) {
+      const code = wechatErrorCode(error);
+
+      // Unbound WeChat: a guest (or a member whose binding was cleared). Drop any
+      // stale local session and show the public zone; the member entry there leads
+      // back to login for first-bind / re-bind.
+      if (code === WECHAT_UNBOUND_CODE) {
+        session.clearSession();
+        return PUBLIC_HOME_ROUTE;
+      }
+
+      // Disabled / mismatched / already-bound accounts are members with a problem;
+      // send them to the login page instead of the guest zone.
+      if (code !== null && WECHAT_SESSION_REJECTED_CODES.has(code)) {
         session.clearSession();
         return LOGIN_ROUTE;
       }
 
+      // Transient failure (network, WeChat service). Keep a still-valid local
+      // session and fall through; a guest with no session lands on public home.
       if (!session.accessToken) {
-        return LOGIN_ROUTE;
+        return PUBLIC_HOME_ROUTE;
       }
     }
   }
 
   if (!session.accessToken) {
-    return LOGIN_ROUTE;
+    return PUBLIC_HOME_ROUTE;
   }
 
   try {
     const currentUser = await session.refreshCurrentUser();
     if (!currentUser) {
+      // A token was present but could not be refreshed: this was a member
+      // session, so recover through the login page rather than the guest zone.
       session.clearSession();
       return LOGIN_ROUTE;
     }

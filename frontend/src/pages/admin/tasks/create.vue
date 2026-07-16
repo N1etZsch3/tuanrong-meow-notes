@@ -281,6 +281,7 @@ import {
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import { returnToListAfterDelete } from "@/utils/delete-navigation";
+import { completeCreateOrEditNavigation } from "@/utils/save-navigation";
 import {
   TASK_PUBLISH_LOCATION_STORAGE_KEY,
   buildSummerFeedingTaskPayload,
@@ -537,7 +538,10 @@ async function submitTask() {
     await submitStatusChangeIfNeeded(token);
     uni.removeStorageSync(TASK_PUBLISH_LOCATION_STORAGE_KEY);
     uni.showToast({ title: isEditMode.value ? "任务已保存" : "任务已发布", icon: "success" });
-    uni.redirectTo({ url: `/pages/tasks/detail?task_id=${response.task_id}` });
+    completeCreateOrEditNavigation({
+      isEditMode: isEditMode.value,
+      detailUrl: `/pages/tasks/detail?task_id=${response.task_id}`,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : isEditMode.value ? "保存失败" : "发布失败";
     uni.showToast({ title: message, icon: "none" });

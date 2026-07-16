@@ -29,6 +29,34 @@
 			}
 		},
 		{
+			"path": "pages/public/home",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "团绒喵记本"
+			}
+		},
+		{
+			"path": "pages/public/cats",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "校园猫咪"
+			}
+		},
+		{
+			"path": "pages/public/cat-detail",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "猫咪详情"
+			}
+		},
+		{
+			"path": "pages/public/post-detail",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "详情"
+			}
+		},
+		{
 			"path": "pages/index/index",
 			"style": {
 				"navigationStyle": "custom",

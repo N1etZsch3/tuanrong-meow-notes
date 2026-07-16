@@ -70,6 +70,12 @@ $nginxConfig = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap.conf"
 $frontendEnv = Read-RequiredFile (Join-Path $repoRoot "frontend/src/config/app-env.ts")
 $frontendEnvExample = Read-RequiredFile (Join-Path $repoRoot "frontend/.env.example")
 $devDeployScript = Read-RequiredFile (Join-Path $repoRoot "scripts/deploy-backend-dev.ps1")
+$devEnvPreparationScript = Read-RequiredFile (
+    Join-Path $repoRoot "scripts/prepare-backend-dev-env.ps1"
+)
+$devDatabaseRefreshScript = Read-RequiredFile (
+    Join-Path $repoRoot "scripts/refresh-dev-database.ps1"
+)
 $devUnit = Read-RequiredFile (Join-Path $repoRoot "deploy/systemd/catmap-backend-dev.service")
 $devNginx = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap-dev.conf")
 $devNginxBootstrap = Read-RequiredFile (Join-Path $repoRoot "deploy/nginx/catmap-dev-http-bootstrap.conf")
@@ -212,6 +218,81 @@ Assert-Contains `
     -Content $devDeployScript `
     -Needle "CATMAP_TENCENT_COS_ENV_PREFIX" `
     -Message "Development deployment must validate the object storage environment prefix."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "CATMAP_JWT_SECRET_KEY" `
+    -Message "Development deployment must require an explicit isolated JWT secret."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "CATMAP_CAPTCHA_SECRET_KEY" `
+    -Message "Development deployment must require an explicit isolated captcha secret."
+
+Assert-Contains `
+    -Content $devDeployScript `
+    -Needle "CATMAP_WECHAT_CONTENT_SECURITY_MODE=off" `
+    -Message "Development deployment must disable production content-security callbacks."
+
+Assert-Contains `
+    -Content $devEnvPreparationScript `
+    -Needle "RandomNumberGenerator" `
+    -Message "Development environment preparation must generate cryptographic secrets."
+
+Assert-Contains `
+    -Content $devEnvPreparationScript `
+    -Needle "CATMAP_WECHAT_CONTENT_SECURITY_MODE" `
+    -Message "Development environment preparation must explicitly isolate content security."
+
+Assert-Contains `
+    -Content $devEnvPreparationScript `
+    -Needle "Remove-EnvValues" `
+    -Message "Development environment preparation must normalize duplicate non-secret mode keys."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle '[ValidateSet("clone-catmap-to-catmap_dev")]' `
+    -Message "Development database refresh must require an explicit confirmation token."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle '$ProductionDatabase = "catmap"' `
+    -Message "Development database refresh must use production only as the fixed snapshot source."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle '$DevelopmentDatabase = "catmap_dev"' `
+    -Message "Development database refresh must target only the development database."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle "pg_dump" `
+    -Message "Development database refresh must read production through a logical snapshot."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle "--exclude-schema=tiger" `
+    -Message "Development database refresh must let fresh PostGIS extensions own their schemas."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle "--exclude-table-data=spatial_ref_sys" `
+    -Message "Development database refresh must retain the fresh PostGIS reference table."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle "STAGING_DATABASE" `
+    -Message "Development database refresh must validate a staging database before switching."
+
+Assert-Contains `
+    -Content $devDatabaseRefreshScript `
+    -Needle "BACKUP_DATABASE" `
+    -Message "Development database refresh must retain a rollback database."
+
+Assert-NotContains `
+    -Content $devDatabaseRefreshScript `
+    -Needle 'systemctl stop "$PRODUCTION_SERVICE"' `
+    -Message "Development database refresh must never stop the production service."
 
 Assert-Contains `
     -Content $devDeployScript `

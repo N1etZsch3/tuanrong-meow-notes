@@ -248,3 +248,33 @@ def test_cats_endpoints_require_profile_completed(api_client, db_session):
 
     assert response.status_code == 403
     assert response.json()["code"] == 63006
+
+
+def test_cats_list_pages_do_not_overlap_or_drop_with_identical_sort_keys(
+    api_client, db_session
+):
+    user = create_member(db_session)
+    shared_seen = datetime(2026, 7, 1, 12, 0, 0, tzinfo=UTC)
+    for index in range(25):
+        seed_cat(
+            db_session,
+            name=f"猫{index:02d}",
+            coat_color="狸花",
+            resident_area_text="教学楼A",
+            last_seen_at=shared_seen,
+        )
+    db_session.commit()
+
+    collected: list[str] = []
+    for page in range(1, 5):
+        response = api_client.get(
+            f"/api/v1/cats?page={page}&page_size=10",
+            headers=auth_headers(user),
+        )
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["total"] == 25
+        collected.extend(item["cat_id"] for item in data["items"])
+
+    assert len(collected) == 25
+    assert len(set(collected)) == 25

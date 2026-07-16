@@ -113,7 +113,13 @@
         </view>
       </view>
 
-      <scroll-view class="task-scroll" scroll-y :show-scrollbar="false">
+      <scroll-view
+        class="task-scroll"
+        scroll-y
+        :show-scrollbar="false"
+        lower-threshold="140"
+        @scrolltolower="loadMore"
+      >
         <view class="task-list-body">
         <view v-if="loadState === 'loading'" class="state-box">
           <text class="state-title">正在加载投喂任务</text>
@@ -172,6 +178,11 @@
               </scroll-view>
             </view>
           </view>
+
+          <view class="list-footer">
+            <text v-if="isLoadingMore" class="list-footer-text">正在加载更多任务...</text>
+            <text v-else-if="!hasMore" class="list-footer-text">已展示全部 {{ totalTasks }} 个任务</text>
+          </view>
         </view>
 
         <view v-else class="state-box">
@@ -196,7 +207,7 @@
 import { onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
-import { getTasks, type TaskExecutionDto, type TaskListItemDto, type TaskListQuery } from "@/api/tasks";
+import { getTasks, type TaskExecutionDto, type TaskListItemDto, type TaskListQuery, type TaskListResponse } from "@/api/tasks";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
@@ -227,7 +238,13 @@ type PickerKind = "task_type" | "status" | "date" | "";
 type PickerChangeEvent = { detail: { value: string | number } };
 type DatePickerChangeEvent = { detail: { value: string } };
 
-const DEFAULT_TASK_STATUS_QUERY = "in_progress,completed,cancelled,archived";
+// 默认列表隐藏「已归档」「已取消」父任务：默认只查进行中 + 已完成。
+// 「未开始/进行中/已完成」筛选走子任务展示状态 execution_display_status；
+// 「已归档/已取消」筛选走父任务 status（后端 display status 永不产出 archived，
+// 旧实现选「已归档」会得到空列表，这里改为按父 status 查询修复该问题）。
+const DEFAULT_PARENT_STATUS_QUERY = "in_progress,completed";
+const PARENT_STATUS_FILTER_VALUES = ["archived", "cancelled"] as const;
+const PAGE_SIZE = 10;
 const taskTypeOptions = [
   { label: "全部", value: "" },
   { label: "暑假投喂", value: "feeding" },
@@ -258,6 +275,10 @@ const selectedTaskStatus = ref("");
 const selectedDateFilter = ref<TaskDateFilterValue>("");
 const selectedSpecificDate = ref(formatLocalDate(new Date()));
 const activePicker = ref<PickerKind>("");
+const currentPage = ref(0);
+const totalTasks = ref(0);
+const hasMore = ref(false);
+const isLoadingMore = ref(false);
 
 const selectedTaskTypeIndex = computed(() =>
   Math.max(
@@ -300,22 +321,37 @@ async function getAccessToken(): Promise<string | null> {
   return null;
 }
 
-function buildTaskListQuery(): TaskListQuery {
+function buildTaskListQuery(page = 1): TaskListQuery {
   const dateQuery = buildTaskDateFilterQuery(
     selectedDateFilter.value,
     selectedSpecificDate.value,
   );
+  // 「已归档」「已取消」→ 父任务 status；其余（未开始/进行中/已完成）→ 子任务展示状态。
+  const isParentStatusFilter = (
+    PARENT_STATUS_FILTER_VALUES as readonly string[]
+  ).includes(selectedTaskStatus.value);
+  const statusQuery = isParentStatusFilter
+    ? selectedTaskStatus.value
+    : DEFAULT_PARENT_STATUS_QUERY;
+  const executionDisplayStatus = isParentStatusFilter ? "" : selectedTaskStatus.value;
   return {
     task_type: selectedTaskType.value
       ? (selectedTaskType.value as TaskListQuery["task_type"])
       : undefined,
-    status: DEFAULT_TASK_STATUS_QUERY,
-    execution_display_status: selectedTaskStatus.value,
+    status: statusQuery,
+    execution_display_status: executionDisplayStatus,
     keyword: searchKeyword.value.trim(),
     ...dateQuery,
-    page: 1,
-    page_size: 50,
+    page,
+    page_size: PAGE_SIZE,
   };
+}
+
+function applyFirstPage(data: TaskListResponse) {
+  tasks.value = data.items;
+  currentPage.value = data.page;
+  totalTasks.value = data.total;
+  hasMore.value = data.has_more;
 }
 
 async function fetchTasks(
@@ -328,7 +364,7 @@ async function fetchTasks(
   }
   try {
     const data = await getTasks(token, query);
-    tasks.value = data.items;
+    applyFirstPage(data);
     setCachedTaskList(query, data);
     loadState.value = "ready";
   } catch (error) {
@@ -343,6 +379,33 @@ async function fetchTasks(
   }
 }
 
+async function loadMore() {
+  if (isLoadingMore.value || loadState.value !== "ready" || !hasMore.value) {
+    return;
+  }
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  isLoadingMore.value = true;
+  try {
+    const query = buildTaskListQuery(currentPage.value + 1);
+    const data = await getTasks(token, query);
+    const existingIds = new Set(tasks.value.map((task) => task.task_id));
+    tasks.value = [
+      ...tasks.value,
+      ...data.items.filter((task) => !existingIds.has(task.task_id)),
+    ];
+    currentPage.value = data.page;
+    totalTasks.value = data.total;
+    hasMore.value = data.has_more;
+  } catch {
+    // 加载更多失败保持已加载内容，静默处理（用户可继续下拉重试）。
+  } finally {
+    isLoadingMore.value = false;
+  }
+}
+
 async function loadTasks(options: { force?: boolean } = {}) {
   const token = await getAccessToken();
   if (!token) {
@@ -353,7 +416,7 @@ async function loadTasks(options: { force?: boolean } = {}) {
   if (!options.force) {
     const cached = getCachedTaskList(query);
     if (cached) {
-      tasks.value = cached.items;
+      applyFirstPage(cached);
       loadState.value = "ready";
       void fetchTasks(token, query, { silent: true });
       return;
@@ -744,6 +807,17 @@ onShow(() => {
   display: flex;
   flex-direction: column;
   gap: 22rpx;
+}
+
+.list-footer {
+  padding: 28rpx 0 8rpx;
+  text-align: center;
+}
+
+.list-footer-text {
+  color: #8b929a;
+  font-size: 22rpx;
+  font-weight: 700;
 }
 
 .task-card {

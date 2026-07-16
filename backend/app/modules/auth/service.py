@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import or_, select, text
+from sqlalchemy import func, or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -608,7 +608,7 @@ def list_users(
     if department:
         statement = statement.where(UserProfile.department == department)
 
-    total = len(db.scalars(statement).all())
+    total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
     if sort_by == "meow_no":
         order_clause = User.student_no.asc() if sort_order == "asc" else User.student_no.desc()
     else:

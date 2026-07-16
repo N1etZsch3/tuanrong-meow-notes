@@ -246,7 +246,7 @@ type PickerChangeEvent = {
 
 type PickerKind = "filter_key" | "filter_value" | "sort";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 const DEFAULT_SORT_OPTION: CatSortOption = { value: "last_seen_desc", label: "最近出现" };
 const statIconMap: Record<string, string> = {
   total: totalStatsIcon,

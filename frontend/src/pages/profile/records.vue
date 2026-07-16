@@ -11,6 +11,8 @@
         class="record-list"
         scroll-y
         :show-scrollbar="false"
+        lower-threshold="140"
+        @scrolltolower="loadMoreRecords"
       >
         <button
           v-for="record in completedTaskRecords"
@@ -28,6 +30,11 @@
           </view>
           <text class="record-arrow">›</text>
         </button>
+
+        <view class="list-footer">
+          <text v-if="isLoadingMore" class="list-footer-text">正在加载更多记录...</text>
+          <text v-else-if="!hasMore" class="list-footer-text">已展示全部 {{ totalRecords }} 条记录</text>
+        </view>
       </scroll-view>
 
       <view v-else class="empty-card">
@@ -65,6 +72,11 @@ const userStore = useUserStore();
 const recordType = ref<ProfileRecordType>("total_tasks");
 const records = ref<EmptyRecordPage | null>(null);
 const isLoading = ref(false);
+const isLoadingMore = ref(false);
+const currentPage = ref(0);
+const totalRecords = ref(0);
+const hasMore = ref(false);
+const PAGE_SIZE = 10;
 
 const recordMeta = computed(() => PROFILE_RECORD_TYPES[recordType.value]);
 const isCompletedTaskRecordPage = computed(
@@ -89,7 +101,11 @@ function formatRecordDate(value: string | null): string {
 }
 
 async function loadCompletedTaskRecords(accessToken: string) {
-  records.value = await getMyCheckins(accessToken);
+  const page = await getMyCheckins(accessToken, { page: 1, page_size: PAGE_SIZE });
+  records.value = page;
+  currentPage.value = page.page;
+  totalRecords.value = page.total;
+  hasMore.value = page.has_more;
 }
 
 async function loadRecords() {
@@ -115,6 +131,44 @@ async function loadRecords() {
     uni.showToast({ title: message, icon: "none" });
   } finally {
     isLoading.value = false;
+  }
+}
+
+async function loadMoreRecords() {
+  if (
+    !isCompletedTaskRecordPage.value ||
+    isLoadingMore.value ||
+    isLoading.value ||
+    !hasMore.value
+  ) {
+    return;
+  }
+  const accessToken = await userStore.ensureFreshAccessToken();
+  if (!accessToken) {
+    return;
+  }
+  isLoadingMore.value = true;
+  try {
+    const page = await getMyCheckins(accessToken, {
+      page: currentPage.value + 1,
+      page_size: PAGE_SIZE,
+    });
+    const existing = (records.value?.items || []) as MyCheckinRecordDto[];
+    const existingIds = new Set(existing.map((item) => item.checkin_id));
+    const merged = [
+      ...existing,
+      ...(page.items as MyCheckinRecordDto[]).filter(
+        (item) => !existingIds.has(item.checkin_id),
+      ),
+    ];
+    records.value = { ...page, items: merged };
+    currentPage.value = page.page;
+    totalRecords.value = page.total;
+    hasMore.value = page.has_more;
+  } catch {
+    // 加载更多失败保持已加载内容，静默处理。
+  } finally {
+    isLoadingMore.value = false;
   }
 }
 
@@ -268,6 +322,17 @@ onLoad((options) => {
   color: #8a929c;
   font-size: 48rpx;
   font-weight: 300;
+}
+
+.list-footer {
+  padding: 20rpx 0 32rpx;
+  text-align: center;
+}
+
+.list-footer-text {
+  color: #8b929a;
+  font-size: 22rpx;
+  font-weight: 700;
 }
 
 .empty-image {

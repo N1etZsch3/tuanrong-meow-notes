@@ -4,7 +4,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import APIError, ErrorCode
@@ -15,8 +15,12 @@ from app.modules.landmarks.schemas import (
     LandmarkPhotoRequest,
     LandmarkUpdateRequest,
 )
-from app.modules.map.models import MapMarkerConfig, MapPoint, MapPointPhoto
-from app.modules.map.service import associated_poi_payload, get_default_campus
+from app.modules.map.models import CampusArea, MapMarkerConfig, MapPoint, MapPointPhoto
+from app.modules.map.service import (
+    associated_poi_payload,
+    get_default_campus,
+    map_point_list_item_payload,
+)
 
 
 def _now() -> datetime:
@@ -48,6 +52,57 @@ def _landmark_base_statement():
         MapPoint.point_type == "landmark",
         MapPoint.deleted_at.is_(None),
     )
+
+
+def list_landmarks(
+    db: Session,
+    *,
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """校园地标分页列表。默认只暴露 public+active 点位。"""
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+    statement = (
+        select(MapPoint)
+        .options(selectinload(MapPoint.photos), selectinload(MapPoint.area))
+        .where(
+            MapPoint.point_type == "landmark",
+            MapPoint.deleted_at.is_(None),
+            MapPoint.visibility == "public",
+            MapPoint.status == "active",
+        )
+    )
+    normalized_keyword = keyword.strip() if keyword else ""
+    if normalized_keyword:
+        like = f"%{normalized_keyword}%"
+        statement = statement.outerjoin(CampusArea, MapPoint.area_id == CampusArea.id).where(
+            or_(
+                MapPoint.name.ilike(like),
+                MapPoint.subtitle.ilike(like),
+                MapPoint.location_name.ilike(like),
+                MapPoint.location_detail.ilike(like),
+                CampusArea.name.ilike(like),
+            )
+        )
+
+    total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
+    start = (page - 1) * page_size
+    points = db.scalars(
+        statement.order_by(MapPoint.created_at.desc(), MapPoint.id.desc())
+        .offset(start)
+        .limit(page_size)
+    ).all()
+    return {
+        "items": [
+            map_point_list_item_payload(point, detail_id=point.id) for point in points
+        ],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "has_more": start + page_size < total,
+    }
 
 
 def _landmark_icon_key(db: Session) -> str | None:

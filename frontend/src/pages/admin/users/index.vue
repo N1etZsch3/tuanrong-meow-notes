@@ -137,7 +137,7 @@ import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 
 type PickerChangeEvent = { detail: { value: string | number } };
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 10;
 const departments = ["生存保障部", "活动部", "宣传部", "秘书部", "养护部"];
 const roleOptions = [
   { label: "全部", value: "" },

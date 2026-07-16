@@ -114,6 +114,7 @@ export const API_ENDPOINTS = {
     walkingRoute: "/map/route/walking",
   },
   landmarks: {
+    list: "/landmarks",
     detail: (landmarkId: ApiPathParam) =>
       `/landmarks/${encodePathParam(landmarkId)}`,
   },
@@ -187,6 +188,7 @@ export const API_ENDPOINTS = {
       `/tasks/${encodePathParam(taskId)}/checkin-photos/${encodePathParam(photoId)}`,
   },
   supplies: {
+    list: "/supply-points",
     detail: (supplyPointId: ApiPathParam) =>
       `/supply-points/${encodePathParam(supplyPointId)}`,
     records: (supplyPointId: ApiPathParam) =>

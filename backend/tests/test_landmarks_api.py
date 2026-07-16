@@ -133,6 +133,43 @@ def test_landmark_publish_rejects_unreviewed_external_photo_url(
     assert response.json()["code"] == 65024
 
 
+def test_landmark_list_endpoint_paginates_and_filters(api_client, db_session):
+    admin = create_user(db_session, role="admin", nickname="Manager")
+    member = create_user(db_session, nickname="Member")
+    campus = seed_campus(db_session)
+    created = create_landmark(api_client, admin, campus)
+
+    list_response = api_client.get(
+        "/api/v1/landmarks?page=1&page_size=10",
+        headers=auth_headers(member),
+    )
+    assert list_response.status_code == 200
+    data = list_response.json()["data"]
+    assert data["total"] == 1
+    assert data["page"] == 1
+    assert data["page_size"] == 10
+    assert data["has_more"] is False
+    item = data["items"][0]
+    assert item["detail_id"] == created["landmark_id"]
+    assert item["title"] == "东门地标"
+    assert item["cover_photo_url"] == "https://img.example.com/landmark-thumb.jpg"
+    assert "nearby_landmark_name" in item
+
+    keyword_hit = api_client.get(
+        "/api/v1/landmarks?keyword=东门",
+        headers=auth_headers(member),
+    )
+    assert keyword_hit.status_code == 200
+    assert keyword_hit.json()["data"]["total"] == 1
+
+    keyword_miss = api_client.get(
+        "/api/v1/landmarks?keyword=不存在的地标",
+        headers=auth_headers(member),
+    )
+    assert keyword_miss.status_code == 200
+    assert keyword_miss.json()["data"]["items"] == []
+
+
 def test_admin_can_create_landmark_and_member_can_view_from_map(api_client, db_session):
     admin = create_user(db_session, role="admin", nickname="Manager")
     member = create_user(db_session, nickname="Member")

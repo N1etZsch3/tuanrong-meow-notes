@@ -28,24 +28,30 @@
         </view>
       </view>
 
-      <scroll-view class="point-scroll" scroll-y :show-scrollbar="false">
+      <scroll-view
+        class="point-scroll"
+        scroll-y
+        :show-scrollbar="false"
+        lower-threshold="140"
+        @scrolltolower="loadMore"
+      >
         <view class="point-list-body">
-          <view v-if="loadState === 'loading'" class="state-box">
+          <view v-if="isLoading" class="state-box">
             <text class="state-title">正在加载物资点</text>
             <text class="state-copy">稍等一下，物资记录马上就好。</text>
           </view>
 
-          <view v-else-if="loadState === 'error'" class="state-box">
+          <view v-else-if="errorMessage" class="state-box">
             <text class="state-title">物资点加载失败</text>
             <text class="state-copy">{{ errorMessage }}</text>
-            <button class="retry-button" hover-class="button-hover" @tap="loadSupplyPoints">
+            <button class="retry-button" hover-class="button-hover" @tap="refresh">
               重新加载
             </button>
           </view>
 
-          <view v-else-if="displayItems.length" class="point-list">
+          <view v-else-if="items.length" class="point-list">
             <button
-              v-for="item in displayItems"
+              v-for="item in items"
               :key="item.point_id"
               class="point-card"
               hover-class="point-card-hover"
@@ -71,6 +77,11 @@
                 </view>
               </view>
             </button>
+
+            <view class="list-footer">
+              <text v-if="isLoadingMore" class="list-footer-text">正在加载更多物资点...</text>
+              <text v-else-if="!hasMore" class="list-footer-text">已展示全部 {{ total }} 个物资点</text>
+            </view>
           </view>
 
           <view v-else class="state-box">
@@ -93,34 +104,49 @@
 
 <script setup lang="ts">
 import { onShow } from "@dcloudio/uni-app";
-import { computed, ref } from "vue";
+import { ref } from "vue";
 
-import { getMapPoints } from "@/api/map";
+import { getSupplyPoints } from "@/api/supplies";
+import { usePagedList } from "@/composables/use-paged-list";
 import { LOGIN_ROUTE } from "@/services/app-startup";
-import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
-import {
-  filterPointListByKeyword,
-  mapMarkersToMeowPointListItems,
-  type MeowPointListItem,
-} from "@/pages/tasks/meow-list-page";
+import type { MeowPointListItem } from "@/pages/tasks/meow-list-page";
 
 import supplyIcon from "../../../素材/png/地图点/物资点.png";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
-type LoadState = "idle" | "loading" | "ready" | "error";
+const PAGE_SIZE = 10;
 
 const userStore = useUserStore();
-const items = ref<MeowPointListItem[]>([]);
-const loadState = ref<LoadState>("idle");
-const errorMessage = ref("");
 const searchKeyword = ref("");
 const failedImageIds = ref<Record<string, boolean>>({});
 
-const displayItems = computed(() =>
-  filterPointListByKeyword(items.value, searchKeyword.value),
-);
+const {
+  items,
+  total,
+  hasMore,
+  isLoading,
+  isLoadingMore,
+  errorMessage,
+  refresh: refreshList,
+  loadMore,
+} = usePagedList<MeowPointListItem>({
+  pageSize: PAGE_SIZE,
+  getItemKey: (item) => item.point_id,
+  fallbackErrorMessage: "物资点加载失败",
+  fetchPage: async (page, pageSize) => {
+    const token = await getAccessToken();
+    if (!token) {
+      throw new Error("未登录");
+    }
+    return getSupplyPoints(token, {
+      keyword: searchKeyword.value.trim() || undefined,
+      page,
+      page_size: pageSize,
+    });
+  },
+});
 
 async function getAccessToken(): Promise<string | null> {
   const accessToken = await userStore.ensureFreshAccessToken();
@@ -132,29 +158,14 @@ async function getAccessToken(): Promise<string | null> {
   return null;
 }
 
-async function loadSupplyPoints() {
-  const token = await getAccessToken();
-  if (!token) {
-    return;
-  }
-
-  loadState.value = "loading";
-  try {
-    const data = await getMapPoints(token, { point_types: "supply" });
-    items.value = mapMarkersToMeowPointListItems(data.items);
-    failedImageIds.value = {};
-    loadState.value = "ready";
-  } catch (error) {
-    loadState.value = "error";
-    errorMessage.value =
-      error instanceof ApiBusinessError || error instanceof Error
-        ? error.message
-        : "请稍后重试";
-  }
+async function refresh() {
+  failedImageIds.value = {};
+  await refreshList();
 }
 
 function handleSearchConfirm() {
   searchKeyword.value = searchKeyword.value.trim();
+  void refresh();
 }
 
 function goBack() {
@@ -183,7 +194,7 @@ function goCreateSupplyPoint() {
 }
 
 onShow(() => {
-  void loadSupplyPoints();
+  void refresh();
 });
 </script>
 
@@ -364,6 +375,17 @@ onShow(() => {
   display: flex;
   flex-direction: column;
   gap: 22rpx;
+}
+
+.list-footer {
+  padding: 28rpx 0 8rpx;
+  text-align: center;
+}
+
+.list-footer-text {
+  color: #8b929a;
+  font-size: 22rpx;
+  font-weight: 700;
 }
 
 .point-card {

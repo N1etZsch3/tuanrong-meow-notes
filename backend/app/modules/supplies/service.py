@@ -4,14 +4,18 @@ from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import APIError
 from app.modules.auth.models import AdminOperationLog, User
 from app.modules.files.service import resolve_business_image
-from app.modules.map.models import MapPoint, MapPointPhoto
-from app.modules.map.service import associated_poi_payload, get_default_campus
+from app.modules.map.models import CampusArea, MapPoint, MapPointPhoto
+from app.modules.map.service import (
+    associated_poi_payload,
+    get_default_campus,
+    map_point_list_item_payload,
+)
 from app.modules.supplies.models import (
     SupplyPoint,
     SupplyPointItem,
@@ -69,6 +73,62 @@ def _supply_base_statement():
         .selectinload(User.profile),
         selectinload(SupplyPoint.records).selectinload(SupplyPointRecord.items),
     )
+
+
+def list_supply_points(
+    db: Session,
+    *,
+    keyword: str | None = None,
+    page: int = 1,
+    page_size: int = 20,
+) -> dict:
+    """物资点分页列表。detail_id 用 SupplyPoint 业务 id（前端详情页据此打开）。"""
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 100)
+    statement = (
+        select(SupplyPoint)
+        .join(MapPoint, SupplyPoint.map_point_id == MapPoint.id)
+        .options(
+            selectinload(SupplyPoint.map_point).selectinload(MapPoint.photos),
+            selectinload(SupplyPoint.map_point).selectinload(MapPoint.area),
+        )
+        .where(
+            SupplyPoint.deleted_at.is_(None),
+            MapPoint.deleted_at.is_(None),
+            MapPoint.visibility == "public",
+            MapPoint.status == "active",
+        )
+    )
+    normalized_keyword = keyword.strip() if keyword else ""
+    if normalized_keyword:
+        like = f"%{normalized_keyword}%"
+        statement = statement.outerjoin(CampusArea, MapPoint.area_id == CampusArea.id).where(
+            or_(
+                MapPoint.name.ilike(like),
+                MapPoint.subtitle.ilike(like),
+                MapPoint.location_name.ilike(like),
+                MapPoint.location_detail.ilike(like),
+                CampusArea.name.ilike(like),
+            )
+        )
+
+    total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
+    start = (page - 1) * page_size
+    supplies = db.scalars(
+        statement.order_by(MapPoint.created_at.desc(), SupplyPoint.id.desc())
+        .offset(start)
+        .limit(page_size)
+    ).all()
+    return {
+        "items": [
+            map_point_list_item_payload(supply.map_point, detail_id=supply.id)
+            for supply in supplies
+        ],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "has_more": start + page_size < total,
+    }
 
 
 def _active_items(supply: SupplyPoint) -> list[SupplyPointItem]:

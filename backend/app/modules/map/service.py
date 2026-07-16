@@ -432,6 +432,47 @@ def associated_poi_payload(point: MapPoint) -> dict | None:
     }
 
 
+def map_point_cover_photo_url(point: MapPoint) -> str | None:
+    """点位封面缩略图 URL：优先 cover_photo_id，否则取 sort_order 最小的照片。"""
+    photos = [photo for photo in point.photos if photo.deleted_at is None]
+    cover = next((photo for photo in photos if photo.id == point.cover_photo_id), None)
+    if cover:
+        return cover.thumbnail_url or cover.file_url
+    first_photo = min(photos, key=lambda item: item.sort_order, default=None)
+    return (first_photo.thumbnail_url or first_photo.file_url) if first_photo else None
+
+
+def map_point_nearby_landmark_name(point: MapPoint) -> str:
+    """列表卡片的"附近地标"文案，语义与前端 getMarkerNearbyLandmarkName 一致。"""
+    poi = associated_poi_payload(point)
+    if poi:
+        name = (poi.get("name") or "").strip() if isinstance(poi.get("name"), str) else ""
+        if name:
+            return name
+        address = (
+            (poi.get("address") or "").strip() if isinstance(poi.get("address"), str) else ""
+        )
+        if address:
+            return address
+    if point.location_detail and point.location_detail.strip():
+        return point.location_detail.strip()
+    area_name = point.area.name if point.area else None
+    return area_name or point.subtitle or "暂无附近地标"
+
+
+def map_point_list_item_payload(point: MapPoint, *, detail_id) -> dict:
+    """物资/地标列表项，字段形态与前端 MeowPointListItem 对齐。"""
+    return {
+        "point_id": str(point.id),
+        "detail_id": str(detail_id),
+        "title": point.name or point.subtitle or "未命名点位",
+        "nearby_landmark_name": map_point_nearby_landmark_name(point),
+        "cover_photo_url": map_point_cover_photo_url(point),
+        "subtitle": point.subtitle,
+        "area_name": point.area.name if point.area else None,
+    }
+
+
 def tencent_bounds_boundary() -> str:
     south_west = HBNU_CAMPUS_SEARCH_BOUNDS["south_west"]
     north_east = HBNU_CAMPUS_SEARCH_BOUNDS["north_east"]

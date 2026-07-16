@@ -1,7 +1,8 @@
+import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import or_, select
+from sqlalchemy import String, case, cast, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.modules.cats.models import Cat, CatAlias, CatFavorite
@@ -244,36 +245,49 @@ def list_cats(
             elif cutoff:
                 statement = statement.where(Cat.last_seen_at >= cutoff)
 
-    if sort == "name_asc":
-        statement = statement.order_by(Cat.name.asc(), Cat.updated_at.desc())
-    elif sort == "updated_desc":
-        statement = statement.order_by(Cat.updated_at.desc())
-    elif sort == "health_priority":
-        statement = statement.order_by(Cat.updated_at.desc())
-    elif sort == "not_neutered_first":
-        statement = statement.order_by(Cat.updated_at.desc())
-    else:
-        statement = statement.order_by(Cat.last_seen_at.desc().nullslast(), Cat.updated_at.desc())
-
-    cats = db.scalars(statement).all()
     if tag_filter_value:
-        cats = [cat for cat in cats if tag_filter_value in (cat.personality_tags or [])]
-    if sort == "health_priority":
-        priority = {"abnormal": 0, "injured": 1, "sick": 2, "watching": 3}
-        cats.sort(
-            key=lambda cat: (priority.get(cat.health_status, 9), cat.updated_at),
-            reverse=False,
-        )
-    elif sort == "not_neutered_first":
-        priority = {"not_neutered": 0, "scheduled": 1, "unknown": 2}
-        cats.sort(
-            key=lambda cat: (priority.get(cat.neuter_status, 9), cat.updated_at),
-            reverse=False,
+        # personality_tags 存为 JSON 数组。下推 SQL 文本匹配，避免全表载入内存过滤。
+        # SQLite 以 ensure_ascii 存储（中文转 \uXXXX），Postgres/JSONB 存原始 UTF-8，
+        # 两者的 JSON 文本形态不同，故按方言选择要匹配的带引号 token。
+        dialect_name = db.get_bind().dialect.name
+        if dialect_name == "sqlite":
+            tag_token = json.dumps(tag_filter_value, ensure_ascii=True)
+        else:
+            tag_token = json.dumps(tag_filter_value, ensure_ascii=False)
+        statement = statement.where(
+            cast(Cat.personality_tags, String).contains(tag_token)
         )
 
-    total = len(cats)
+    if sort == "name_asc":
+        order_by = (Cat.name.asc(), Cat.updated_at.desc(), Cat.id.desc())
+    elif sort == "updated_desc":
+        order_by = (Cat.updated_at.desc(), Cat.id.desc())
+    elif sort == "health_priority":
+        priority = case(
+            {"abnormal": 0, "injured": 1, "sick": 2, "watching": 3},
+            value=Cat.health_status,
+            else_=9,
+        )
+        order_by = (priority.asc(), Cat.updated_at.desc(), Cat.id.desc())
+    elif sort == "not_neutered_first":
+        priority = case(
+            {"not_neutered": 0, "scheduled": 1, "unknown": 2},
+            value=Cat.neuter_status,
+            else_=9,
+        )
+        order_by = (priority.asc(), Cat.updated_at.desc(), Cat.id.desc())
+    else:
+        order_by = (
+            Cat.last_seen_at.desc().nullslast(),
+            Cat.updated_at.desc(),
+            Cat.id.desc(),
+        )
+
+    total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
     start = (page - 1) * page_size
-    paged = cats[start : start + page_size]
+    paged = db.scalars(
+        statement.order_by(*order_by).offset(start).limit(page_size)
+    ).all()
     favorite_cat_ids = set(
         db.scalars(
             select(CatFavorite.cat_id).where(

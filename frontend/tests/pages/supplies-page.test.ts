@@ -34,9 +34,9 @@ function extractFunctionSource(source: string, functionName: string): string {
 describe("supply point detail page", () => {
   it("registers and renders a searchable supply point list page", () => {
     expect(pagesJson).toContain("pages/supplies/index");
-    expect(supplyIndexSource).toContain("getMapPoints");
-    expect(supplyIndexSource).toContain("filterPointListByKeyword");
-    expect(supplyIndexSource).toContain('point_types: "supply"');
+    expect(supplyIndexSource).toContain("getSupplyPoints");
+    expect(supplyIndexSource).toContain("usePagedList");
+    expect(supplyIndexSource).toContain('@scrolltolower="loadMore"');
     expect(supplyIndexSource).toContain('placeholder="搜索物资点 / 附近地标"');
     expect(supplyIndexSource).toContain('class="point-card"');
     expect(supplyIndexSource).toContain("nearby_landmark_name");

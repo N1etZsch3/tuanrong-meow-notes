@@ -334,8 +334,25 @@ describe("summer feeding task pages", () => {
     expect(taskListSource).not.toContain("only_today");
     expect(taskListSource).toContain("clearFilters");
     expect(taskListSource).toContain("keyword: searchKeyword.value.trim()");
-    expect(taskListSource).toContain("status: DEFAULT_TASK_STATUS_QUERY");
-    expect(taskListSource).toContain("execution_display_status: selectedTaskStatus.value");
+    expect(taskListSource).toContain("DEFAULT_PARENT_STATUS_QUERY");
+    expect(taskListSource).toContain("PARENT_STATUS_FILTER_VALUES");
+    expect(taskListSource).toContain('"in_progress,completed"');
+  });
+
+  it("hides archived and cancelled parent tasks by default and lazy-loads more", () => {
+    // 默认列表只查进行中+已完成父任务，归档/取消不再出现在默认列表
+    expect(taskListSource).toContain('const DEFAULT_PARENT_STATUS_QUERY = "in_progress,completed"');
+    expect(taskListSource).toContain('const PARENT_STATUS_FILTER_VALUES = ["archived", "cancelled"]');
+    // 「已归档/已取消」筛选走父任务 status（修复旧实现选已归档得空列表的 bug）
+    expect(taskListSource).toContain("isParentStatusFilter");
+    expect(taskListSource).toContain("status: statusQuery");
+    expect(taskListSource).toContain("execution_display_status: executionDisplayStatus");
+    // 每页 10 条 + 触底懒加载
+    expect(taskListSource).toContain("const PAGE_SIZE = 10");
+    expect(taskListSource).toContain('@scrolltolower="loadMore"');
+    expect(taskListSource).toContain("function loadMore");
+    expect(taskListSource).not.toContain("page_size: 50");
+    expect(taskListSource).not.toContain('"in_progress,completed,cancelled,archived"');
   });
 
   it("renders recurring child execution cards inside each parent task card", () => {

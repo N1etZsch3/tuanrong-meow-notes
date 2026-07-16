@@ -33,9 +33,9 @@ describe("landmark list page", () => {
   it("registers and renders a searchable campus landmark list page", () => {
     expect(pagesJson).toContain("pages/landmarks/index");
     expect(pagesJson).toContain("pages/landmarks/detail");
-    expect(landmarkIndexSource).toContain("getMapPoints");
-    expect(landmarkIndexSource).toContain("filterPointListByKeyword");
-    expect(landmarkIndexSource).toContain('point_types: "landmark"');
+    expect(landmarkIndexSource).toContain("getLandmarks");
+    expect(landmarkIndexSource).toContain("usePagedList");
+    expect(landmarkIndexSource).toContain('@scrolltolower="loadMore"');
     expect(landmarkIndexSource).toContain('placeholder="搜索校园地标 / 附近位置"');
     expect(landmarkIndexSource).toContain('class="point-card"');
     expect(landmarkIndexSource).toContain("nearby_landmark_name");

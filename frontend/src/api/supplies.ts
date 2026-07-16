@@ -1,6 +1,13 @@
 import { request } from "@/services/request";
 import { API_ENDPOINTS, compactApiParams } from "@/api/routes";
 import type { TencentPoiDto } from "@/api/map";
+import type { MeowPointListResponse } from "@/pages/tasks/meow-list-page";
+
+export interface MeowPointListQuery {
+  keyword?: string;
+  page?: number;
+  page_size?: number;
+}
 
 export interface UploadedFileRef {
   file_id?: string | null;
@@ -256,6 +263,18 @@ export function createSupplyRecord(
     url: API_ENDPOINTS.supplies.records(supplyPointId),
     method: "POST",
     data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function getSupplyPoints(
+  accessToken: string,
+  query: MeowPointListQuery = {},
+): Promise<MeowPointListResponse> {
+  return request<MeowPointListResponse>({
+    url: API_ENDPOINTS.supplies.list,
+    method: "GET",
+    data: compactApiParams(query),
     token: accessToken,
   });
 }

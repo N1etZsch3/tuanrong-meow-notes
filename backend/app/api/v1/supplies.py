@@ -14,6 +14,19 @@ from app.modules.supplies.schemas import SupplyRecordCreateRequest
 router = APIRouter(tags=["Supply Points"])
 
 
+@router.get("", summary="List supply points")
+def supply_point_list(
+    request: Request,
+    keyword: str | None = Query(default=None, max_length=50),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_profile_completed),
+):
+    data = service.list_supply_points(db, keyword=keyword, page=page, page_size=page_size)
+    return api_success(data=data, trace_id=request.state.trace_id)
+
+
 @router.get("/{supply_point_id}", summary="Get supply point detail")
 def supply_point_detail(
     supply_point_id: UUID,

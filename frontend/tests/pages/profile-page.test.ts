@@ -361,8 +361,9 @@ describe("profile center pages", () => {
     expect(profileRecordsSource).toContain(
       'recordType.value === "total_tasks" || recordType.value === "monthly_completed"',
     );
-    expect(profileRecordsSource).toContain("records.value = await getMyCheckins(accessToken");
+    expect(profileRecordsSource).toContain("await getMyCheckins(accessToken");
     expect(profileRecordsSource).toContain('class="record-card"');
     expect(profileRecordsSource).toContain("record.execute_date");
+    expect(profileRecordsSource).toContain('@scrolltolower="loadMoreRecords"');
   });
 });

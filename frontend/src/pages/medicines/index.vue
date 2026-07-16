@@ -65,7 +65,13 @@
         </view>
       </view>
 
-      <scroll-view class="medicine-scroll" scroll-y :show-scrollbar="false">
+      <scroll-view
+        class="medicine-scroll"
+        scroll-y
+        :show-scrollbar="false"
+        lower-threshold="140"
+        @scrolltolower="loadMoreMedicines"
+      >
         <view class="medicine-list-body">
           <view v-if="loadState === 'loading'" class="state-box">
             <text class="state-title">正在加载药品库存</text>
@@ -137,6 +143,11 @@
                 </scroll-view>
               </view>
             </view>
+
+            <view class="list-footer">
+              <text v-if="isLoadingMore" class="list-footer-text">正在加载更多药品...</text>
+              <text v-else-if="!hasMore" class="list-footer-text">已展示全部 {{ totalMedicines }} 种药品</text>
+            </view>
           </view>
 
           <view v-else class="state-box">
@@ -190,6 +201,11 @@ const errorMessage = ref("");
 const searchKeyword = ref("");
 const selectedCategory = ref("");
 const selectedHoldingRelation = ref<MedicineListQuery["holding_relation"]>("all");
+const currentPage = ref(0);
+const totalMedicines = ref(0);
+const hasMore = ref(false);
+const isLoadingMore = ref(false);
+const PAGE_SIZE = 10;
 
 const categoryOptions = computed(() => [
   { label: "全部", value: "" },
@@ -236,13 +252,13 @@ async function loadCategories(token: string) {
   categories.value = data.items;
 }
 
-function buildMedicineListQuery(): MedicineListQuery {
+function buildMedicineListQuery(page = 1): MedicineListQuery {
   return {
     keyword: searchKeyword.value.trim(),
     category_id: selectedCategory.value || undefined,
     holding_relation: selectedHoldingRelation.value,
-    page: 1,
-    page_size: 50,
+    page,
+    page_size: PAGE_SIZE,
   };
 }
 
@@ -260,6 +276,9 @@ async function loadMedicines() {
     }
     const data = await getMedicines(token, buildMedicineListQuery());
     medicines.value = data.items;
+    currentPage.value = data.page;
+    totalMedicines.value = data.total;
+    hasMore.value = data.has_more;
     loadState.value = "ready";
   } catch (error) {
     loadState.value = "error";
@@ -267,6 +286,32 @@ async function loadMedicines() {
       error instanceof ApiBusinessError || error instanceof Error
         ? error.message
         : "请稍后重试";
+  }
+}
+
+async function loadMoreMedicines() {
+  if (isLoadingMore.value || loadState.value !== "ready" || !hasMore.value) {
+    return;
+  }
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  isLoadingMore.value = true;
+  try {
+    const data = await getMedicines(token, buildMedicineListQuery(currentPage.value + 1));
+    const existingIds = new Set(medicines.value.map((item) => item.medicine_id));
+    medicines.value = [
+      ...medicines.value,
+      ...data.items.filter((item) => !existingIds.has(item.medicine_id)),
+    ];
+    currentPage.value = data.page;
+    totalMedicines.value = data.total;
+    hasMore.value = data.has_more;
+  } catch {
+    // 加载更多失败保持已加载内容，静默处理。
+  } finally {
+    isLoadingMore.value = false;
   }
 }
 
@@ -541,6 +586,17 @@ onShow(() => {
   display: flex;
   flex-direction: column;
   gap: 22rpx;
+}
+
+.list-footer {
+  padding: 28rpx 0 8rpx;
+  text-align: center;
+}
+
+.list-footer-text {
+  color: #8b929a;
+  font-size: 22rpx;
+  font-weight: 700;
 }
 
 .medicine-card {

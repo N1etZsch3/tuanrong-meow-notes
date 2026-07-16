@@ -1,7 +1,8 @@
 import { request } from "@/services/request";
-import { API_ENDPOINTS } from "@/api/routes";
+import { API_ENDPOINTS, compactApiParams } from "@/api/routes";
 import type { TencentPoiDto } from "@/api/map";
-import type { UploadedFileRef } from "@/api/supplies";
+import type { MeowPointListQuery, UploadedFileRef } from "@/api/supplies";
+import type { MeowPointListResponse } from "@/pages/tasks/meow-list-page";
 
 export interface LandmarkMapPointPayload {
   campus_id?: string;
@@ -139,6 +140,18 @@ export function getLandmarkDetail(
   return request<LandmarkDetailDto>({
     url: API_ENDPOINTS.landmarks.detail(landmarkId),
     method: "GET",
+    token: accessToken,
+  });
+}
+
+export function getLandmarks(
+  accessToken: string,
+  query: MeowPointListQuery = {},
+): Promise<MeowPointListResponse> {
+  return request<MeowPointListResponse>({
+    url: API_ENDPOINTS.landmarks.list,
+    method: "GET",
+    data: compactApiParams(query),
     token: accessToken,
   });
 }

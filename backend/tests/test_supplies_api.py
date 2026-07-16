@@ -136,6 +136,35 @@ def publish_supply_point(api_client, admin: User, campus: Campus) -> dict:
     return response.json()["data"]
 
 
+def test_supply_point_list_endpoint_paginates_and_filters(api_client, db_session):
+    admin = create_user(db_session, role="admin", nickname="Manager")
+    member = create_user(db_session, nickname="Member")
+    campus = seed_campus(db_session)
+    created = publish_supply_point(api_client, admin, campus)
+
+    list_response = api_client.get(
+        "/api/v1/supply-points?page=1&page_size=10",
+        headers=auth_headers(member),
+    )
+    assert list_response.status_code == 200
+    data = list_response.json()["data"]
+    assert data["total"] == 1
+    assert data["page"] == 1
+    assert data["page_size"] == 10
+    assert data["has_more"] is False
+    item = data["items"][0]
+    assert item["detail_id"] == created["supply_point_id"]
+    assert item["title"]
+    assert "nearby_landmark_name" in item
+
+    keyword_miss = api_client.get(
+        "/api/v1/supply-points?keyword=不存在的物资点",
+        headers=auth_headers(member),
+    )
+    assert keyword_miss.status_code == 200
+    assert keyword_miss.json()["data"]["items"] == []
+
+
 def test_supply_publish_rejects_unreviewed_external_photo_url(
     api_client,
     db_session,

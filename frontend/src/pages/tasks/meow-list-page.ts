@@ -10,6 +10,14 @@ export interface MeowPointListItem {
   area_name: string | null;
 }
 
+export interface MeowPointListResponse {
+  items: MeowPointListItem[];
+  page: number;
+  page_size: number;
+  total: number;
+  has_more: boolean;
+}
+
 interface AssociatedPoiLike {
   name?: unknown;
   address?: unknown;

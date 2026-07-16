@@ -4,7 +4,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.core.errors import APIError, ErrorCode
@@ -218,10 +218,10 @@ def _user_payload(user: User | None) -> dict | None:
     }
 
 
-def ensure_default_categories(db: Session, *, created_by: UUID | None = None) -> None:
-    exists = db.scalar(select(func.count(MedicineCategory.id))) or 0
-    if exists:
-        return
+def ensure_default_categories(db: Session, *, created_by: UUID | None = None) -> bool:
+    exists_count = db.scalar(select(func.count(MedicineCategory.id))) or 0
+    if exists_count:
+        return False
     now = _now()
     for sort_order, (name, code) in enumerate(DEFAULT_CATEGORIES, start=1):
         db.add(
@@ -235,17 +235,19 @@ def ensure_default_categories(db: Session, *, created_by: UUID | None = None) ->
             )
         )
     db.flush()
+    return True
 
 
 def list_categories(db: Session, *, user: User, include_disabled: bool = False) -> dict:
-    ensure_default_categories(db, created_by=user.id)
+    # 首次访问时补种默认分类（写），只有确实播种过才提交；常态请求保持只读。
+    if ensure_default_categories(db, created_by=user.id):
+        db.commit()
     statement = select(MedicineCategory).where(MedicineCategory.deleted_at.is_(None))
     if not include_disabled:
         statement = statement.where(MedicineCategory.is_enabled.is_(True))
     categories = db.scalars(
         statement.order_by(MedicineCategory.sort_order, MedicineCategory.created_at)
     ).all()
-    db.commit()
     return {
         "items": [
             {
@@ -478,6 +480,32 @@ def _holding_statement_for_catalog(medicine_id: UUID):
     )
 
 
+def _holdings_by_medicine_ids(
+    db: Session,
+    medicine_ids: list[UUID],
+) -> dict[UUID, list[MedicineHolding]]:
+    """Load every active holding for the given catalogs in one batched query."""
+    grouped: dict[UUID, list[MedicineHolding]] = {medicine_id: [] for medicine_id in medicine_ids}
+    if not medicine_ids:
+        return grouped
+    holdings = db.scalars(
+        select(MedicineHolding)
+        .options(joinedload(MedicineHolding.holder).joinedload(User.profile))
+        .where(
+            MedicineHolding.medicine_id.in_(medicine_ids),
+            MedicineHolding.deleted_at.is_(None),
+            MedicineHolding.status.in_(("active", "empty")),
+        )
+        .order_by(
+            MedicineHolding.last_operation_at.desc().nullslast(),
+            MedicineHolding.created_at,
+        )
+    ).all()
+    for holding in holdings:
+        grouped[holding.medicine_id].append(holding)
+    return grouped
+
+
 def _log_payload(log: MedicineStockLog, unit: str) -> dict:
     return {
         "id": str(log.id),
@@ -495,17 +523,6 @@ def _log_payload(log: MedicineStockLog, unit: str) -> dict:
         "description": log.description,
         "related_task": None,
         "created_at": log.created_at.isoformat(),
-    }
-
-
-def _paginated(items: list[dict], *, page: int, page_size: int) -> dict:
-    total = len(items)
-    return {
-        "items": items[(page - 1) * page_size : page * page_size],
-        "page": page,
-        "page_size": page_size,
-        "total": total,
-        "has_more": page * page_size < total,
     }
 
 
@@ -582,13 +599,13 @@ def _holder_payload(holding: MedicineHolding, current_user_id: UUID) -> dict:
 
 
 def _catalog_summary_payload(
-    db: Session,
     catalog: MedicineCatalog,
     *,
+    holdings: list[MedicineHolding],
     current_user: User,
-    recent_log_limit: int = 0,
+    recent_logs: list[MedicineStockLog] | None = None,
 ) -> dict:
-    holdings = db.scalars(_holding_statement_for_catalog(catalog.id)).all()
+    """Assemble the catalog summary from preloaded rows — no queries in here."""
     total_current = sum((holding.current_quantity for holding in holdings), Decimal("0"))
     total_in = sum((holding.total_in_quantity for holding in holdings), Decimal("0"))
     stock_status, stock_status_label = _stock_status(total_current, total_in)
@@ -618,15 +635,8 @@ def _catalog_summary_payload(
         "last_operation_at": last_operation.isoformat() if last_operation else None,
         "holders": [_holder_payload(holding, current_user.id) for holding in holdings],
     }
-    if recent_log_limit:
-        logs = db.scalars(
-            select(MedicineStockLog)
-            .options(joinedload(MedicineStockLog.operator).joinedload(User.profile))
-            .where(MedicineStockLog.medicine_id == catalog.id)
-            .order_by(MedicineStockLog.created_at.desc())
-            .limit(recent_log_limit)
-        ).all()
-        payload["recent_logs"] = [_log_payload(log, catalog.unit) for log in logs]
+    if recent_logs is not None:
+        payload["recent_logs"] = [_log_payload(log, catalog.unit) for log in recent_logs]
     return payload
 
 
@@ -740,6 +750,42 @@ def create_medicine(db: Session, *, user: User, payload: MedicineCreateRequest) 
     }
 
 
+def _catalog_list_filters(
+    *,
+    user: User,
+    keyword: str | None,
+    category_id: UUID | None,
+    holding_relation: str,
+    include_archived: bool,
+) -> list:
+    """Build the catalog list WHERE conditions, all pushable to SQL."""
+    conditions = [MedicineCatalog.deleted_at.is_(None)]
+    if not include_archived:
+        conditions.append(MedicineCatalog.status == "active")
+    if category_id:
+        conditions.append(MedicineCatalog.category_id == category_id)
+    if keyword:
+        like = f"%{keyword.strip()}%"
+        conditions.append(
+            or_(
+                MedicineCatalog.name.ilike(like),
+                MedicineCatalog.description.ilike(like),
+                MedicineCatalog.usage_notes.ilike(like),
+            )
+        )
+    if holding_relation in {"mine", "others"}:
+        mine_exists = exists(
+            select(MedicineHolding.id).where(
+                MedicineHolding.medicine_id == MedicineCatalog.id,
+                MedicineHolding.holder_id == user.id,
+                MedicineHolding.deleted_at.is_(None),
+                MedicineHolding.status.in_(("active", "empty")),
+            )
+        )
+        conditions.append(mine_exists if holding_relation == "mine" else ~mine_exists)
+    return conditions
+
+
 def list_medicines(
     db: Session,
     *,
@@ -751,47 +797,36 @@ def list_medicines(
     page_size: int = 20,
     include_archived: bool = False,
 ) -> dict:
-    statement = (
+    conditions = _catalog_list_filters(
+        user=user,
+        keyword=keyword,
+        category_id=category_id,
+        holding_relation=holding_relation,
+        include_archived=include_archived,
+    )
+    # 数据库内完成 COUNT、排序（追加唯一 ID 保证分页稳定）与 OFFSET/LIMIT。
+    total = db.scalar(
+        select(func.count()).select_from(MedicineCatalog).where(*conditions)
+    )
+    start = (page - 1) * page_size
+    page_items = db.scalars(
         select(MedicineCatalog)
         .options(joinedload(MedicineCatalog.category))
-        .where(MedicineCatalog.deleted_at.is_(None))
-    )
-    if not include_archived:
-        statement = statement.where(MedicineCatalog.status == "active")
-    if category_id:
-        statement = statement.where(MedicineCatalog.category_id == category_id)
-    if keyword:
-        like = f"%{keyword.strip()}%"
-        statement = statement.where(
-            or_(
-                MedicineCatalog.name.ilike(like),
-                MedicineCatalog.description.ilike(like),
-                MedicineCatalog.usage_notes.ilike(like),
-            )
-        )
-    catalogs = db.scalars(statement.order_by(MedicineCatalog.created_at.desc())).all()
-    if holding_relation in {"mine", "others"}:
-        filtered = []
-        for catalog in catalogs:
-            has_mine = db.scalar(
-                select(func.count(MedicineHolding.id)).where(
-                    MedicineHolding.medicine_id == catalog.id,
-                    MedicineHolding.holder_id == user.id,
-                    MedicineHolding.deleted_at.is_(None),
-                    MedicineHolding.status.in_(("active", "empty")),
-                )
-            )
-            if (holding_relation == "mine" and has_mine) or (
-                holding_relation == "others" and not has_mine
-            ):
-                filtered.append(catalog)
-        catalogs = filtered
-    total = len(catalogs)
-    start = (page - 1) * page_size
-    page_items = catalogs[start : start + page_size]
+        .where(*conditions)
+        .order_by(MedicineCatalog.created_at.desc(), MedicineCatalog.id.desc())
+        .offset(start)
+        .limit(page_size)
+    ).all()
+    # 当前页库存摘要：一次批量查询全部持有记录，Python 内按 medicine_id 分组聚合。
+    holdings_by_medicine = _holdings_by_medicine_ids(db, [catalog.id for catalog in page_items])
     return {
         "items": [
-            _catalog_summary_payload(db, catalog, current_user=user) for catalog in page_items
+            _catalog_summary_payload(
+                catalog,
+                holdings=holdings_by_medicine.get(catalog.id, []),
+                current_user=user,
+            )
+            for catalog in page_items
         ],
         "page": page,
         "page_size": page_size,
@@ -839,7 +874,20 @@ def search_medicines(db: Session, *, keyword: str, limit: int = 10) -> dict:
 
 def get_medicine_detail(db: Session, *, medicine_id: UUID, user: User) -> dict:
     catalog = _get_catalog_or_raise(db, medicine_id)
-    summary = _catalog_summary_payload(db, catalog, current_user=user, recent_log_limit=10)
+    holdings = _holdings_by_medicine_ids(db, [catalog.id]).get(catalog.id, [])
+    recent_logs = db.scalars(
+        select(MedicineStockLog)
+        .options(joinedload(MedicineStockLog.operator).joinedload(User.profile))
+        .where(MedicineStockLog.medicine_id == catalog.id)
+        .order_by(MedicineStockLog.created_at.desc(), MedicineStockLog.id.desc())
+        .limit(10)
+    ).all()
+    summary = _catalog_summary_payload(
+        catalog,
+        holdings=holdings,
+        current_user=user,
+        recent_logs=recent_logs,
+    )
     summary.update(
         {
             "description": catalog.description,
@@ -860,6 +908,35 @@ def list_medicine_holdings(db: Session, *, medicine_id: UUID, user: User) -> dic
     return {"items": [_holder_payload(holding, user.id) for holding in holdings]}
 
 
+def _paginate_stock_logs(
+    db: Session,
+    *,
+    conditions: list,
+    unit: str,
+    page: int,
+    page_size: int,
+) -> dict:
+    """DB-paginated stock-log listing: COUNT + ORDER BY(created_at, id) + OFFSET/LIMIT."""
+    total = db.scalar(
+        select(func.count()).select_from(MedicineStockLog).where(*conditions)
+    )
+    logs = db.scalars(
+        select(MedicineStockLog)
+        .options(joinedload(MedicineStockLog.operator).joinedload(User.profile))
+        .where(*conditions)
+        .order_by(MedicineStockLog.created_at.desc(), MedicineStockLog.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return {
+        "items": [_log_payload(log, unit) for log in logs],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "has_more": page * page_size < total,
+    }
+
+
 def list_medicine_logs(
     db: Session,
     *,
@@ -868,14 +945,10 @@ def list_medicine_logs(
     page_size: int = 20,
 ) -> dict:
     catalog = _get_catalog_or_raise(db, medicine_id)
-    logs = db.scalars(
-        select(MedicineStockLog)
-        .options(joinedload(MedicineStockLog.operator).joinedload(User.profile))
-        .where(MedicineStockLog.medicine_id == catalog.id)
-        .order_by(MedicineStockLog.created_at.desc())
-    ).all()
-    return _paginated(
-        [_log_payload(log, catalog.unit) for log in logs],
+    return _paginate_stock_logs(
+        db,
+        conditions=[MedicineStockLog.medicine_id == catalog.id],
+        unit=catalog.unit,
         page=page,
         page_size=page_size,
     )
@@ -889,14 +962,10 @@ def list_holding_logs(
     page_size: int = 20,
 ) -> dict:
     holding = _holding_or_raise(db, holding_id)
-    logs = db.scalars(
-        select(MedicineStockLog)
-        .options(joinedload(MedicineStockLog.operator).joinedload(User.profile))
-        .where(MedicineStockLog.holding_id == holding.id)
-        .order_by(MedicineStockLog.created_at.desc())
-    ).all()
-    return _paginated(
-        [_log_payload(log, holding.unit_snapshot) for log in logs],
+    return _paginate_stock_logs(
+        db,
+        conditions=[MedicineStockLog.holding_id == holding.id],
+        unit=holding.unit_snapshot,
         page=page,
         page_size=page_size,
     )
@@ -910,7 +979,7 @@ def get_holding_detail(db: Session, *, holding_id: UUID, user: User) -> dict:
         select(MedicineStockLog)
         .options(joinedload(MedicineStockLog.operator).joinedload(User.profile))
         .where(MedicineStockLog.holding_id == holding.id)
-        .order_by(MedicineStockLog.created_at.desc())
+        .order_by(MedicineStockLog.created_at.desc(), MedicineStockLog.id.desc())
         .limit(10)
     ).all()
     is_holder = holding.holder_id == user.id
@@ -1395,7 +1464,26 @@ def list_applications(
     page: int = 1,
     page_size: int = 20,
 ) -> dict:
-    statement = (
+    conditions = [MedicineUseApplication.deleted_at.is_(None)]
+    if scope == "review":
+        conditions.append(MedicineUseApplication.holder_id == user.id)
+    elif scope == "all" and user.role in {"admin", "super_admin"}:
+        pass
+    elif scope == "all":
+        conditions.append(
+            or_(
+                MedicineUseApplication.applicant_id == user.id,
+                MedicineUseApplication.holder_id == user.id,
+            )
+        )
+    else:
+        conditions.append(MedicineUseApplication.applicant_id == user.id)
+    if status:
+        conditions.append(MedicineUseApplication.status == status)
+    total = db.scalar(
+        select(func.count()).select_from(MedicineUseApplication).where(*conditions)
+    )
+    applications = db.scalars(
         select(MedicineUseApplication)
         .options(
             joinedload(MedicineUseApplication.medicine),
@@ -1403,31 +1491,21 @@ def list_applications(
             joinedload(MedicineUseApplication.applicant).joinedload(User.profile),
             joinedload(MedicineUseApplication.holder).joinedload(User.profile),
         )
-        .where(MedicineUseApplication.deleted_at.is_(None))
-    )
-    if scope == "review":
-        statement = statement.where(MedicineUseApplication.holder_id == user.id)
-    elif scope == "all" and user.role in {"admin", "super_admin"}:
-        pass
-    elif scope == "all":
-        statement = statement.where(
-            or_(
-                MedicineUseApplication.applicant_id == user.id,
-                MedicineUseApplication.holder_id == user.id,
-            )
+        .where(*conditions)
+        .order_by(
+            MedicineUseApplication.created_at.desc(),
+            MedicineUseApplication.id.desc(),
         )
-    else:
-        statement = statement.where(MedicineUseApplication.applicant_id == user.id)
-    if status:
-        statement = statement.where(MedicineUseApplication.status == status)
-    applications = db.scalars(
-        statement.order_by(MedicineUseApplication.created_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     ).all()
-    return _paginated(
-        [_application_payload(application) for application in applications],
-        page=page,
-        page_size=page_size,
-    )
+    return {
+        "items": [_application_payload(application) for application in applications],
+        "page": page,
+        "page_size": page_size,
+        "total": total,
+        "has_more": page * page_size < total,
+    }
 
 
 def get_application_detail(db: Session, *, application_id: UUID, user: User) -> dict:

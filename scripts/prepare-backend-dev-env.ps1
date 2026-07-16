@@ -4,6 +4,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$DevelopmentCosEnvPrefix = "dev-sandbox"
 
 function New-RandomHexSecret {
     $bytes = New-Object byte[] 48
@@ -100,7 +101,14 @@ $content = Set-EnvValue `
     -Name "CATMAP_WECHAT_CONTENT_SECURITY_MODE" `
     -Value "off"
 
+$content = Set-EnvValue `
+    -Content (Remove-EnvValues `
+        -Content $content `
+        -Name "CATMAP_TENCENT_COS_ENV_PREFIX") `
+    -Name "CATMAP_TENCENT_COS_ENV_PREFIX" `
+    -Value $DevelopmentCosEnvPrefix
+
 $utf8NoBom = New-Object Text.UTF8Encoding($false)
 [IO.File]::WriteAllText($resolvedEnvFile, $content, $utf8NoBom)
 
-Write-Host "Development backend environment prepared with isolated runtime secrets."
+Write-Host "Development backend environment prepared with isolated runtime secrets and COS prefix."

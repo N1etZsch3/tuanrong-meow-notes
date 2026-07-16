@@ -17,6 +17,7 @@ $Domain = "dev-api.trmx.fun"
 $NginxConfigName = "catmap-dev.conf"
 $SystemdUnitName = "catmap-backend-dev.service"
 $DevelopmentDatabaseRole = "catmap_dev_app"
+$DevelopmentCosEnvPrefix = "dev-sandbox"
 $ProductionDeployDir = "/opt/catmap/backend"
 $ProductionServiceName = "catmap-backend"
 $ProductionDomain = "trmx.fun"
@@ -216,8 +217,8 @@ if ($databaseUrl -notmatch "^[a-z0-9+]+://$([regex]::Escape($DevelopmentDatabase
 }
 
 $cosEnvPrefix = Get-RequiredEnvValue -Content $envContent -Name "CATMAP_TENCENT_COS_ENV_PREFIX"
-if ($cosEnvPrefix -ne "dev") {
-    throw "Development EnvFile must use CATMAP_TENCENT_COS_ENV_PREFIX=dev."
+if ($cosEnvPrefix -ne $DevelopmentCosEnvPrefix) {
+    throw "Development EnvFile must use CATMAP_TENCENT_COS_ENV_PREFIX=$DevelopmentCosEnvPrefix."
 }
 
 $insecureDevelopmentSecrets = @(
@@ -346,8 +347,8 @@ if [ "$(grep -Ec '^CATMAP_TENCENT_COS_ENV_PREFIX=' "$ENV_UPLOAD")" -ne 1 ]; then
     exit 1
 fi
 
-if ! grep -Eq '^CATMAP_TENCENT_COS_ENV_PREFIX=dev[[:space:]]*$' "$ENV_UPLOAD"; then
-    echo 'Development object storage prefix must be dev.' >&2
+if ! grep -Eq '^CATMAP_TENCENT_COS_ENV_PREFIX=$DevelopmentCosEnvPrefix[[:space:]]*$' "$ENV_UPLOAD"; then
+    echo 'Development object storage prefix must be $DevelopmentCosEnvPrefix.' >&2
     exit 1
 fi
 

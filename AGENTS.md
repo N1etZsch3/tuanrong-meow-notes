@@ -117,7 +117,8 @@ Ignored environment and local config files are required for many checks, builds,
 - If required env files are missing from `dev`, ask the user instead of fabricating values.
 - Verify copied env files remain ignored with `git status --short --ignored -- <path>`.
 - Do not print env contents.
-- Do not infer an environment from its worktree or filename. Before a development deployment, check only non-sensitive boolean conditions: the database name is `catmap_dev`, the database role is `catmap_dev_app`, and `CATMAP_TENCENT_COS_ENV_PREFIX` is `dev`.
+- Do not infer an environment from its worktree or filename. Before a development deployment, check only non-sensitive boolean conditions: the database name is `catmap_dev`, the database role is `catmap_dev_app`, and `CATMAP_TENCENT_COS_ENV_PREFIX` is `dev-sandbox`.
+- Before a production deployment, verify the effective environment targets database `catmap`, does not use the development database role, retains the production legacy COS prefix `dev`, and enforces image content security. Prefer preserving the verified server production `.env` when no production configuration change is required.
 
 Mini Program AppIDs and third-party service keys are push-sensitive. Keep local development config aligned with the authorized app, but inspect staged diffs and push ranges before pushing. Do not push real AppIDs, keys, tokens, or private credentials to a remote unless the user explicitly approves that remote state.
 
@@ -138,7 +139,7 @@ Until separate physical servers are funded, production and development share one
 - Development deployment must use `scripts/deploy-backend-dev.ps1` with an explicit server host and ignored development environment file. Its fixed deployment directory, service name, domain, database, database role, and COS prefix guards must not be weakened or parameterized to production values.
 - The development service must run as the dedicated non-root `catmap-dev` system user, listen only on loopback, and must never add a public firewall/security-group rule for port 8001.
 - The development Nginx vhost must not use `default_server`. Obtain the development certificate with the HTTP webroot/bootstrap vhost; never use a standalone ACME mode that stops or occupies production 80/443 listeners.
-- One COS bucket may be shared temporarily, but development writes must use the `dev/` prefix. Treat this as naming isolation only: request a CAM policy limited to `dev/*` before considering object storage access fully isolated.
+- One COS bucket may be shared temporarily. Production retains its legacy `catmap/dev/` object paths, while development writes must use `catmap/dev-sandbox/`; cloned production references remain readable but cannot be deleted by the development runtime. Treat this as naming isolation only: request a CAM policy limited to `catmap/dev-sandbox/*` before considering object storage access fully isolated.
 - Do not automatically copy production data into development. Any later refresh must be a separate, approved procedure with backup, masking, restore validation, and rollback notes.
 - Deploy only a committed source baseline whose Alembic migrations are compatible with `catmap_dev`. Never deploy uncommitted worktree changes as a development release.
 - After a development deployment, verify both production and development health endpoints, both systemd units, the development database/role identity, the development migration version, loopback-only port 8001, and that production resource files and database version did not change.

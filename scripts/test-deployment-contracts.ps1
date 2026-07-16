@@ -125,6 +125,21 @@ Assert-Contains `
 
 Assert-Contains `
     -Content $deployScript `
+    -Needle '$ProductionDatabaseName = "catmap"' `
+    -Message "deploy-backend.ps1 must pin the production database name."
+
+Assert-Contains `
+    -Content $deployScript `
+    -Needle '$ProductionCosEnvPrefix = "dev"' `
+    -Message "deploy-backend.ps1 must preserve the production legacy COS prefix."
+
+Assert-Contains `
+    -Content $deployScript `
+    -Needle "Production environment file must target only the catmap database." `
+    -Message "deploy-backend.ps1 must reject an effective development database remotely."
+
+Assert-Contains `
+    -Content $deployScript `
     -Needle 'CATMAP_WECHAT_CONTENT_SECURITY_CALLBACK_TOKEN=' `
     -Message "deploy-backend.ps1 must require a content security callback token."
 
@@ -221,6 +236,11 @@ Assert-Contains `
 
 Assert-Contains `
     -Content $devDeployScript `
+    -Needle '$DevelopmentCosEnvPrefix = "dev-sandbox"' `
+    -Message "Development deployment must use a prefix distinct from the production legacy prefix."
+
+Assert-Contains `
+    -Content $devDeployScript `
     -Needle "CATMAP_JWT_SECRET_KEY" `
     -Message "Development deployment must require an explicit isolated JWT secret."
 
@@ -243,6 +263,11 @@ Assert-Contains `
     -Content $devEnvPreparationScript `
     -Needle "CATMAP_WECHAT_CONTENT_SECURITY_MODE" `
     -Message "Development environment preparation must explicitly isolate content security."
+
+Assert-Contains `
+    -Content $devEnvPreparationScript `
+    -Needle '$DevelopmentCosEnvPrefix = "dev-sandbox"' `
+    -Message "Development environment preparation must normalize the isolated COS prefix."
 
 Assert-Contains `
     -Content $devEnvPreparationScript `

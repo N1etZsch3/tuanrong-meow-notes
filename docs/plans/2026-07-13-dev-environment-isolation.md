@@ -4,7 +4,7 @@
 
 **Goal:** 在不改变生产部署契约的情况下，增加可验证、可拒绝误操作的同机开发后端发布路径，并明确开发前端 API 配置和服务器启用顺序。
 
-**Architecture:** 生产服务继续使用 `/opt/catmap/backend`、`catmap-backend`、`127.0.0.1:8000` 和生产域名。新增开发服务固定使用 `/opt/catmap-dev/backend`、`catmap-backend-dev`、`127.0.0.1:8001` 与 `dev-api.trmx.fun`；Nginx 根据域名反向代理。开发服务以 `catmap-dev` 非特权系统用户运行，环境文件必须指向 `catmap_dev`、开发专用数据库角色并使用对象存储 `dev/` 前缀。
+**Architecture:** 生产服务继续使用 `/opt/catmap/backend`、`catmap-backend`、`127.0.0.1:8000` 和生产域名。新增开发服务固定使用 `/opt/catmap-dev/backend`、`catmap-backend-dev`、`127.0.0.1:8001` 与 `dev-api.trmx.fun`；Nginx 根据域名反向代理。开发服务以 `catmap-dev` 非特权系统用户运行，环境文件必须指向 `catmap_dev`、开发专用数据库角色并使用对象存储 `dev-sandbox` 前缀。
 
 **Tech Stack:** PowerShell 7、Pester 风格部署契约测试、systemd、Nginx、Let's Encrypt/现有证书工具、FastAPI、Alembic、uni-app/Vite。
 
@@ -126,7 +126,7 @@ $SystemdUnitName = 'catmap-backend-dev.service'
 
 **Step 2: 在本地上传前加入环境护栏**
 
-脚本只读取键名和值的匹配结果，不输出原始环境文件。必须拒绝以下情形：环境文件不存在；数据库连接字符串未标识 `catmap_dev` 或未使用开发专用数据库角色；`CATMAP_TENCENT_COS_ENV_PREFIX` 不是 `dev`；部署目录、服务名、域名或 Nginx 文件名意外等于生产值。开发环境的内容安全模式应在注释/校验中明确为开发专用策略，不能假装生产审核已覆盖。
+脚本只读取键名和值的匹配结果，不输出原始环境文件。必须拒绝以下情形：环境文件不存在；数据库连接字符串未标识 `catmap_dev` 或未使用开发专用数据库角色；`CATMAP_TENCENT_COS_ENV_PREFIX` 不是 `dev-sandbox`；部署目录、服务名、域名或 Nginx 文件名意外等于生产值。开发环境的内容安全模式应在注释/校验中明确为开发专用策略，不能假装生产审核已覆盖。
 
 **Step 3: 在远程命令中重复校验关键目标**
 

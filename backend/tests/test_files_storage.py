@@ -35,3 +35,14 @@ def test_cos_delete_refuses_keys_from_another_environment() -> None:
     storage.delete_object("catmap/dev/task/development.jpg")
 
     assert storage._client.deleted_keys == ["catmap/dev/task/development.jpg"]
+
+
+def test_development_sandbox_cannot_delete_legacy_production_objects() -> None:
+    storage = make_storage("dev-sandbox")
+
+    storage.delete_object("catmap/dev/task/production-legacy.jpg")
+    storage.delete_object("catmap/dev-sandbox/task/development.jpg")
+
+    assert storage._client.deleted_keys == [
+        "catmap/dev-sandbox/task/development.jpg"
+    ]

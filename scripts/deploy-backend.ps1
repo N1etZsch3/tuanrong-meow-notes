@@ -19,6 +19,8 @@ $backendDir = Join-Path $repoRoot "backend"
 $nginxConfig = Join-Path $repoRoot "deploy\nginx\catmap.conf"
 $systemdService = Join-Path $repoRoot "deploy\systemd\catmap-backend.service"
 $healthUrl = "https://$Domain/api/v1/health"
+$ProductionDatabaseName = "catmap"
+$ProductionCosEnvPrefix = "dev"
 
 function Invoke-Native {
     param(
@@ -96,6 +98,30 @@ if ($EnvFile) {
         throw "Env file not found: $EnvFile"
     }
     $envContent = Get-Content -LiteralPath $EnvFile -Raw -Encoding UTF8
+    $databaseUrlMatches = [regex]::Matches(
+        $envContent,
+        '(?m)^CATMAP_DATABASE_URL=(?<value>[^\r\n]+)\s*$'
+    )
+    if ($databaseUrlMatches.Count -ne 1) {
+        throw "Production EnvFile must define CATMAP_DATABASE_URL exactly once."
+    }
+    $databaseUrl = $databaseUrlMatches[0].Groups['value'].Value.Trim()
+    if (
+        $databaseUrl -notmatch "/$([regex]::Escape($ProductionDatabaseName))(?:\?|$)" -or
+        $databaseUrl -match '/catmap_dev(?:\?|$)'
+    ) {
+        throw "Production EnvFile must target the $ProductionDatabaseName database."
+    }
+    $cosPrefixMatches = [regex]::Matches(
+        $envContent,
+        '(?m)^CATMAP_TENCENT_COS_ENV_PREFIX=(?<value>[^\r\n]+)\s*$'
+    )
+    if (
+        $cosPrefixMatches.Count -ne 1 -or
+        $cosPrefixMatches[0].Groups['value'].Value.Trim() -ne $ProductionCosEnvPrefix
+    ) {
+        throw "Production EnvFile must retain CATMAP_TENCENT_COS_ENV_PREFIX=$ProductionCosEnvPrefix."
+    }
     if ($envContent -notmatch '(?m)^CATMAP_WECHAT_CONTENT_SECURITY_MODE=enforced\s*$') {
         throw "Production image uploads require CATMAP_WECHAT_CONTENT_SECURITY_MODE=enforced."
     }
@@ -220,6 +246,19 @@ if [ -f "`$ENV_UPLOAD" ]; then
     install -m 600 "`$ENV_UPLOAD" "`$DEPLOY_DIR/.env"
 elif [ ! -f "`$DEPLOY_DIR/.env" ]; then
     echo "`$DEPLOY_DIR/.env is missing. Pass -EnvFile on the first deploy." >&2
+    exit 1
+fi
+
+if [ "`$(grep -Ec '^CATMAP_DATABASE_URL=' "`$DEPLOY_DIR/.env")" -ne 1 ] || \
+   ! grep -Eq '^CATMAP_DATABASE_URL=.*/catmap([?[:space:]]|$)' "`$DEPLOY_DIR/.env" || \
+   grep -Eq '^CATMAP_DATABASE_URL=.*/catmap_dev([?[:space:]]|$)' "`$DEPLOY_DIR/.env"; then
+    echo 'Production environment file must target only the catmap database.' >&2
+    exit 1
+fi
+
+if [ "`$(grep -Ec '^CATMAP_TENCENT_COS_ENV_PREFIX=' "`$DEPLOY_DIR/.env")" -ne 1 ] || \
+   ! grep -Eq '^CATMAP_TENCENT_COS_ENV_PREFIX=dev[[:space:]]*$' "`$DEPLOY_DIR/.env"; then
+    echo 'Production environment file must retain the legacy COS prefix.' >&2
     exit 1
 fi
 

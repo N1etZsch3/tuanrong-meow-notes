@@ -78,7 +78,7 @@ describe("summer feeding task pages", () => {
 
   it("turns the task tab into a Meow Notes bookshelf entry page", () => {
     expect(meowNotesSource).toContain("喵记");
-    expect(meowNotesSource).toContain("noteBooks");
+    expect(meowNotesSource).toContain("RECORD_BOOKS");
     expect(meowNotesSource).toContain('class="shelf"');
     expect(meowNotesSource).toContain('class="shelf__inner"');
     expect(meowNotesSource).toContain('class="cell"');
@@ -126,7 +126,7 @@ describe("summer feeding task pages", () => {
   it("adds shelf pagination for future Meow Notes book pages", () => {
     const pagerRule = extractCssRule(meowNotesSource, ".shelf-pager");
 
-    expect(meowNotesSource).toContain("bookPages");
+    expect(meowNotesSource).toContain("shelfPages");
     expect(meowNotesSource).toContain("currentBookRows");
     expect(meowNotesSource).toContain("currentShelfPageLabel");
     expect(meowNotesSource).toContain("goPreviousBookPage");

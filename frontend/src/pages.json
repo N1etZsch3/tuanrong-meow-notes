@@ -165,7 +165,14 @@
 			"path": "pages/profile/settings",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTitleText": "账号设置"
+				"navigationBarTitleText": "设置"
+			}
+		},
+		{
+			"path": "pages/profile/help-feedback",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "帮助与反馈"
 			}
 		},
 		{

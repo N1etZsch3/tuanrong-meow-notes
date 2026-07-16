@@ -65,27 +65,12 @@
         <view class="menu-card">
           <button class="menu-row" @tap="goAccountSettings">
             <image class="menu-icon-image" :src="profileMenuIconMap.settings" mode="aspectFit" />
-            <text class="menu-label">账号设置</text>
+            <text class="menu-label">设置</text>
             <text class="menu-chevron">›</text>
           </button>
           <button class="menu-row" @tap="goPublicHome">
             <image class="menu-icon-image" :src="publicHomeIcon" mode="aspectFit" />
             <text class="menu-label">协会公开主页</text>
-            <text class="menu-chevron">›</text>
-          </button>
-          <button class="menu-row" @tap="showPendingToast('消息通知')">
-            <image class="menu-icon-image" :src="profileMenuIconMap.notifications" mode="aspectFit" />
-            <text class="menu-label">消息通知</text>
-            <text class="menu-chevron">›</text>
-          </button>
-          <button class="menu-row" @tap="showPendingToast('帮助与反馈')">
-            <image class="menu-icon-image" :src="profileMenuIconMap.feedback" mode="aspectFit" />
-            <text class="menu-label">帮助与反馈</text>
-            <text class="menu-chevron">›</text>
-          </button>
-          <button v-if="dashboard?.profile.show_admin_entry" class="menu-row" @tap="goAdmin">
-            <image class="menu-icon-image" :src="adminIcon" mode="aspectFit" />
-            <text class="menu-label">管理员入口</text>
             <text class="menu-chevron">›</text>
           </button>
         </view>
@@ -124,10 +109,7 @@ import favoriteCat from "../../../素材/svg/萌猫/黑猫.svg";
 import taskStatsIcon from "../../../素材/svg/用户页/任务.svg";
 import inProgressStatsIcon from "../../../素材/svg/用户页/进行中.svg";
 import settingsIcon from "../../../素材/svg/用户页/设置.svg";
-import notificationsIcon from "../../../素材/svg/用户页/通知.svg";
-import feedbackIcon from "../../../素材/svg/用户页/帮助和反馈.svg";
 import observationIcon from "../../../素材/登录页素材/密码-显示.svg";
-import adminIcon from "../../../素材/svg/登录页/修改密码.svg";
 import publicHomeIcon from "../../../素材/svg/登录页/猫爪1.svg";
 
 const userStore = useUserStore();
@@ -144,8 +126,6 @@ const profileStatIconMap: Partial<Record<(typeof PROFILE_STAT_ENTRIES)[number]["
 };
 const profileMenuIconMap = {
   settings: settingsIcon,
-  notifications: notificationsIcon,
-  feedback: feedbackIcon,
 } as const;
 
 const avatarLoadFailed = ref(false);
@@ -216,14 +196,6 @@ function getProfileStatIcon(item: (typeof PROFILE_STAT_ENTRIES)[number]) {
 
 function getProfileStatFallbackIcon(item: (typeof PROFILE_STAT_ENTRIES)[number]) {
   return item.icon;
-}
-
-function goAdmin() {
-  uni.navigateTo({ url: "/pages/admin/index" });
-}
-
-function showPendingToast(title: string) {
-  uni.showToast({ title: `${title}暂未开放`, icon: "none" });
 }
 
 onShow(() => {

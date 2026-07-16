@@ -106,13 +106,25 @@ describe("profile center pages", () => {
     expect(profileIndexSource).toContain("素材/svg/用户页/任务.svg");
     expect(profileIndexSource).toContain("素材/svg/用户页/进行中.svg");
     expect(profileIndexSource).toContain("素材/svg/用户页/设置.svg");
-    expect(profileIndexSource).toContain("素材/svg/用户页/通知.svg");
-    expect(profileIndexSource).toContain("素材/svg/用户页/帮助和反馈.svg");
     expect(profileIndexSource).toContain("profileStatIconMap");
     expect(profileIndexSource).toContain("profileMenuIconMap");
     expect(profileIndexSource).toContain('class="stat-icon-image"');
     expect(profileIndexSource).toContain('class="menu-icon-image"');
     expect(profileIndexSource).not.toContain("{{ item.icon }}");
+  });
+
+  it("moves notifications and help-and-feedback off the profile menu into settings", () => {
+    expect(profileIndexSource).not.toContain("消息通知");
+    expect(profileIndexSource).not.toContain("帮助与反馈");
+    expect(profileIndexSource).not.toContain("管理员入口");
+    expect(profileIndexSource).not.toContain("showPendingToast");
+    expect(profileIndexSource).not.toContain("/pages/admin/index");
+    expect(profileIndexSource).toContain("协会公开主页");
+    expect(profileSettingsSource).toContain("消息通知");
+    expect(profileSettingsSource).toContain("帮助与反馈");
+    expect(profileSettingsSource).toContain("素材/svg/用户页/通知.svg");
+    expect(profileSettingsSource).toContain("素材/svg/用户页/帮助和反馈.svg");
+    expect(profileSettingsSource).toContain("/pages/profile/help-feedback");
   });
 
   it("keeps profile detail editable with the profile update api", () => {
@@ -278,7 +290,10 @@ describe("profile center pages", () => {
   it("routes account settings to a dedicated settings page with logout and reset password actions", () => {
     expect(pagesJson).toContain("pages/profile/settings");
     expect(pagesJson).toContain("pages/profile/reset-password");
+    expect(pagesJson).toContain("pages/profile/help-feedback");
     expect(profileIndexSource).toContain("/pages/profile/settings");
+    expect(profileIndexSource).toContain("设置");
+    expect(profileIndexSource).not.toContain("账号设置");
     expect(profileIndexSource).not.toContain('class="logout-button"');
     expect(profileSettingsSource).toContain("/pages/profile/reset-password");
     expect(profileSettingsSource).toContain("logoutFromServer");

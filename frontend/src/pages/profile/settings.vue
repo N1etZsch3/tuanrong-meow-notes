@@ -6,8 +6,29 @@
         <view class="nav-row">
           <button class="back-button" @tap="goBack">‹</button>
           <view class="nav-copy">
-            <text class="nav-title">账号设置</text>
-            <text class="nav-subtitle">管理登录密码与当前会话</text>
+            <text class="nav-title">设置</text>
+            <text class="nav-subtitle">账号安全与通知偏好</text>
+          </view>
+        </view>
+
+        <view class="settings-section">
+          <text class="section-title">通用</text>
+          <view class="settings-group">
+            <button class="settings-row" @tap="goNotificationSettings">
+              <view class="row-icon-shell is-notification">
+                <image class="row-icon" :src="notificationIcon" mode="aspectFit" />
+              </view>
+              <text class="row-title">消息通知</text>
+              <text class="row-chevron">›</text>
+            </button>
+            <view class="row-divider" />
+            <button class="settings-row" @tap="goHelpFeedback">
+              <view class="row-icon-shell is-feedback">
+                <image class="row-icon" :src="feedbackIcon" mode="aspectFit" />
+              </view>
+              <text class="row-title">帮助与反馈</text>
+              <text class="row-chevron">›</text>
+            </button>
           </view>
         </view>
 
@@ -56,6 +77,8 @@ import { useUserStore } from "@/stores/user";
 
 import passwordIcon from "../../../素材/svg/登录页/修改密码.svg";
 import wechatIcon from "../../../素材/svg/用户页/设置.svg";
+import notificationIcon from "../../../素材/svg/用户页/通知.svg";
+import feedbackIcon from "../../../素材/svg/用户页/帮助和反馈.svg";
 import pageBackground from "../../../素材/加载页素材/背景.jpg";
 
 const userStore = useUserStore();
@@ -63,6 +86,15 @@ const isUnbindingWechat = ref(false);
 
 function goBack() {
   uni.navigateBack();
+}
+
+function goNotificationSettings() {
+  // 阶段④通知后端落地后，这里改为跳转真正的通知开关设置页 /pages/profile/notifications。
+  uni.showToast({ title: "消息通知设置暂未开放", icon: "none" });
+}
+
+function goHelpFeedback() {
+  uni.navigateTo({ url: "/pages/profile/help-feedback" });
 }
 
 function goResetPassword() {
@@ -254,6 +286,14 @@ function confirmLogout() {
 
 .row-icon-shell.is-wechat {
   background: #edf7f0;
+}
+
+.row-icon-shell.is-notification {
+  background: #eef3ff;
+}
+
+.row-icon-shell.is-feedback {
+  background: #fff4e8;
 }
 
 .row-icon {

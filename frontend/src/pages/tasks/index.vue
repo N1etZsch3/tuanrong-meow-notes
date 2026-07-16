@@ -8,7 +8,7 @@
             <text class="title-text">喵记</text>
             <image class="title-icon" :src="pawIcon" mode="aspectFit" />
           </view>
-          <text class="title-subtitle">记录与管理入口</text>
+          <text class="title-subtitle">{{ currentShelfSubtitle }}</text>
         </view>
       </view>
 
@@ -37,7 +37,7 @@
         </view>
       </view>
 
-      <view class="shelf-pager" aria-label="书架分页">
+      <view v-if="showShelfPager" class="shelf-pager" aria-label="书架分页">
         <button
           class="pager-button"
           :class="{ 'pager-button--disabled': !canGoPreviousBookPage }"
@@ -65,13 +65,16 @@
 
 <script setup lang="ts">
 import { computed, ref } from "vue";
+import { onShow } from "@dcloudio/uni-app";
 import AppTabBar from "@/components/AppTabBar.vue";
+import { useUserStore } from "@/stores/user";
 
 import taskIcon from "../../../素材/svg/喵记/任务.svg";
 import supplyIcon from "../../../素材/svg/喵记/物资仓库.svg";
 import landmarkIcon from "../../../素材/svg/喵记/地标.svg";
 import medicineIcon from "../../../素材/svg/喵记/药品.svg";
 import catsLibraryIcon from "../../../素材/svg/猫咪库/总计.svg";
+import memberIcon from "../../../素材/svg/登录页/部门管理.svg";
 import pawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 
@@ -84,7 +87,13 @@ interface NoteBook {
   url?: string;
 }
 
-const noteBooks: NoteBook[] = [
+interface ShelfPage {
+  key: string;
+  subtitle: string;
+  books: NoteBook[];
+}
+
+const RECORD_BOOKS: NoteBook[] = [
   {
     key: "tasks",
     label: "任务",
@@ -127,16 +136,48 @@ const noteBooks: NoteBook[] = [
   },
 ];
 
-const bookPages: NoteBook[][] = [noteBooks];
+const ADMIN_BOOKS: NoteBook[] = [
+  {
+    key: "members",
+    label: "成员",
+    icon: memberIcon,
+    tone: "green",
+    ribbon: false,
+    url: "/pages/admin/users/index",
+  },
+];
+
+const userStore = useUserStore();
 const currentBookPage = ref(0);
 
-const totalBookPages = computed(() => bookPages.length);
-const currentBookRows = computed(() => buildBookRows(bookPages[currentBookPage.value] ?? []));
-const currentShelfPageLabel = computed(
-  () => `${currentBookPage.value + 1}/${totalBookPages.value}`,
+const shelfPages = computed<ShelfPage[]>(() => {
+  const pages: ShelfPage[] = [
+    { key: "records", subtitle: "记录入口", books: RECORD_BOOKS },
+  ];
+  if (userStore.isAdmin) {
+    pages.push({ key: "manage", subtitle: "管理入口", books: ADMIN_BOOKS });
+  }
+  return pages;
+});
+
+const totalBookPages = computed(() => shelfPages.value.length);
+const activeBookPage = computed(() =>
+  Math.min(currentBookPage.value, totalBookPages.value - 1),
 );
-const canGoPreviousBookPage = computed(() => currentBookPage.value > 0);
-const canGoNextBookPage = computed(() => currentBookPage.value < totalBookPages.value - 1);
+const currentBookRows = computed(() =>
+  buildBookRows(shelfPages.value[activeBookPage.value]?.books ?? []),
+);
+const currentShelfSubtitle = computed(
+  () => shelfPages.value[activeBookPage.value]?.subtitle ?? "记录入口",
+);
+const currentShelfPageLabel = computed(
+  () => `${activeBookPage.value + 1}/${totalBookPages.value}`,
+);
+const showShelfPager = computed(() => totalBookPages.value > 1);
+const canGoPreviousBookPage = computed(() => activeBookPage.value > 0);
+const canGoNextBookPage = computed(
+  () => activeBookPage.value < totalBookPages.value - 1,
+);
 
 function buildBookRows(books: NoteBook[]): NoteBook[][] {
   return [books.slice(0, 3), books.slice(3, 6), []];
@@ -147,7 +188,7 @@ function goPreviousBookPage() {
     return;
   }
 
-  currentBookPage.value -= 1;
+  currentBookPage.value = activeBookPage.value - 1;
 }
 
 function goNextBookPage() {
@@ -155,7 +196,7 @@ function goNextBookPage() {
     return;
   }
 
-  currentBookPage.value += 1;
+  currentBookPage.value = activeBookPage.value + 1;
 }
 
 function openBook(book: NoteBook) {
@@ -169,6 +210,11 @@ function openBook(book: NoteBook) {
 
   uni.navigateTo({ url: book.url });
 }
+
+onShow(() => {
+  // 角色态可能在切换 tab 后变化，把当前页夹回有效范围，避免停在已消失的管理页。
+  currentBookPage.value = Math.min(currentBookPage.value, totalBookPages.value - 1);
+});
 </script>
 
 <style scoped>

@@ -100,9 +100,9 @@
             />
             <view class="agreement-text">
               <text>我已阅读并同意</text>
-              <text class="agreement-link" @tap.stop="openModal('用户协议')">《用户协议》</text>
-              <text class="agreement-link" @tap.stop="openModal('隐私政策')">《隐私政策》</text>
-              <text class="agreement-link" @tap.stop="openModal('校园猫协成员规范')">《校园猫协成员规范》</text>
+              <text class="agreement-link" @tap.stop="openPrivacyContract">
+                《团绒喵记本小程序隐私保护指引》
+              </text>
             </view>
           </label>
         </checkbox-group>
@@ -115,37 +115,6 @@
           <text>请使用喵喵号登录并严格遵守任务与救助规范，</text>
           <text>共同守护校园猫咪安全与健康。</text>
         </view>
-      </view>
-    </view>
-
-    <view v-if="showModal" class="modal-mask" @tap="closeModal">
-      <view class="modal-card" @tap.stop>
-        <image class="modal-corner-paw modal-corner-paw-left" :src="pawIcon" mode="aspectFit" />
-        <image class="modal-corner-paw modal-corner-paw-right" :src="pawSoftIcon" mode="aspectFit" />
-        <button class="modal-close" type="button" aria-label="关闭弹窗" @tap="closeModal">×</button>
-        <view class="modal-header">
-          <image class="paw-icon left-paw" :src="pawSoftIcon" mode="aspectFit" />
-          <text class="modal-title">{{ modalTitle }}</text>
-          <image class="paw-icon right-paw" :src="pawLineIcon" mode="aspectFit" />
-        </view>
-
-        <view class="modal-body">
-          <view class="modal-joke-card">
-            <image class="modal-cat" :src="modalCat" mode="aspectFit" />
-            <text class="modal-joke-title">骗你的，其实什么也没有。</text>
-            <view class="modal-joke-mark">
-              <view class="modal-joke-dot" />
-              <view class="modal-joke-leaf" />
-              <view class="modal-joke-dot" />
-            </view>
-            <text class="modal-joke-sub">♥ 喵~ 你也太可爱了吧！♥</text>
-          </view>
-        </view>
-
-        <button class="modal-btn" hover-class="modal-btn-hover" @tap="closeModal">
-          <image class="btn-paw-icon" :src="pawSoftIcon" mode="aspectFit" />
-          <text>知道啦</text>
-        </button>
       </view>
     </view>
   </view>
@@ -173,10 +142,10 @@ import iconCaptcha from "../../../素材/登录页素材/验证码.svg";
 import iconUser from "../../../素材/登录页素材/登录.svg";
 import iconShow from "../../../素材/登录页素材/密码-显示.svg";
 import iconHide from "../../../素材/登录页素材/密码-隐藏.svg";
-import modalCat from "../../../素材/svg/萌猫/橘猫.svg";
-import pawIcon from "../../../素材/svg/登录页/猫爪.svg";
-import pawSoftIcon from "../../../素材/svg/登录页/猫爪1.svg";
-import pawLineIcon from "../../../素材/svg/登录页/猫爪-copy-copy.svg";
+
+declare const wx: {
+  openPrivacyContract(options: { fail?: () => void }): void;
+};
 
 const userStore = useUserStore();
 
@@ -193,20 +162,23 @@ const captchaImage = ref("");
 const isLoading = ref(false);
 const isConfirmingBinding = ref(false);
 const WECHAT_BINDING_CONFIRMATION_REQUIRED = 40006;
-const showModal = ref(false);
-const modalTitle = ref("");
-
-const openModal = (title: string) => {
-  modalTitle.value = title;
-  showModal.value = true;
-};
-
-const closeModal = () => {
-  showModal.value = false;
-};
 
 function onAgreementChange(e: any) {
   form.agreed = e.detail.value.length > 0;
+}
+
+function openPrivacyContract() {
+  // #ifdef MP-WEIXIN
+  wx.openPrivacyContract({
+    fail: () => {
+      uni.showToast({ title: "隐私保护指引暂时无法打开", icon: "none" });
+    },
+  });
+  // #endif
+
+  // #ifndef MP-WEIXIN
+  uni.showToast({ title: "请在微信小程序中查看隐私保护指引", icon: "none" });
+  // #endif
 }
 
 function applyRememberedAgreement() {
@@ -543,8 +515,7 @@ watch(
 
 .icon-action::after,
 .refresh-captcha::after,
-.login-button::after,
-.modal-btn::after {
+.login-button::after {
   border: 0;
 }
 
@@ -670,259 +641,5 @@ watch(
   color: #5f666e;
   font-size: 24rpx;
   line-height: 1.36;
-}
-
-.modal-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 44rpx;
-  box-sizing: border-box;
-  background: rgba(28, 42, 30, 0.42);
-  backdrop-filter: blur(12rpx);
-  z-index: 999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-card {
-  position: relative;
-  width: 624rpx;
-  max-width: 100%;
-  min-height: 560rpx;
-  box-sizing: border-box;
-  padding: 74rpx 48rpx 46rpx;
-  border: 2rpx solid rgba(213, 232, 203, 0.96);
-  border-radius: 42rpx;
-  background:
-    radial-gradient(circle at 12% 10%, rgba(207, 236, 194, 0.9) 0, rgba(207, 236, 194, 0) 152rpx),
-    radial-gradient(circle at 88% 12%, rgba(255, 235, 208, 0.94) 0, rgba(255, 235, 208, 0) 150rpx),
-    linear-gradient(180deg, #ffffff 0%, #fbfff7 100%);
-  box-shadow: 0 34rpx 88rpx rgba(19, 55, 24, 0.2);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  overflow: hidden;
-  animation: modalShow 0.24s ease-out forwards;
-}
-
-@keyframes modalShow {
-  from {
-    opacity: 0;
-    transform: translateY(20rpx) scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
-}
-
-.modal-card::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 16rpx;
-  background: linear-gradient(90deg, #d6efc8 0%, #6faf62 54%, #f2cf9f 100%);
-}
-
-.modal-card::after {
-  content: "";
-  position: absolute;
-  left: 42rpx;
-  right: 42rpx;
-  bottom: 132rpx;
-  height: 2rpx;
-  background: linear-gradient(90deg, rgba(111, 175, 98, 0), rgba(111, 175, 98, 0.28), rgba(111, 175, 98, 0));
-}
-
-.modal-corner-paw {
-  position: absolute;
-  width: 124rpx;
-  height: 124rpx;
-  opacity: 0.14;
-  pointer-events: none;
-}
-
-.modal-corner-paw-left {
-  left: -24rpx;
-  top: 34rpx;
-  transform: rotate(-20deg);
-}
-
-.modal-corner-paw-right {
-  right: -18rpx;
-  bottom: 96rpx;
-  transform: rotate(18deg);
-}
-
-.modal-close {
-  position: absolute;
-  top: 32rpx;
-  right: 32rpx;
-  width: 56rpx;
-  height: 56rpx;
-  margin: 0;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.76);
-  color: #78a26d;
-  font-size: 40rpx;
-  line-height: 52rpx;
-  box-shadow: 0 8rpx 22rpx rgba(42, 83, 48, 0.08);
-}
-
-.modal-close::after {
-  border: 0;
-}
-
-.modal-header {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 18rpx;
-  width: 100%;
-  margin-bottom: 42rpx;
-}
-
-.paw-icon {
-  width: 42rpx;
-  height: 42rpx;
-}
-
-.left-paw {
-  transform: rotate(-18deg);
-}
-
-.right-paw {
-  transform: rotate(16deg);
-}
-
-.modal-title {
-  color: #287331;
-  font-size: 40rpx;
-  font-weight: 800;
-  letter-spacing: 4rpx;
-  line-height: 1.2;
-}
-
-.modal-body {
-  position: relative;
-  z-index: 1;
-  width: 100%;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 44rpx;
-}
-
-.modal-joke-card {
-  position: relative;
-  width: 100%;
-  min-height: 278rpx;
-  box-sizing: border-box;
-  padding: 24rpx 22rpx 34rpx;
-  border: 2rpx solid rgba(224, 237, 215, 0.76);
-  border-radius: 32rpx;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.86) 0%, rgba(255, 255, 255, 0.66) 100%),
-    radial-gradient(circle at 50% 18%, rgba(247, 211, 164, 0.26), rgba(247, 211, 164, 0) 154rpx);
-  box-shadow: inset 0 1rpx 0 rgba(255, 255, 255, 0.8);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.modal-cat {
-  width: 126rpx;
-  height: 126rpx;
-  margin-bottom: 10rpx;
-  flex: 0 0 auto;
-}
-
-.modal-joke-title {
-  color: #566a61;
-  font-family: "Songti SC", "STSong", "SimSun", serif;
-  font-size: 38rpx;
-  font-weight: 500;
-  letter-spacing: 4rpx;
-  line-height: 1.35;
-  text-align: center;
-}
-
-.modal-joke-mark {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12rpx;
-  height: 34rpx;
-  margin: 12rpx 0 8rpx;
-}
-
-.modal-joke-dot {
-  width: 10rpx;
-  height: 10rpx;
-  border-radius: 50%;
-  background: rgba(226, 198, 164, 0.62);
-}
-
-.modal-joke-leaf {
-  width: 28rpx;
-  height: 14rpx;
-  border-left: 6rpx solid rgba(150, 190, 137, 0.7);
-  border-bottom: 6rpx solid rgba(150, 190, 137, 0.7);
-  transform: rotate(-45deg);
-}
-
-.modal-joke-sub {
-  color: #d6c3a6;
-  font-family: "Songti SC", "STSong", "SimSun", serif;
-  font-size: 25rpx;
-  letter-spacing: 2rpx;
-  line-height: 1.4;
-  text-align: center;
-}
-
-.modal-btn {
-  position: relative;
-  z-index: 1;
-  width: 286rpx;
-  height: 76rpx;
-  margin: 0;
-  border: 0;
-  border-radius: 38rpx;
-  background: linear-gradient(90deg, #62af59 0%, #2f8738 100%);
-  color: #ffffff;
-  font-size: 30rpx;
-  font-weight: 800;
-  line-height: 76rpx;
-  box-shadow: 0 14rpx 28rpx rgba(55, 133, 56, 0.24);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10rpx;
-}
-
-.modal-btn::after {
-  border: 0;
-}
-
-.modal-btn-hover {
-  opacity: 0.88;
-}
-
-.btn-paw-icon {
-  width: 32rpx;
-  height: 32rpx;
 }
 </style>

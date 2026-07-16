@@ -5,7 +5,7 @@ from decimal import Decimal
 from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import or_, select
+from sqlalchemy import Select, case, exists, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.errors import APIError, ErrorCode
@@ -127,8 +127,9 @@ def _user_payload(user: User | None) -> dict | None:
     }
 
 
-def _task_base_statement():
-    return select(Task).options(
+def _task_detail_load_options():
+    """Eager-load everything the detail payload renders (activities, checkins, photos)."""
+    return (
         selectinload(Task.map_point),
         selectinload(Task.publisher).selectinload(User.profile),
         selectinload(Task.photos).selectinload(TaskPhoto.file_asset),
@@ -143,6 +144,19 @@ def _task_base_statement():
         .selectinload(TaskCheckinPhoto.uploader)
         .selectinload(User.profile),
     )
+
+
+def _task_list_load_options():
+    """Eager-load only what the list summary renders: cover photo, execution cards, map point."""
+    return (
+        selectinload(Task.map_point),
+        selectinload(Task.photos).selectinload(TaskPhoto.file_asset),
+        selectinload(Task.execution_dates).selectinload(TaskExecutionDate.completed_user),
+    )
+
+
+def _task_base_statement():
+    return select(Task).options(*_task_detail_load_options())
 
 
 def get_task_or_raise(db: Session, task_id: UUID, *, include_private: bool = False) -> Task:
@@ -771,14 +785,143 @@ def task_detail_payload(
     }
 
 
-def _task_statement_for_list(*, include_private: bool = False):
-    statement = _task_base_statement().where(
+FINAL_EXECUTION_DISPLAY_CANCELLED = ("cancelled", "skipped")
+
+
+def _execution_display_status_sql(today: date):
+    """SQL expression mirroring execution_display_status() for a TaskExecutionDate row."""
+    return case(
+        (TaskExecutionDate.status == "completed", "completed"),
+        (
+            TaskExecutionDate.status.in_(FINAL_EXECUTION_DISPLAY_CANCELLED),
+            "cancelled",
+        ),
+        (TaskExecutionDate.execute_date > today, "not_started"),
+        else_="in_progress",
+    )
+
+
+def _execution_child_conditions(
+    *,
+    execute_date: date | None,
+    execute_date_start: date | None,
+    execute_date_end: date | None,
+    execution_statuses: list[str],
+    execution_display_statuses: list[str],
+    today: date,
+) -> list:
+    """Build SQL predicates on TaskExecutionDate matching _execution_matches_filters()."""
+    conditions = [TaskExecutionDate.deleted_at.is_(None)]
+    if execute_date is not None:
+        conditions.append(TaskExecutionDate.execute_date == execute_date)
+    else:
+        if execute_date_start is not None:
+            conditions.append(TaskExecutionDate.execute_date >= execute_date_start)
+        if execute_date_end is not None:
+            conditions.append(TaskExecutionDate.execute_date <= execute_date_end)
+    if execution_statuses:
+        conditions.append(TaskExecutionDate.status.in_(execution_statuses))
+    if execution_display_statuses:
+        conditions.append(
+            _execution_display_status_sql(today).in_(execution_display_statuses)
+        )
+    return conditions
+
+
+def _apply_task_list_filters(
+    statement: Select,
+    *,
+    include_private: bool,
+    statuses: list[str],
+    keyword: str,
+    execute_date: date | None,
+    execute_date_start: date | None,
+    execute_date_end: date | None,
+    execution_statuses: list[str],
+    execution_display_statuses: list[str],
+    today: date,
+) -> Select:
+    """Apply every list filter that can be pushed to SQL, including child display status."""
+    statement = statement.where(
         Task.deleted_at.is_(None),
         Task.task_type == "feeding",
     )
     if not include_private:
         statement = statement.where(Task.is_public.is_(True))
+    if statuses:
+        statement = statement.where(Task.status.in_(statuses))
+    if keyword:
+        statement = statement.join(MapPoint, MapPoint.id == Task.map_point_id).where(
+            or_(
+                Task.title.contains(keyword),
+                MapPoint.location_name.contains(keyword),
+                MapPoint.location_detail.contains(keyword),
+            )
+        )
+    child_conditions = _execution_child_conditions(
+        execute_date=execute_date,
+        execute_date_start=execute_date_start,
+        execute_date_end=execute_date_end,
+        execution_statuses=execution_statuses,
+        execution_display_statuses=execution_display_statuses,
+        today=today,
+    )
+    if len(child_conditions) > 1:
+        statement = statement.where(
+            exists(
+                select(TaskExecutionDate.id).where(
+                    TaskExecutionDate.task_id == Task.id,
+                    *child_conditions,
+                )
+            )
+        )
     return statement
+
+
+def sync_due_task_lifecycles(
+    db: Session,
+    *,
+    include_private: bool = True,
+    today: date | None = None,
+) -> bool:
+    """Normalize lifecycles for all *unsettled* feeding tasks and commit if anything changed.
+
+    Explicit, write-owning entry point (extracted out of the read queries). A task is a
+    normalization candidate only when it is still active (``in_progress``/``completed``) or
+    still has non-final execution dates; fully settled tasks are skipped so the scan cost
+    stays proportional to active tasks rather than the whole history.
+    """
+    today = today or _today()
+    unsettled = or_(
+        Task.status.in_(("in_progress", "completed")),
+        exists(
+            select(TaskExecutionDate.id).where(
+                TaskExecutionDate.task_id == Task.id,
+                TaskExecutionDate.deleted_at.is_(None),
+                TaskExecutionDate.status.in_(("pending", "missed")),
+            )
+        ),
+    )
+    statement = (
+        select(Task)
+        .options(
+            selectinload(Task.map_point),
+            selectinload(Task.execution_dates),
+        )
+        .where(
+            Task.deleted_at.is_(None),
+            Task.task_type == "feeding",
+            unsettled,
+        )
+    )
+    if not include_private:
+        statement = statement.where(Task.is_public.is_(True))
+    changed = False
+    for task in db.scalars(statement):
+        changed = _normalize_task_lifecycle(task, today=today) or changed
+    if changed:
+        db.commit()
+    return changed
 
 
 def list_tasks(
@@ -806,69 +949,51 @@ def list_tasks(
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
     today = _today()
-    statement = _task_statement_for_list(include_private=include_private)
-    if status:
-        statuses = _split_statuses(status)
-        if statuses:
-            statement = statement.where(Task.status.in_(statuses))
+
+    # 显式生命周期同步（写）：在只读分页查询之前把到期任务状态归一，使 SQL 过滤/计数准确。
+    sync_due_task_lifecycles(db, include_private=include_private, today=today)
+
+    statuses = _split_statuses(status) if status else []
     normalized_keyword = keyword.strip() if keyword else ""
-    if normalized_keyword:
-        statement = statement.join(MapPoint, MapPoint.id == Task.map_point_id).where(
-            or_(
-                Task.title.contains(normalized_keyword),
-                MapPoint.location_name.contains(normalized_keyword),
-                MapPoint.location_detail.contains(normalized_keyword),
-            )
-        )
     query_date = today if only_today else execute_date
     execution_statuses = _split_statuses(execution_status)
-    if query_date or execute_date_start or execute_date_end or execution_statuses:
-        task_ids = select(TaskExecutionDate.task_id).where(
-            TaskExecutionDate.deleted_at.is_(None),
-        )
-        if query_date:
-            task_ids = task_ids.where(TaskExecutionDate.execute_date == query_date)
-        else:
-            if execute_date_start:
-                task_ids = task_ids.where(TaskExecutionDate.execute_date >= execute_date_start)
-            if execute_date_end:
-                task_ids = task_ids.where(TaskExecutionDate.execute_date <= execute_date_end)
-        if execution_statuses:
-            task_ids = task_ids.where(TaskExecutionDate.status.in_(execution_statuses))
-        statement = statement.where(Task.id.in_(task_ids))
+    execution_display_statuses = _split_statuses(execution_display_status)
 
-    tasks = db.scalars(statement.order_by(Task.start_at.asc(), Task.published_at.desc())).all()
-    changed = False
-    for task in tasks:
-        changed = _normalize_task_lifecycle(task, today=today) or changed
-    if changed:
-        db.commit()
-        tasks = db.scalars(statement.order_by(Task.start_at.asc(), Task.published_at.desc())).all()
-
-    has_child_filter = bool(
-        query_date
-        or execute_date_start
-        or execute_date_end
-        or execution_status
-        or execution_display_status
+    filters = dict(
+        include_private=include_private,
+        statuses=statuses,
+        keyword=normalized_keyword,
+        execute_date=query_date,
+        execute_date_start=execute_date_start,
+        execute_date_end=execute_date_end,
+        execution_statuses=execution_statuses,
+        execution_display_statuses=execution_display_statuses,
+        today=today,
     )
-    if has_child_filter:
-        tasks = [
-            task
-            for task in tasks
-            if _display_executions_payload(
-                task.execution_dates,
-                execute_date=query_date,
-                execute_date_start=execute_date_start,
-                execute_date_end=execute_date_end,
-                execution_status=execution_status,
-                execution_display_status=execution_display_status,
-                today=today,
-            )
-        ]
-    total = len(tasks)
+
+    # 第一阶段：数据库内完成 COUNT 与当前页 ID（ORDER BY + OFFSET + LIMIT）。
+    total = db.scalar(
+        select(func.count()).select_from(
+            _apply_task_list_filters(select(Task.id), **filters).subquery()
+        )
+    )
     start = (page - 1) * page_size
-    paged = tasks[start : start + page_size]
+    id_statement = _apply_task_list_filters(select(Task.id), **filters).order_by(
+        Task.start_at.asc(),
+        Task.published_at.desc(),
+        Task.id.desc(),
+    )
+    page_ids = list(db.scalars(id_statement.offset(start).limit(page_size)).all())
+
+    # 第二阶段：只加载当前页任务及列表所需的轻量关联，并按分页 ID 顺序恢复。
+    tasks_by_id: dict[UUID, Task] = {}
+    if page_ids:
+        loaded = db.scalars(
+            select(Task).options(*_task_list_load_options()).where(Task.id.in_(page_ids))
+        ).all()
+        tasks_by_id = {task.id: task for task in loaded}
+    paged = [tasks_by_id[task_id] for task_id in page_ids if task_id in tasks_by_id]
+
     return {
         "items": [
             task_list_item_payload(
@@ -1104,6 +1229,19 @@ def publish_summer_feeding_task(
     }
 
 
+def sync_task_lifecycle(
+    db: Session,
+    task: Task,
+    *,
+    today: date | None = None,
+) -> bool:
+    """Normalize one task's lifecycle and commit if it changed. Explicit write step."""
+    if _normalize_task_lifecycle(task, today=today or _today()):
+        db.commit()
+        return True
+    return False
+
+
 def get_task_detail(
     db: Session,
     *,
@@ -1116,8 +1254,8 @@ def get_task_detail(
     viewer: User | None = None,
 ) -> dict:
     task = get_task_or_raise(db, task_id, include_private=include_private)
-    if _normalize_task_lifecycle(task, today=current_date or _today()):
-        db.commit()
+    # 显式生命周期同步（写）先行，随后 task_detail_payload 只做只读组装。
+    if sync_task_lifecycle(db, task, today=current_date or _today()):
         task = get_task_or_raise(db, task_id, include_private=include_private)
     return task_detail_payload(
         task,
@@ -1167,8 +1305,7 @@ def checkin_task(
 ) -> dict:
     task = get_task_or_raise(db, task_id)
     today = _today()
-    if _normalize_task_lifecycle(task, today=today):
-        db.commit()
+    if sync_task_lifecycle(db, task, today=today):
         task = get_task_or_raise(db, task_id)
     if task.status == "cancelled":
         raise APIError(

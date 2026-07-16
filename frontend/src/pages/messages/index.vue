@@ -1029,7 +1029,7 @@ onUnload(() => {
   box-sizing: border-box;
   height: 100vh;
   padding: var(--catmap-page-title-top, 92rpx) var(--catmap-page-title-side, 42rpx)
-    calc(env(safe-area-inset-bottom) + 154rpx);
+    calc(env(safe-area-inset-bottom) + 108rpx);
   display: flex;
   flex-direction: column;
   transition: filter 0.28s ease, transform 0.28s ease;

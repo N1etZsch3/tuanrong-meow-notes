@@ -405,6 +405,11 @@ describe("messages page wiring", () => {
     expect(messagesPageSource).toContain("var(--catmap-page-title-top, 92rpx)");
   });
 
+  it("keeps the message list close to the shared tab bar while reserving the safe area", () => {
+    expect(messagesPageSource).toContain("calc(env(safe-area-inset-bottom) + 108rpx)");
+    expect(messagesPageSource).not.toContain("calc(env(safe-area-inset-bottom) + 154rpx)");
+  });
+
   it("wires the mock websocket channel and unread management flows", () => {
     expect(messagesPageSource).toContain("connectNotificationChannel");
     expect(messagesPageSource).toContain('mode: "mock"');

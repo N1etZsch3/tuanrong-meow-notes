@@ -42,6 +42,22 @@ describe("login agreement memory", () => {
     expect(loginPageSource).not.toContain("请先勾选协议");
   });
 
+  it("opens the official privacy contract instead of placeholder agreement pages", () => {
+    expect(loginPageSource).toContain("《团绒喵记本小程序隐私保护指引》");
+    expect(loginPageSource).toContain("openPrivacyContract");
+    expect(loginPageSource).toContain("wx.openPrivacyContract");
+    expect(loginPageSource).not.toContain("openModal('用户协议')");
+    expect(loginPageSource).not.toContain("openModal('隐私政策')");
+    expect(loginPageSource).not.toContain("openModal('校园猫协成员规范')");
+    expect(loginPageSource).not.toContain("骗你的，其实什么也没有");
+  });
+
+  it("vertically centers the agreement checkbox with its privacy copy", () => {
+    expect(loginPageSource).toMatch(
+      /\.checkbox-label\s*{[^}]*align-items:\s*center;/s,
+    );
+  });
+
   it("uses a conditional login confirmation modal instead of a WeChat binding checkbox", () => {
     expect(loginPageSource).toContain(
       "登录后，当前微信将自动与该喵喵号绑定，用于后续自动登录和账号保护。如需更换微信，请联系管理员解绑。",

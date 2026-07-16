@@ -10,9 +10,9 @@ function extractAppIds(source: string) {
 }
 
 describe("mini program configuration", () => {
-  it("builds the 1.1.2 Mini Program release metadata", () => {
-    expect(manifestSource).toContain('"versionName" : "1.1.2"');
-    expect(manifestSource).toContain('"versionCode" : "112"');
+  it("builds the 1.1.3 Mini Program release metadata", () => {
+    expect(manifestSource).toContain('"versionName" : "1.1.3"');
+    expect(manifestSource).toContain('"versionCode" : "113"');
   });
 
   it("builds with the authorized WeChat app id instead of touristappid", () => {

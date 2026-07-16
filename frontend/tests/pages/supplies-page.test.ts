@@ -96,6 +96,19 @@ describe("supply point detail page", () => {
     expect(resetSource).not.toContain("HBNU_DEFAULT_SUPPLY_LOCATION");
   });
 
+  it("lets admins drag supply point photos to change the cover order", () => {
+    expect(adminSupplyCreateSource).toContain("SortableImageGrid");
+    expect(adminSupplyCreateSource).toContain('@reorder="reorderPhoto"');
+    expect(adminSupplyCreateSource).toContain("moveArrayItem(form.photos");
+  });
+
+  it("opens supply point photos with the native image preview", () => {
+    expect(supplyDetailSource).toContain("uni.previewImage({");
+    expect(supplyDetailSource).toContain("urls: resolvedUrls");
+    expect(supplyDetailSource).not.toContain("ImagePreviewModal");
+    expect(supplyDetailSource).not.toContain("imagePreviewVisible");
+  });
+
   it("lets members adjust selected supply quantities before submitting a record", () => {
     const payloadSource = extractFunctionSource(supplyDetailSource, "recordPayloadItems");
 

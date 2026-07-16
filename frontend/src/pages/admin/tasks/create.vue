@@ -122,34 +122,13 @@
             <text class="step-badge">6</text>
             <text class="section-title">任务点图片</text>
           </view>
-          <view class="photo-grid">
-            <view
-              v-for="photo in form.photos"
-              :key="photo.file_id || photo.file_url"
-              class="photo-item"
-            >
-              <image
-                class="photo-thumb"
-                :src="photo.thumbnail_url || photo.file_url"
-                mode="aspectFill"
-              />
-              <button
-                class="photo-remove"
-                hover-class="button-hover"
-                @tap="removeTaskPhoto(photo)"
-              >
-                ×
-              </button>
-            </view>
-            <button
-              class="photo-upload"
-              :loading="isUploading"
-              hover-class="button-hover"
-              @tap="chooseTaskPhoto"
-            >
-              +
-            </button>
-          </view>
+          <SortableImageGrid
+            :images="taskPhotoItems"
+            :uploading="isUploading"
+            @add="chooseTaskPhoto"
+            @remove="removeTaskPhotoAt"
+            @reorder="reorderTaskPhoto"
+          />
         </view>
 
         <view class="form-section">
@@ -169,9 +148,9 @@
         <view v-if="isEditMode" class="form-section">
           <view class="section-title-row">
             <text class="step-badge">8</text>
-            <text class="section-title">任务完成状态</text>
+            <text class="section-title">{{ statusSectionTitle }}</text>
           </view>
-          <text class="section-hint">用于管理员手动调整整个暑假投喂任务的状态</text>
+          <text class="section-hint">{{ statusSectionHint }}</text>
           <picker
             mode="selector"
             :range="statusOptions"
@@ -188,9 +167,9 @@
       </view>
     </scroll-view>
 
-    <view class="bottom-actions" :class="{ 'is-edit': isEditMode }">
+    <view class="bottom-actions" :class="{ 'is-edit': isEditMode && !isExecutionEditMode }">
       <button
-        v-if="isEditMode"
+        v-if="isEditMode && !isExecutionEditMode"
         class="delete-button"
         :disabled="isSubmitting || isLoadingDetail"
         hover-class="button-hover"
@@ -272,14 +251,18 @@ import {
   getAdminTaskDetail,
   publishSummerFeedingTask,
   updateSummerFeedingTask,
+  updateSummerFeedingTaskExecutionStatus,
   updateSummerFeedingTaskStatus,
+  type TaskExecutionStatusUpdatePayload,
   type TaskDetailDto,
   type TaskPhotoDto,
   type TaskStatusUpdatePayload,
   type UploadedFileRef,
 } from "@/api/tasks";
+import SortableImageGrid from "@/components/SortableImageGrid.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import { moveArrayItem } from "@/utils/array-order";
 import { returnToListAfterDelete } from "@/utils/delete-navigation";
 import { completeCreateOrEditNavigation } from "@/utils/save-navigation";
 import {
@@ -301,17 +284,29 @@ import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 const userStore = useUserStore();
 const form = reactive<FeedingTaskDraft>(createDefaultFeedingTaskDraft());
 const editTaskId = ref("");
+const editExecutionDateId = ref("");
 const isUploading = ref(false);
 const isLoadingDetail = ref(false);
 const isSubmitting = ref(false);
 const initialTaskStatus = ref<FeedingTaskDraft["status"]>("in_progress");
 const isEditMode = computed(() => Boolean(editTaskId.value));
+const isExecutionEditMode = computed(() => Boolean(editExecutionDateId.value));
 const pageTitle = computed(() => (isEditMode.value ? "编辑喂食任务" : "发布喂食任务"));
 const pageSubtitle = computed(() =>
-  isEditMode.value ? "修改暑假投喂任务" : "创建暑假投喂任务",
+  isExecutionEditMode.value
+    ? "修改本次子任务和共享任务信息"
+    : isEditMode.value
+      ? "修改暑假投喂任务"
+      : "创建暑假投喂任务",
 );
 const submitButtonText = computed(() => (isEditMode.value ? "保存修改" : "发布任务"));
 const selectedLocation = computed(() => form.location);
+const taskPhotoItems = computed(() =>
+  form.photos.map((photo) => ({
+    key: photo.file_id || photo.file_url,
+    url: photo.thumbnail_url || photo.file_url,
+  })),
+);
 const dateSummary = computed(() => formatExecutionDateSummary(form.execute_dates));
 const calendarVisible = ref(false);
 const calendarDraftDates = ref<string[]>([]);
@@ -319,7 +314,7 @@ const calendarMonth = ref(new Date(2026, 6, 1));
 const calendarWeeks = ["日", "一", "二", "三", "四", "五", "六"];
 const CALENDAR_START_DATE = "2026-07-01";
 const CALENDAR_END_DATE = "2026-09-01";
-const statusOptions: Array<{
+const parentStatusOptions: Array<{
   value: FeedingTaskDraft["status"];
   label: string;
 }> = [
@@ -328,14 +323,34 @@ const statusOptions: Array<{
   { value: "cancelled", label: "已取消" },
   { value: "archived", label: "已归档" },
 ];
+const executionStatusOptions: Array<{
+  value: FeedingTaskDraft["status"];
+  label: string;
+}> = [
+  { value: "pending", label: "未完成" },
+  { value: "completed", label: "已完成" },
+  { value: "cancelled", label: "已取消" },
+  { value: "skipped", label: "已跳过" },
+];
+const statusOptions = computed(() =>
+  isExecutionEditMode.value ? executionStatusOptions : parentStatusOptions,
+);
+const statusSectionTitle = computed(() =>
+  isExecutionEditMode.value ? "本次子任务完成状态" : "父任务完成状态",
+);
+const statusSectionHint = computed(() =>
+  isExecutionEditMode.value
+    ? "仅调整当前日期的子任务状态，不会批量覆盖其他日期"
+    : "调整整个暑假投喂父任务的状态，完成或取消会影响未完成子任务",
+);
 const selectedStatusIndex = computed(() =>
   Math.max(
     0,
-    statusOptions.findIndex((option) => option.value === form.status),
+    statusOptions.value.findIndex((option) => option.value === form.status),
   ),
 );
 const selectedStatusLabel = computed(
-  () => statusOptions[selectedStatusIndex.value]?.label || "进行中",
+  () => statusOptions.value[selectedStatusIndex.value]?.label || "进行中",
 );
 
 interface CalendarDay {
@@ -454,10 +469,21 @@ function removeTaskPhoto(photo: UploadedFileRef) {
   form.photos = form.photos.filter((item) => item !== photo);
 }
 
+function removeTaskPhotoAt(index: number) {
+  const photo = form.photos[index];
+  if (photo) {
+    removeTaskPhoto(photo);
+  }
+}
+
+function reorderTaskPhoto(fromIndex: number, toIndex: number) {
+  form.photos = moveArrayItem(form.photos, fromIndex, toIndex);
+}
+
 function changeTaskStatus(event: Event) {
   const value = (event as CustomEvent<{ value?: string | number }>).detail?.value;
   const index = Number(value);
-  const option = Number.isFinite(index) ? statusOptions[index] : null;
+  const option = Number.isFinite(index) ? statusOptions.value[index] : null;
   if (option) {
     form.status = option.value;
   }
@@ -510,10 +536,23 @@ async function submitStatusChangeIfNeeded(token: string) {
 
   const statusLabel = selectedStatusLabel.value;
   const payload: TaskStatusUpdatePayload = {
-    status: form.status,
+    status: form.status as TaskStatusUpdatePayload["status"],
     reason: `管理员在编辑页将任务状态调整为${statusLabel}`,
   };
-  await updateSummerFeedingTaskStatus(token, editTaskId.value, payload);
+  if (isExecutionEditMode.value) {
+    const executionPayload: TaskExecutionStatusUpdatePayload = {
+      status: form.status as TaskExecutionStatusUpdatePayload["status"],
+      reason: `管理员在编辑页将本次子任务状态调整为${statusLabel}`,
+    };
+    await updateSummerFeedingTaskExecutionStatus(
+      token,
+      editTaskId.value,
+      editExecutionDateId.value,
+      executionPayload,
+    );
+  } else {
+    await updateSummerFeedingTaskStatus(token, editTaskId.value, payload);
+  }
   initialTaskStatus.value = form.status;
 }
 
@@ -538,9 +577,12 @@ async function submitTask() {
     await submitStatusChangeIfNeeded(token);
     uni.removeStorageSync(TASK_PUBLISH_LOCATION_STORAGE_KEY);
     uni.showToast({ title: isEditMode.value ? "任务已保存" : "任务已发布", icon: "success" });
+    const executionQuery = editExecutionDateId.value
+      ? `&execution_date_id=${editExecutionDateId.value}`
+      : "";
     completeCreateOrEditNavigation({
       isEditMode: isEditMode.value,
-      detailUrl: `/pages/tasks/detail?task_id=${response.task_id}`,
+      detailUrl: `/pages/tasks/detail?task_id=${response.task_id}${executionQuery}`,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : isEditMode.value ? "保存失败" : "发布失败";
@@ -601,8 +643,10 @@ function applyTaskDetailToForm(task: TaskDetailDto) {
   form.title = task.title || "";
   form.description = task.description || "";
   form.required_items = task.required_items || "猫粮、水";
+  const scopedStatus = isExecutionEditMode.value ? task.execution?.status : task.status;
   form.status =
-    statusOptions.find((option) => option.value === task.status)?.value || "in_progress";
+    statusOptions.value.find((option) => option.value === scopedStatus)?.value ||
+    (isExecutionEditMode.value ? "pending" : "in_progress");
   initialTaskStatus.value = form.status;
   form.execute_dates = sortUniqueDates(
     task.execution_dates.map((item) => item.execute_date).filter(Boolean),
@@ -640,7 +684,9 @@ async function loadEditableTaskDetail() {
 
   isLoadingDetail.value = true;
   try {
-    const task = await getAdminTaskDetail(token, editTaskId.value);
+    const task = await getAdminTaskDetail(token, editTaskId.value, {
+      execution_date_id: editExecutionDateId.value || undefined,
+    });
     applyTaskDetailToForm(task);
   } catch (error) {
     const message = error instanceof Error ? error.message : "任务数据加载失败";
@@ -675,6 +721,8 @@ onShow(() => {
 
 onLoad((query) => {
   const queryTaskId = typeof query?.task_id === "string" ? query.task_id : "";
+  editExecutionDateId.value =
+    typeof query?.execution_date_id === "string" ? query.execution_date_id : "";
   editTaskId.value = queryTaskId;
   if (editTaskId.value) {
     void loadEditableTaskDetail();

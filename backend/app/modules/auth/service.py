@@ -3,7 +3,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from fastapi.encoders import jsonable_encoder
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
@@ -164,12 +164,22 @@ def generate_next_meow_no(db: Session) -> str:
     values = db.scalars(
         select(User.student_no).where(User.student_no.like(f"{MEOW_NO_PREFIX}%"))
     ).all()
-    max_sequence = 0
+    used_sequences: set[int] = set()
     for value in values:
         suffix = value.removeprefix(MEOW_NO_PREFIX)
         if suffix.isdigit():
-            max_sequence = max(max_sequence, int(suffix))
-    return f"{MEOW_NO_PREFIX}{max_sequence + 1:0{MEOW_NO_WIDTH}d}"
+            used_sequences.add(int(suffix))
+
+    if db.get_bind().dialect.name == "postgresql":
+        while True:
+            sequence = int(db.scalar(text("SELECT nextval('meow_no_auto_sequence')")) or 0)
+            if sequence > 0 and sequence not in used_sequences:
+                return f"{MEOW_NO_PREFIX}{sequence:0{MEOW_NO_WIDTH}d}"
+
+    sequence = 1
+    while sequence in used_sequences:
+        sequence += 1
+    return f"{MEOW_NO_PREFIX}{sequence:0{MEOW_NO_WIDTH}d}"
 
 
 def get_user_by_student_no(db: Session, student_no: str) -> User | None:

@@ -133,6 +133,7 @@ def _catalog_summary_payload(
     catalog: MedicineCatalog,
     *,
     holdings: list[MedicineHolding],
+    photo_urls: list[str],
     current_user: User,
     recent_logs: list[MedicineStockLog] | None = None,
 ) -> dict:
@@ -144,6 +145,7 @@ def _catalog_summary_payload(
         (holding.last_operation_at for holding in holdings if holding.last_operation_at),
         None,
     )
+    cover_image_url = photo_urls[0] if photo_urls else catalog.cover_image_url
     payload = {
         "medicine_id": str(catalog.id),
         "name": catalog.name,
@@ -156,7 +158,8 @@ def _catalog_summary_payload(
         "specification": catalog.specification,
         "unit": catalog.unit,
         "description": catalog.description,
-        "cover_image_url": catalog.cover_image_url,
+        "cover_image_url": cover_image_url,
+        "photo_urls": photo_urls or ([cover_image_url] if cover_image_url else []),
         "status": catalog.status,
         "total_current_quantity": _quantity(total_current),
         "total_in_quantity": _quantity(total_in),

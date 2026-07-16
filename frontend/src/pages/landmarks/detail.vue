@@ -119,13 +119,6 @@
       </button>
     </view>
 
-    <ImagePreviewModal
-      :visible="imagePreviewVisible"
-      :images="imagePreviewUrls"
-      :current-index="imagePreviewIndex"
-      @change="setImagePreviewIndex"
-      @close="closeImagePreview"
-    />
   </view>
 </template>
 
@@ -134,7 +127,6 @@ import { onLoad, onShow } from "@dcloudio/uni-app";
 import { computed, ref } from "vue";
 
 import { getLandmarkDetail, type LandmarkDetailDto } from "@/api/landmarks";
-import ImagePreviewModal from "@/components/ImagePreviewModal.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { ApiBusinessError } from "@/services/request";
 import { useUserStore } from "@/stores/user";
@@ -151,9 +143,6 @@ const landmarkId = ref("");
 const landmark = ref<LandmarkDetailDto | null>(null);
 const loadState = ref<LoadState>("idle");
 const errorMessage = ref("");
-const imagePreviewVisible = ref(false);
-const imagePreviewUrls = ref<string[]>([]);
-const imagePreviewIndex = ref(0);
 const heroPhotos = computed(() =>
   (landmark.value?.photos || [])
     .map((photo) => ({ photo_id: photo.photo_id, url: getLandmarkPhotoDisplayUrl(photo) }))
@@ -197,17 +186,13 @@ function openImagePreview(urls: string[], current: string) {
     return;
   }
   const uniqueUrls = Array.from(new Set(urls.filter((url) => url)));
-  imagePreviewUrls.value = uniqueUrls.length ? uniqueUrls : [current];
-  imagePreviewIndex.value = Math.max(0, imagePreviewUrls.value.indexOf(current));
-  imagePreviewVisible.value = true;
-}
-
-function closeImagePreview() {
-  imagePreviewVisible.value = false;
-}
-
-function setImagePreviewIndex(index: number) {
-  imagePreviewIndex.value = index;
+  const resolvedUrls = uniqueUrls.includes(current)
+    ? uniqueUrls
+    : [current, ...uniqueUrls];
+  uni.previewImage({
+    current,
+    urls: resolvedUrls,
+  });
 }
 
 function goNavigateToLandmark() {

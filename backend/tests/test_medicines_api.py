@@ -215,6 +215,11 @@ def test_member_can_create_medicine_and_read_catalog_summary(api_client, db_sess
     detail = detail_response.json()["data"]
     assert detail["medicine_id"] == created["medicine_id"]
     assert detail["cover_image_url"] == "https://img.example.com/amoxicillin.jpg"
+    assert detail["photo_urls"] == [
+        "https://img.example.com/amoxicillin.jpg",
+        "https://img.example.com/amoxicillin-box.jpg",
+        "https://img.example.com/amoxicillin-label.jpg",
+    ]
     assert detail["total_current_quantity"] == 20
     assert detail["permissions"]["can_edit_catalog"] is False
     assert detail["recent_logs"][0]["operation_type"] == "initial_in"
@@ -716,6 +721,11 @@ def test_admin_can_manage_categories_and_edit_catalog(api_client, db_session):
             "unit": "片",
             "description": "更新后的说明",
             "usage_notes": "遵医嘱",
+            "cover_image_url": "https://img.example.com/medicine-back.jpg",
+            "photo_urls": [
+                "https://img.example.com/medicine-back.jpg",
+                "https://img.example.com/medicine-front.jpg",
+            ],
         },
     )
     assert edit_response.status_code == 200
@@ -729,6 +739,21 @@ def test_admin_can_manage_categories_and_edit_catalog(api_client, db_session):
     assert detail["category"]["name"] == "术后护理"
     assert detail["specification"] == "50mg/片"
     assert detail["description"] == "更新后的说明"
+    assert detail["cover_image_url"] == "https://img.example.com/medicine-back.jpg"
+    assert detail["photo_urls"] == [
+        "https://img.example.com/medicine-back.jpg",
+        "https://img.example.com/medicine-front.jpg",
+    ]
+    active_photos = db_session.scalars(
+        select(MedicinePhoto)
+        .where(
+            MedicinePhoto.medicine_id == UUID(created["medicine_id"]),
+            MedicinePhoto.deleted_at.is_(None),
+        )
+        .order_by(MedicinePhoto.sort_order)
+    ).all()
+    assert [photo.file_url for photo in active_photos] == detail["photo_urls"]
+    assert [photo.photo_type for photo in active_photos] == ["cover", "gallery"]
 
 
 def test_admin_archive_and_delete_require_no_stock_or_pending_applications(

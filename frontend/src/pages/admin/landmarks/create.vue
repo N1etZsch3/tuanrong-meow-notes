@@ -67,26 +67,13 @@
             <text class="step-badge">3</text>
             <text class="section-title">照片</text>
           </view>
-          <view class="photo-grid">
-            <view
-              v-for="photo in form.photos"
-              :key="photo.file_id || photo.file_url"
-              class="photo-item"
-            >
-              <image class="photo-thumb" :src="photo.thumbnail_url || photo.file_url" mode="aspectFill" />
-              <button class="photo-remove" hover-class="button-hover" @tap="removePhoto(photo)">
-                ×
-              </button>
-            </view>
-            <button
-              class="photo-upload"
-              :loading="isUploading"
-              hover-class="button-hover"
-              @tap="choosePhoto"
-            >
-              +
-            </button>
-          </view>
+          <SortableImageGrid
+            :images="landmarkPhotoItems"
+            :uploading="isUploading"
+            @add="choosePhoto"
+            @remove="removePhotoAt"
+            @reorder="reorderPhoto"
+          />
         </view>
 
         <view class="form-section">
@@ -141,8 +128,10 @@ import {
   updateLandmark,
   type LandmarkPhotoPayload,
 } from "@/api/landmarks";
+import SortableImageGrid from "@/components/SortableImageGrid.vue";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import { moveArrayItem } from "@/utils/array-order";
 import { returnToListAfterDelete } from "@/utils/delete-navigation";
 import { completeCreateOrEditNavigation } from "@/utils/save-navigation";
 import {
@@ -173,6 +162,12 @@ const pageSubtitle = computed(() =>
 );
 const submitButtonText = computed(() => (isEditMode.value ? "保存修改" : "发布地标点"));
 const selectedLocation = computed(() => form.location);
+const landmarkPhotoItems = computed(() =>
+  form.photos.map((photo) => ({
+    key: photo.file_id || photo.file_url,
+    url: photo.thumbnail_url || photo.file_url,
+  })),
+);
 
 async function getAccessToken(): Promise<string | null> {
   const accessToken = await userStore.ensureFreshAccessToken();
@@ -185,6 +180,17 @@ async function getAccessToken(): Promise<string | null> {
 
 function removePhoto(photo: LandmarkPhotoPayload) {
   form.photos = form.photos.filter((item) => item !== photo);
+}
+
+function removePhotoAt(index: number) {
+  const photo = form.photos[index];
+  if (photo) {
+    removePhoto(photo);
+  }
+}
+
+function reorderPhoto(fromIndex: number, toIndex: number) {
+  form.photos = moveArrayItem(form.photos, fromIndex, toIndex);
 }
 
 function choosePhoto() {

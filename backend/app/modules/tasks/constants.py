@@ -10,6 +10,13 @@ TASK_STATUS_LABELS = {
     "archived": "已归档",
 }
 
+EXECUTION_STATUS_LABELS = {
+    "pending": "未完成",
+    "completed": "已完成",
+    "cancelled": "已取消",
+    "skipped": "已跳过",
+}
+
 TASK_ERROR_PARAM = 62001
 TASK_ERROR_EMPTY_DATES = 62002
 TASK_ERROR_INVALID_DATES = 62003

@@ -44,7 +44,7 @@ export interface FeedingTaskDraft {
   description: string;
   required_items: string;
   execute_dates: string[];
-  status: "in_progress" | "completed" | "cancelled" | "archived";
+  status: "in_progress" | "pending" | "completed" | "cancelled" | "archived" | "skipped";
   location: SelectedTaskLocation | null;
   photos: UploadedFileRef[];
   route_instruction: string;
@@ -97,6 +97,28 @@ export function formatTaskDate(value: string | null | undefined): string {
 
 function padDatePart(value: number): string {
   return String(value).padStart(2, "0");
+}
+
+const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
+
+export function formatChinaDateTime(value: string | null | undefined): string {
+  const normalized = value?.trim();
+  if (!normalized) {
+    return "";
+  }
+
+  const hasTimeZone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+  const timestamp = Date.parse(hasTimeZone ? normalized : `${normalized}Z`);
+  if (!Number.isFinite(timestamp)) {
+    return normalized.replace("T", " ").slice(0, 16);
+  }
+
+  const chinaTime = new Date(timestamp + CHINA_TIME_OFFSET_MS);
+  return `${chinaTime.getUTCFullYear()}-${padDatePart(
+    chinaTime.getUTCMonth() + 1,
+  )}-${padDatePart(chinaTime.getUTCDate())} ${padDatePart(
+    chinaTime.getUTCHours(),
+  )}:${padDatePart(chinaTime.getUTCMinutes())}`;
 }
 
 export function formatLocalDate(value: Date): string {

@@ -68,4 +68,11 @@ describe("landmark list page", () => {
     expect(landmarkDetailSource).toContain('import { onLoad, onShow } from "@dcloudio/uni-app"');
     expect(landmarkDetailSource).toMatch(/onShow\(\(\) => \{\s*void loadLandmarkDetail/);
   });
+
+  it("opens landmark photos with the native image preview", () => {
+    expect(landmarkDetailSource).toContain("uni.previewImage({");
+    expect(landmarkDetailSource).toContain("urls: resolvedUrls");
+    expect(landmarkDetailSource).not.toContain("ImagePreviewModal");
+    expect(landmarkDetailSource).not.toContain("imagePreviewVisible");
+  });
 });

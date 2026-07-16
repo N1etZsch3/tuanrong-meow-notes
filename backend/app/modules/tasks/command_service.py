@@ -20,8 +20,10 @@ from app.modules.map.models import MapPoint
 from app.modules.map.service import get_default_campus
 from app.modules.tasks.constants import (
     EXECUTION_REMOVED_CANCEL_REASON,
+    EXECUTION_STATUS_LABELS,
     TASK_ERROR_DUPLICATE_DATE,
     TASK_ERROR_EMPTY_DATES,
+    TASK_ERROR_EXECUTION_NOT_FOUND,
     TASK_ERROR_INVALID_DATES,
     TASK_ERROR_MAP_POINT_INVALID,
     TASK_ERROR_PHOTO_INVALID,
@@ -36,10 +38,12 @@ from app.modules.tasks.execution_state import (
     normalize_task_lifecycle,
 )
 from app.modules.tasks.models import Task, TaskActivityLog, TaskExecutionDate, TaskPhoto
+from app.modules.tasks.presenters import activity_payload, execution_payload
 from app.modules.tasks.query_service import get_task_or_raise
 from app.modules.tasks.schemas import (
     SummerFeedingTaskCreateRequest,
     SummerFeedingTaskUpdateRequest,
+    TaskExecutionStatusUpdateRequest,
     TaskPhotoRequest,
     TaskStatusUpdateRequest,
     UploadedFileRef,
@@ -460,6 +464,120 @@ def update_task_status(
     )
     db.commit()
     return {"task_id": task.id, "status": task.status, "updated_at": task.updated_at}
+
+
+def update_task_execution_status(
+    db: Session,
+    *,
+    task_id: UUID,
+    execution_date_id: UUID,
+    admin: User,
+    payload: TaskExecutionStatusUpdateRequest,
+    today: date,
+    now: datetime,
+) -> dict:
+    """Adjust one execution date while keeping parent lifecycle and map state consistent."""
+    task = get_task_or_raise(db, task_id, include_private=True)
+    execution = next(
+        (
+            item
+            for item in task.execution_dates
+            if item.id == execution_date_id and item.deleted_at is None
+        ),
+        None,
+    )
+    if execution is None:
+        raise APIError(
+            code=TASK_ERROR_EXECUTION_NOT_FOUND,
+            message="执行日期不存在",
+            status_code=404,
+        )
+    if task.status in {"cancelled", "archived"} and payload.status in {
+        "pending",
+        "completed",
+    }:
+        raise APIError(
+            code=TASK_ERROR_STATUS_CONFLICT,
+            message="请先恢复父任务，再调整子任务状态",
+            status_code=409,
+        )
+
+    previous_status = execution.status
+    execution.status = payload.status
+    execution.updated_at = now
+    if payload.remark is not None:
+        execution.remark = payload.remark or None
+
+    if payload.status == "completed":
+        execution.completed_by = admin.id
+        execution.completed_at = now
+        execution.cancelled_by = None
+        execution.cancelled_at = None
+        execution.cancel_reason = None
+    elif payload.status == "pending":
+        execution.completed_by = None
+        execution.completed_at = None
+        execution.checkin_id = None
+        execution.cancelled_by = None
+        execution.cancelled_at = None
+        execution.cancel_reason = None
+    else:
+        execution.completed_by = None
+        execution.completed_at = None
+        execution.checkin_id = None
+        execution.cancelled_by = admin.id
+        execution.cancelled_at = now
+        execution.cancel_reason = payload.reason
+
+    status_label = EXECUTION_STATUS_LABELS[payload.status]
+    activity = TaskActivityLog(
+        task_id=task.id,
+        task_execution_date_id=execution.id,
+        activity_type=f"execution_{payload.status}",
+        title=f"子任务{status_label}",
+        content=(
+            payload.reason
+            or f"管理员将 {execution.execute_date.isoformat()} 的子任务调整为{status_label}"
+        ),
+        actor_id=admin.id,
+        activity_metadata={
+            "execute_date": execution.execute_date.isoformat(),
+            "previous_status": previous_status,
+            "status": payload.status,
+            "reason": payload.reason,
+        },
+        created_at=now,
+    )
+    db.add(activity)
+
+    task.updated_at = now
+    normalize_task_lifecycle(task, today=today, now=now)
+    _sync_task_map_point_status(db, task=task, admin=admin, now=now)
+    db.add(
+        AdminOperationLog(
+            admin_id=admin.id,
+            operation_type="update_status",
+            target_type="task_execution_date",
+            target_id=execution.id,
+            summary=(
+                f"调整子任务 {execution.execute_date.isoformat()} 状态："
+                f"{EXECUTION_STATUS_LABELS.get(previous_status, previous_status)} -> {status_label}"
+            ),
+            before_data={"status": previous_status},
+            after_data={
+                "status": payload.status,
+                "reason": payload.reason,
+                "remark": execution.remark,
+            },
+        )
+    )
+    db.commit()
+    return {
+        "task_id": task.id,
+        "task_status": task.status,
+        "execution_date": execution_payload(execution, today=today),
+        "activity": activity_payload(activity),
+    }
 
 
 def soft_delete_task(

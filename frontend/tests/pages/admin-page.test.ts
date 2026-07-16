@@ -4,6 +4,7 @@ import adminCreateUserSource from "../../src/pages/admin/create-user.vue?raw";
 import adminIndexSource from "../../src/pages/admin/index.vue?raw";
 import adminLandmarkCreateSource from "../../src/pages/admin/landmarks/create.vue?raw";
 import adminLandmarkLocationSource from "../../src/pages/admin/landmarks/location.vue?raw";
+import landmarkPageSource from "../../src/pages/admin/landmarks/landmark-page.ts?raw";
 import adminUsersApiSource from "../../src/api/admin-users.ts?raw";
 import adminUsersDetailSource from "../../src/pages/admin/users/detail.vue?raw";
 import pagesJson from "../../src/pages.json?raw";
@@ -141,6 +142,14 @@ describe("admin entry pages", () => {
     expect(adminLandmarkLocationSource).toContain(':show-location="true"');
     expect(resetSource).toContain("void placeAtCurrentUserLocation({ silent: false })");
     expect(resetSource).not.toContain("HBNU_DEFAULT_LANDMARK_LOCATION");
+  });
+
+  it("lets admins drag landmark photos to change the cover order", () => {
+    expect(adminLandmarkCreateSource).toContain("SortableImageGrid");
+    expect(adminLandmarkCreateSource).toContain('@reorder="reorderPhoto"');
+    expect(adminLandmarkCreateSource).toContain("moveArrayItem(form.photos");
+    expect(landmarkPageSource).toContain("sort_order: index");
+    expect(landmarkPageSource).toContain("is_cover: index === 0");
   });
 
   it("groups editable member account operations beside the save action", () => {

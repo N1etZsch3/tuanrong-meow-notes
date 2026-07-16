@@ -142,7 +142,12 @@ export function buildLandmarkPayload(draft: LandmarkDraft): LandmarkCreatePayloa
       location_name: draft.name.trim(),
       route_instruction: description,
     },
-    photos: draft.photos,
+    photos: draft.photos.map((photo, index) => ({
+      ...photo,
+      photo_type: index === 0 ? "cover" : "scene",
+      sort_order: index,
+      is_cover: index === 0,
+    })),
     is_public: true,
   };
 }

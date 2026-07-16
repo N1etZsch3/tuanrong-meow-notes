@@ -108,6 +108,39 @@ def test_admin_create_member_generates_meow_no_and_uses_it_as_initial_password(
     assert login_response.json()["data"]["next_action"] == "change_password"
 
 
+def test_manual_high_meow_no_does_not_advance_automatic_sequence(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin001",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    for sequence in range(1, 10):
+        create_user(
+            db_session,
+            student_no=f"trmx{sequence:04d}",
+            must_change_password=False,
+        )
+    token = create_token(admin)
+
+    manual_response = api_client.post(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"meow_no": "trmx2313", "role": "member"},
+    )
+    assert manual_response.status_code == 200
+    assert manual_response.json()["data"]["meow_no"] == "trmx2313"
+
+    automatic_response = api_client.post(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"role": "member"},
+    )
+    assert automatic_response.status_code == 200
+    assert automatic_response.json()["data"]["meow_no"] == "trmx0010"
+
+
 def test_admin_create_member_without_initial_profile_leaves_fields_empty(api_client, db_session):
     admin = create_user(
         db_session,

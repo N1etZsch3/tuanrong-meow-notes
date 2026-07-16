@@ -287,7 +287,34 @@ def update_catalog(
         catalog.description = payload.description
     if payload.usage_notes is not None:
         catalog.usage_notes = payload.usage_notes
-    if payload.cover_image_url is not None:
+    if payload.photo_urls is not None:
+        requested_urls = _catalog_photo_urls(
+            cover_image_url=payload.cover_image_url,
+            photo_urls=payload.photo_urls,
+        )
+        resolved_urls = _resolve_catalog_photo_urls(
+            db,
+            photo_urls=requested_urls,
+            user=admin,
+        )
+        replacement_time = _now()
+        active_photos = db.scalars(
+            select(MedicinePhoto).where(
+                MedicinePhoto.medicine_id == catalog.id,
+                MedicinePhoto.deleted_at.is_(None),
+            )
+        ).all()
+        for photo in active_photos:
+            photo.deleted_at = replacement_time
+        catalog.cover_image_url = resolved_urls[0] if resolved_urls else None
+        _create_catalog_photos(
+            db,
+            catalog=catalog,
+            photo_urls=resolved_urls,
+            user=admin,
+            now=replacement_time,
+        )
+    elif payload.cover_image_url is not None:
         resolved_urls = _resolve_catalog_photo_urls(
             db,
             photo_urls=[payload.cover_image_url],

@@ -75,6 +75,17 @@ class TaskStatusUpdateRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=500)
 
 
+class TaskExecutionStatusUpdateRequest(BaseModel):
+    status: str = Field(pattern="^(pending|completed|cancelled|skipped)$")
+    reason: str | None = Field(default=None, max_length=500)
+    remark: str | None = Field(default=None, max_length=500)
+
+    @field_validator("reason", "remark")
+    @classmethod
+    def strip_text(cls, value: str | None) -> str | None:
+        return value.strip() if isinstance(value, str) else value
+
+
 class TaskCheckinRequest(BaseModel):
     execute_date: date | None = None
     is_completed: bool = True

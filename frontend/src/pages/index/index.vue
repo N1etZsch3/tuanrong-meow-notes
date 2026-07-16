@@ -91,10 +91,7 @@
       </view>
     </view>
 
-    <cover-view
-      class="map-filter-layer"
-      :class="{ 'map-filter-layer--preview-open': imagePreviewVisible }"
-    >
+    <cover-view class="map-filter-layer">
       <cover-view class="filter-panel-hit-layer">
         <cover-view
           class="filter-chip"
@@ -318,13 +315,6 @@
     </view>
 
     <AppTabBar active-key="map" />
-    <ImagePreviewModal
-      :visible="imagePreviewVisible"
-      :images="imagePreviewUrls"
-      :current-index="imagePreviewIndex"
-      @change="setImagePreviewIndex"
-      @close="closeImagePreview"
-    />
   </view>
 </template>
 
@@ -353,7 +343,6 @@ import {
 } from "@/api/map";
 import { updateAdminMapPointLocation } from "@/api/admin-map";
 import AppTabBar from "@/components/AppTabBar.vue";
-import ImagePreviewModal from "@/components/ImagePreviewModal.vue";
 import { ApiBusinessError, isRequestCanceledError } from "@/services/request";
 import {
   getCachedUserLocation,
@@ -530,9 +519,6 @@ const navigationRoute = ref<NavigationRouteState | null>(null);
 const bottomContentItems = ref<MapShellItem[]>([]);
 const searchResultItems = ref<MapShellItem[]>([]);
 const selectedSummary = ref<MapPointSummaryResponse | null>(null);
-const imagePreviewVisible = ref(false);
-const imagePreviewUrls = ref<string[]>([]);
-const imagePreviewIndex = ref(0);
 const selectedPoiMarker = ref<MapPointMarkerDto | null>(null);
 const nativeMarkerLookup = shallowRef(new Map<number, MapPointMarkerDto>());
 const pendingPointSummaryRequestId = ref<number | null>(null);
@@ -857,21 +843,18 @@ function previewSummaryAvatar() {
 }
 
 function openImagePreview(urls: string[], current: string) {
+  if (!current) {
+    return;
+  }
   const uniqueUrls = Array.from(new Set(urls.filter((url) => url)));
-  const resolvedUrls = uniqueUrls.length ? uniqueUrls : [current];
-  const currentIndex = Math.max(0, resolvedUrls.indexOf(current));
+  const resolvedUrls = uniqueUrls.includes(current)
+    ? uniqueUrls
+    : [current, ...uniqueUrls];
   filterMenuOpen.value = false;
-  imagePreviewUrls.value = resolvedUrls;
-  imagePreviewIndex.value = currentIndex;
-  imagePreviewVisible.value = true;
-}
-
-function closeImagePreview() {
-  imagePreviewVisible.value = false;
-}
-
-function setImagePreviewIndex(index: number) {
-  imagePreviewIndex.value = index;
+  uni.previewImage({
+    current,
+    urls: resolvedUrls,
+  });
 }
 
 const navigationRouteDistance = computed(() =>
@@ -3271,12 +3254,6 @@ onBeforeUnmount(() => {
   top: 380rpx;
   width: 360rpx;
   pointer-events: none;
-}
-
-/* 预览大图时仅隐藏不卸载：drawer.wxs 写在该节点上的内联定位样式
-   得以保留，退出预览不会出现位置回跳闪烁 */
-.map-filter-layer--preview-open {
-  display: none;
 }
 
 .filter-panel-hit-layer {

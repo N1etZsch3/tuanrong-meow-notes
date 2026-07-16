@@ -33,6 +33,7 @@ export interface MedicineListItemDto {
   unit: string;
   description: string | null;
   cover_image_url: string | null;
+  photo_urls?: string[];
   status: string;
   total_current_quantity: number;
   total_in_quantity: number;
@@ -105,6 +106,7 @@ export interface MedicineCatalogUpdatePayload {
   description?: string | null;
   usage_notes?: string | null;
   cover_image_url?: string | null;
+  photo_urls?: string[] | null;
 }
 
 export interface MedicineCatalogUpdateResponse {

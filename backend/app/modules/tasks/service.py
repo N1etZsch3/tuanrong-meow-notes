@@ -58,6 +58,7 @@ from app.modules.tasks.schemas import (
     SummerFeedingTaskCreateRequest,
     SummerFeedingTaskUpdateRequest,
     TaskCheckinRequest,
+    TaskExecutionStatusUpdateRequest,
     TaskStatusUpdateRequest,
 )
 
@@ -91,6 +92,7 @@ __all__ = [
     "task_detail_payload",
     "task_list_item_payload",
     "update_summer_feeding_task",
+    "update_task_execution_status",
     "update_task_status",
 ]
 
@@ -225,6 +227,25 @@ def update_summer_feeding_task(
     return command_service.update_summer_feeding_task(
         db,
         task_id=task_id,
+        admin=admin,
+        payload=payload,
+        today=_today(),
+        now=_now(),
+    )
+
+
+def update_task_execution_status(
+    db: Session,
+    *,
+    task_id: UUID,
+    execution_date_id: UUID,
+    admin: User,
+    payload: TaskExecutionStatusUpdateRequest,
+) -> dict:
+    return command_service.update_task_execution_status(
+        db,
+        task_id=task_id,
+        execution_date_id=execution_date_id,
         admin=admin,
         payload=payload,
         today=_today(),

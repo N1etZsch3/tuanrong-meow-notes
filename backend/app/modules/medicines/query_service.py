@@ -18,6 +18,7 @@ from app.modules.medicines.common import MEDICINE_ERROR_NOT_FOUND, _quantity
 from app.modules.medicines.models import (
     MedicineCatalog,
     MedicineHolding,
+    MedicinePhoto,
     MedicineStockLog,
     MedicineUseApplication,
 )
@@ -95,6 +96,31 @@ def _holdings_by_medicine_ids(
     return grouped
 
 
+def _photo_urls_by_medicine_ids(
+    db: Session,
+    medicine_ids: list[UUID],
+) -> dict[UUID, list[str]]:
+    """Load ordered active photos for a page of catalogs in one query."""
+    grouped: dict[UUID, list[str]] = {medicine_id: [] for medicine_id in medicine_ids}
+    if not medicine_ids:
+        return grouped
+    photos = db.scalars(
+        select(MedicinePhoto)
+        .where(
+            MedicinePhoto.medicine_id.in_(medicine_ids),
+            MedicinePhoto.deleted_at.is_(None),
+        )
+        .order_by(
+            MedicinePhoto.medicine_id,
+            MedicinePhoto.sort_order.asc(),
+            MedicinePhoto.created_at.asc(),
+        )
+    ).all()
+    for photo in photos:
+        grouped[photo.medicine_id].append(photo.file_url)
+    return grouped
+
+
 def _catalog_list_filters(
     *,
     user: User,
@@ -163,12 +189,15 @@ def list_medicines(
         .limit(page_size)
     ).all()
     # 当前页库存摘要：一次批量查询全部持有记录，Python 内按 medicine_id 分组聚合。
-    holdings_by_medicine = _holdings_by_medicine_ids(db, [catalog.id for catalog in page_items])
+    medicine_ids = [catalog.id for catalog in page_items]
+    holdings_by_medicine = _holdings_by_medicine_ids(db, medicine_ids)
+    photos_by_medicine = _photo_urls_by_medicine_ids(db, medicine_ids)
     return {
         "items": [
             _catalog_summary_payload(
                 catalog,
                 holdings=holdings_by_medicine.get(catalog.id, []),
+                photo_urls=photos_by_medicine.get(catalog.id, []),
                 current_user=user,
             )
             for catalog in page_items
@@ -220,6 +249,7 @@ def search_medicines(db: Session, *, keyword: str, limit: int = 10) -> dict:
 def get_medicine_detail(db: Session, *, medicine_id: UUID, user: User) -> dict:
     catalog = _get_catalog_or_raise(db, medicine_id)
     holdings = _holdings_by_medicine_ids(db, [catalog.id]).get(catalog.id, [])
+    photo_urls = _photo_urls_by_medicine_ids(db, [catalog.id]).get(catalog.id, [])
     recent_logs = db.scalars(
         select(MedicineStockLog)
         .options(joinedload(MedicineStockLog.operator).joinedload(User.profile))
@@ -230,6 +260,7 @@ def get_medicine_detail(db: Session, *, medicine_id: UUID, user: User) -> dict:
     summary = _catalog_summary_payload(
         catalog,
         holdings=holdings,
+        photo_urls=photo_urls,
         current_user=user,
         recent_logs=recent_logs,
     )

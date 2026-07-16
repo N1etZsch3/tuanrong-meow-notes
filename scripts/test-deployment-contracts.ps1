@@ -241,6 +241,11 @@ Assert-Contains `
 
 Assert-Contains `
     -Content $devDeployScript `
+    -Needle "Replace('__COS_ENV_PREFIX__', `$DevelopmentCosEnvPrefix)" `
+    -Message "Development deployment must render the isolated prefix into remote guards."
+
+Assert-Contains `
+    -Content $devDeployScript `
     -Needle "CATMAP_JWT_SECRET_KEY" `
     -Message "Development deployment must require an explicit isolated JWT secret."
 

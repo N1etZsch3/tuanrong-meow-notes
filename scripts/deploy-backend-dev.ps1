@@ -289,6 +289,7 @@ DEPLOY_DIR='__DEPLOY_DIR__'
 SERVICE_NAME='__SERVICE_NAME__'
 NGINX_CONFIG_NAME='__NGINX_CONFIG_NAME__'
 DEVELOPMENT_DATABASE_ROLE='__DATABASE_ROLE__'
+DEVELOPMENT_COS_ENV_PREFIX='__COS_ENV_PREFIX__'
 DEPLOY_TMP='__REMOTE_TEMP_DIR__'
 ARCHIVE="$DEPLOY_TMP/backend.tar"
 ENV_UPLOAD="$DEPLOY_TMP/backend.env"
@@ -347,8 +348,8 @@ if [ "$(grep -Ec '^CATMAP_TENCENT_COS_ENV_PREFIX=' "$ENV_UPLOAD")" -ne 1 ]; then
     exit 1
 fi
 
-if ! grep -Eq '^CATMAP_TENCENT_COS_ENV_PREFIX=$DevelopmentCosEnvPrefix[[:space:]]*$' "$ENV_UPLOAD"; then
-    echo 'Development object storage prefix must be $DevelopmentCosEnvPrefix.' >&2
+if ! grep -Eq "^CATMAP_TENCENT_COS_ENV_PREFIX=${DEVELOPMENT_COS_ENV_PREFIX}[[:space:]]*$" "$ENV_UPLOAD"; then
+    echo "Development object storage prefix must be ${DEVELOPMENT_COS_ENV_PREFIX}." >&2
     exit 1
 fi
 
@@ -524,6 +525,7 @@ rm -f "$NGINX_BACKUP"
         Replace('__SERVICE_NAME__', $ServiceName).
         Replace('__NGINX_CONFIG_NAME__', $NginxConfigName).
         Replace('__DATABASE_ROLE__', $DevelopmentDatabaseRole).
+        Replace('__COS_ENV_PREFIX__', $DevelopmentCosEnvPrefix).
         Replace('__REMOTE_TEMP_DIR__', $remoteTempDir)
     $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
     [System.IO.File]::WriteAllText($remoteScriptPath, $remoteScript, $utf8NoBom)

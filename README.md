@@ -23,7 +23,8 @@
   <a href="#核心能力">核心能力</a> ·
   <a href="#技术架构">技术架构</a> ·
   <a href="#本地开发">本地开发</a> ·
-  <a href="#项目文档">项目文档</a>
+  <a href="#项目文档">项目文档</a> ·
+  <a href="#反馈与参与">反馈与参与</a>
 </p>
 
 ## 项目简介
@@ -77,7 +78,6 @@ flowchart LR
 ├── deploy/                  Nginx、systemd 等部署配置
 ├── scripts/                 部署、环境保护与契约校验脚本
 ├── docs/                    模块、接口、库表、计划、发布与进度文档
-├── AGENTS.md                项目开发手册与安全规则
 └── README.md                仓库入口文档
 ```
 
@@ -165,25 +165,21 @@ npm run build:mp-weixin
 
 | 文档 | 用途 |
 | --- | --- |
-| [AGENTS.md](AGENTS.md) | 开发流程、Git 工作树、安全、验证和交接规范 |
 | [开发进度](docs/开发进度.md) | 当前版本、线上状态、最近验证结果与待办 |
+| [发布说明](docs/releases) | 各 GitHub Release 的更新内容 |
+| [后端开发说明](backend/README.md) | Python 环境、后端启动、迁移与测试方式 |
+| [前端开发说明](frontend/README.md) | 前端脚本、API 环境和小程序构建方式 |
 | [Git 版本管理说明](docs/Git版本管理说明.md) | 分支、标签、发布与热修流程 |
 | [接口设计规范](docs/接口文档/接口设计规范文档.md) | `/api/v1` 契约、响应与错误格式 |
 | [模块功能文档](docs/模块功能) | 各业务模块的功能边界与流程 |
 | [接口文档](docs/接口文档) | 各模块 API 契约 |
 | [库表文档](docs/库表文档) | 数据模型、字段与关系说明 |
-| [发布说明](docs/releases) | 各 GitHub Release 的更新内容 |
 
-## 开发约定
+## 反馈与参与
 
-开始修改前请先阅读 [AGENTS.md](AGENTS.md)，并遵循以下原则：
+如果你在使用中遇到问题或有功能建议，欢迎通过 [GitHub Issues](https://github.com/N1etZsch3/tuanrong-meow-notes/issues) 反馈。提交问题时建议附上版本、运行平台、复现步骤和必要截图，但请先移除账号、OpenID、密钥、Token 等隐私或凭据信息。
 
-- 以当前代码和最新进度记录为事实来源。
-- 一个分支只处理一个聚焦任务，普通开发从 `dev` 创建工作分支。
-- 显式暂存需要提交的文件，不使用 `git add .`。
-- API 或数据库契约变化必须同步测试、迁移和对应文档。
-- 开发或发布工作完成后更新 `docs/开发进度.md`。
-- 推送前检查密钥、AppID、Token、私有域名和环境值。
+准备参与代码开发时，可以从 [前端开发说明](frontend/README.md)、[后端开发说明](backend/README.md) 和 [Git 版本管理说明](docs/Git版本管理说明.md) 开始了解工程与协作方式。
 
 ---
 

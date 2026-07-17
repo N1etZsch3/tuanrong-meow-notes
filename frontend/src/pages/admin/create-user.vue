@@ -39,12 +39,7 @@
 
           <view class="field-group">
             <text class="field-label">部门</text>
-            <picker mode="selector" :range="departments" :value="departmentIndex" @change="onDepartmentChange">
-              <view class="picker-field">
-                <text>{{ form.department }}</text>
-                <text class="picker-arrow">⌄</text>
-              </view>
-            </picker>
+            <DepartmentTagPicker v-model="form.departments" placeholder="请添加部门" />
           </view>
 
           <view class="field-group">
@@ -167,11 +162,11 @@ import {
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import type { UserRole } from "@/types/user";
+import DepartmentTagPicker from "@/components/DepartmentTagPicker.vue";
+import { DEPARTMENTS } from "@/constants/departments";
 
 import restorePawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 
-const departments = ["生存保障部", "活动部", "宣传部", "秘书部", "养护部"] as const;
-type Department = (typeof departments)[number];
 const roles: UserRole[] = ["member", "summer_volunteer", "admin"];
 const roleLabels = ["普通成员", "暑期志愿者", "管理员"];
 
@@ -187,28 +182,19 @@ const form = reactive<{
   meow_no: string;
   initial_password: string;
   nickname: string;
-  department: Department;
+  departments: string[];
   role: UserRole;
   must_change_password: boolean;
 }>({
   meow_no: "",
   initial_password: "",
   nickname: "",
-  department: departments[0],
+  departments: [DEPARTMENTS[0]],
   role: "member" as UserRole,
   must_change_password: true,
 });
 
-const departmentIndex = computed(() => {
-  const index = departments.findIndex((department) => department === form.department);
-  return index >= 0 ? index : 0;
-});
 const roleIndex = computed(() => roles.findIndex((role) => role === form.role));
-
-function onDepartmentChange(event: any) {
-  const index = Number(event.detail.value);
-  form.department = departments[index] || departments[0];
-}
 
 function onRoleChange(event: any) {
   const index = Number(event.detail.value);
@@ -226,6 +212,10 @@ function validateForm(): boolean {
   }
   if (form.initial_password && !/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z0-9@_!]{8,20}$/.test(form.initial_password)) {
     uni.showToast({ title: "密码需 8-20 位，含字母和数字", icon: "none" });
+    return false;
+  }
+  if (!form.departments.length) {
+    uni.showToast({ title: "请至少添加一个部门", icon: "none" });
     return false;
   }
   return true;
@@ -252,7 +242,7 @@ async function submitCreateUser() {
         role: form.role,
         profile: {
           nickname: form.nickname,
-          department: form.department,
+          departments: form.departments,
         },
         must_change_password: form.must_change_password,
       },

@@ -169,3 +169,85 @@ def test_profile_complete_requires_password_changed(api_client, db_session):
 
     assert response.status_code == 403
     assert response.json()["code"] == 40301
+
+
+def test_complete_and_update_profile_supports_multiple_departments(api_client, db_session):
+    user = create_user(
+        db_session,
+        student_no="trmx0007",
+        password="trmx0007",
+        must_change_password=False,
+        profile_completed=False,
+    )
+    token = create_token(user)
+
+    complete = api_client.post(
+        "/api/v1/profile/me/complete",
+        headers=auth_headers(token),
+        json={
+            "nickname": "多部门同学",
+            "departments": ["生存保障部", "活动部"],
+            "contact_info": "13800138000",
+        },
+    )
+    assert complete.status_code == 200
+
+    profile = api_client.get("/api/v1/profile/me", headers=auth_headers(token))
+    assert profile.status_code == 200
+    data = profile.json()["data"]
+    assert data["departments"] == ["生存保障部", "活动部"]
+    # 主部门（兼容旧单值字段）= 第一个部门
+    assert data["department"] == "生存保障部"
+
+    # 更新为不同的多部门集合，验证增删对齐
+    update = api_client.patch(
+        "/api/v1/profile/me",
+        headers=auth_headers(token),
+        json={"departments": ["宣传部", "秘书部", "养护部"]},
+    )
+    assert update.status_code == 200
+    assert update.json()["data"]["departments"] == ["宣传部", "秘书部", "养护部"]
+    assert update.json()["data"]["department"] == "宣传部"
+
+
+def test_complete_profile_rejects_empty_departments(api_client, db_session):
+    user = create_user(
+        db_session,
+        student_no="trmx0008",
+        password="trmx0008",
+        must_change_password=False,
+        profile_completed=False,
+    )
+    token = create_token(user)
+
+    response = api_client.post(
+        "/api/v1/profile/me/complete",
+        headers=auth_headers(token),
+        json={
+            "nickname": "无部门同学",
+            "departments": [],
+            "contact_info": "13800138000",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_update_profile_legacy_single_department_still_works(api_client, db_session):
+    user = create_user(
+        db_session,
+        student_no="trmx0009",
+        password="trmx0009",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    token = create_token(user)
+
+    # 旧客户端只传单值 department
+    update = api_client.patch(
+        "/api/v1/profile/me",
+        headers=auth_headers(token),
+        json={"department": "活动部"},
+    )
+    assert update.status_code == 200
+    assert update.json()["data"]["departments"] == ["活动部"]
+    assert update.json()["data"]["department"] == "活动部"

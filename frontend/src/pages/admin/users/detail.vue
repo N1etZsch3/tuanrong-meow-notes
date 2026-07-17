@@ -59,19 +59,11 @@
             </view>
             <view class="field-group">
               <text class="field-label">部门</text>
-              <picker
+              <DepartmentTagPicker
+                v-model="form.departments"
                 :disabled="readonlyMode"
-                :range="departments"
-                :value="departmentIndex"
-                @change="selectDepartment"
-              >
-                <view class="picker-field">
-                  <text :class="form.department ? 'picker-value' : 'picker-placeholder'">
-                    {{ form.department || "请选择部门" }}
-                  </text>
-                  <text v-if="!readonlyMode" class="picker-arrow">⌄</text>
-                </view>
-              </picker>
+                placeholder="请添加部门"
+              />
             </view>
             <view class="field-group">
               <text class="field-label">年级</text>
@@ -213,6 +205,7 @@ import {
   type PageLeaveOrigin,
 } from "@/utils/page-leave-guard";
 
+import DepartmentTagPicker from "@/components/DepartmentTagPicker.vue";
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 import {
@@ -225,7 +218,6 @@ type PickerChangeEvent = { detail: { value: string | number } };
 
 const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024;
 const ACCOUNT_ACTIONS = ["重置密码", "重置微信绑定", "删除账号"] as const;
-const departments = ["生存保障部", "活动部", "宣传部", "秘书部", "养护部"];
 const roleOptions = [
   { label: "成员", value: "member" },
   { label: "暑期志愿者", value: "summer_volunteer" },
@@ -258,7 +250,7 @@ const isGuardContainerClosing = ref(false);
 const form = reactive({
   nickname: "",
   real_name: "",
-  department: "",
+  departments: [] as string[],
   grade: "",
   contact_info: "",
   role: "member",
@@ -287,7 +279,6 @@ const avatarReviewHint = computed(() => {
 watch(avatarPreview, () => {
   avatarLoadFailed.value = false;
 });
-const departmentIndex = computed(() => Math.max(0, departments.findIndex((item) => item === form.department)));
 const roleIndex = computed(() => Math.max(0, roleOptions.findIndex((item) => item.value === form.role)));
 const statusIndex = computed(() => Math.max(0, statusOptions.findIndex((item) => item.value === form.status)));
 const currentRoleLabel = computed(() => roleOptions[roleIndex.value]?.label || "成员");
@@ -320,7 +311,11 @@ function applyUser(
   }
   form.nickname = user.profile.nickname || "";
   form.real_name = user.profile.real_name || "";
-  form.department = user.profile.department || "";
+  form.departments = user.profile.departments?.length
+    ? [...user.profile.departments]
+    : user.profile.department
+      ? [user.profile.department]
+      : [];
   form.grade = user.profile.grade || "";
   form.contact_info = user.profile.contact_info || "";
   form.role = user.role || "member";
@@ -328,7 +323,7 @@ function applyUser(
   savedMemberSnapshot.value = createMemberEditSnapshot({
     nickname: form.nickname,
     real_name: form.real_name,
-    department: form.department,
+    departments: form.departments,
     grade: form.grade,
     contact_info: form.contact_info,
     role: form.role,
@@ -372,10 +367,6 @@ async function loadUser() {
     loadState.value = "error";
     errorMessage.value = error instanceof Error ? error.message : "成员资料加载失败";
   }
-}
-
-function selectDepartment(event: PickerChangeEvent) {
-  form.department = departments[Number(event.detail.value) || 0] || departments[0];
 }
 
 function selectRole(event: PickerChangeEvent) {
@@ -436,8 +427,8 @@ function validateMember(): boolean {
     uni.showToast({ title: "请输入昵称", icon: "none" });
     return false;
   }
-  if (!form.department) {
-    uni.showToast({ title: "请选择部门", icon: "none" });
+  if (!form.departments.length) {
+    uni.showToast({ title: "请至少添加一个部门", icon: "none" });
     return false;
   }
   return true;
@@ -459,7 +450,7 @@ async function saveMember() {
       profile: {
         nickname: form.nickname.trim(),
         real_name: form.real_name || null,
-        department: form.department || null,
+        departments: form.departments,
         grade: form.grade || null,
         contact_info: form.contact_info || null,
       },
@@ -633,7 +624,7 @@ function hasPendingMemberChanges() {
   return hasUnsavedMemberChanges(savedMemberSnapshot.value, {
     nickname: form.nickname,
     real_name: form.real_name,
-    department: form.department,
+    departments: form.departments,
     grade: form.grade,
     contact_info: form.contact_info,
     role: form.role,

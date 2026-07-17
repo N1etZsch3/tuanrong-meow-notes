@@ -1,5 +1,7 @@
 from tests.test_auth_api import auth_headers, create_token, create_user
 
+from app.modules.auth.models import UserDepartment
+
 
 def test_me_dashboard_returns_profile_stats_and_admin_entry(api_client, db_session):
     user = create_user(
@@ -13,6 +15,9 @@ def test_me_dashboard_returns_profile_stats_and_admin_entry(api_client, db_sessi
     user.profile.nickname = "Nietzsche"
     user.profile.department = "宣传部"
     user.profile.contact_info = "13800138000"
+    db_session.add(
+        UserDepartment(user_id=user.id, department="宣传部", sort_order=0)
+    )
     db_session.commit()
     token = create_token(user)
 
@@ -27,6 +32,7 @@ def test_me_dashboard_returns_profile_stats_and_admin_entry(api_client, db_sessi
         "nickname": "Nietzsche",
         "avatar_url": None,
         "department": "宣传部",
+        "departments": ["宣传部"],
         "role": "admin",
         "show_admin_entry": True,
     }

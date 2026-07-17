@@ -1,7 +1,7 @@
 export interface MemberEditSnapshot {
   nickname: string;
   real_name: string;
-  department: string;
+  departments: string[];
   grade: string;
   contact_info: string;
   role: string;
@@ -15,7 +15,7 @@ export function createMemberEditSnapshot(
   return {
     nickname: member.nickname.trim(),
     real_name: member.real_name.trim(),
-    department: member.department,
+    departments: [...member.departments],
     grade: member.grade.trim(),
     contact_info: member.contact_info.trim(),
     role: member.role,
@@ -36,7 +36,7 @@ export function hasUnsavedMemberChanges(
   return (
     saved.nickname !== normalizedCurrent.nickname ||
     saved.real_name !== normalizedCurrent.real_name ||
-    saved.department !== normalizedCurrent.department ||
+    saved.departments.join("|") !== normalizedCurrent.departments.join("|") ||
     saved.grade !== normalizedCurrent.grade ||
     saved.contact_info !== normalizedCurrent.contact_info ||
     saved.role !== normalizedCurrent.role ||

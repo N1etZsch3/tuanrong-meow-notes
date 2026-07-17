@@ -9,6 +9,7 @@ export interface MeDashboardProfile {
   nickname: string;
   avatar_url: string | null;
   department: string | null;
+  departments: string[];
   role: UserRole;
   show_admin_entry: boolean;
 }

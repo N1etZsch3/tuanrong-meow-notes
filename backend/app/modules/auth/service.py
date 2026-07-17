@@ -16,7 +16,14 @@ from app.modules.auth.captcha import (
     hash_captcha_code,
     verify_captcha_code,
 )
-from app.modules.auth.models import AdminOperationLog, AuthCaptcha, User, UserProfile
+from app.modules.auth.departments_service import set_user_departments
+from app.modules.auth.models import (
+    AdminOperationLog,
+    AuthCaptcha,
+    User,
+    UserDepartment,
+    UserProfile,
+)
 from app.modules.auth.schemas import (
     AdminCreateUserRequest,
     AdminResetPasswordRequest,
@@ -95,16 +102,23 @@ def profile_payload(profile: UserProfile | None) -> dict:
             "avatar_review_status": "idle",
             "real_name": None,
             "department": None,
+            "departments": [],
             "grade": None,
             "contact_info": None,
         }
+    departments = (
+        [item.department for item in sorted(profile.user.departments, key=lambda d: d.sort_order)]
+        if profile.user is not None
+        else []
+    )
     return {
         "nickname": clean_initial_display_text(profile.nickname),
         "avatar_url": profile.avatar_url,
         "avatar_review_asset_id": profile.avatar_review_asset_id,
         "avatar_review_status": profile.avatar_review_status,
         "real_name": clean_initial_text(profile.real_name),
-        "department": clean_initial_text(profile.department),
+        "department": departments[0] if departments else clean_initial_text(profile.department),
+        "departments": departments,
         "grade": clean_initial_text(profile.grade),
         "contact_info": clean_initial_text(profile.contact_info),
     }
@@ -551,17 +565,19 @@ def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequ
         if existing_user is not None:
             raise existing_account_error(existing_user) from exc
         raise
-    db.add(
-        UserProfile(
-            user_id=user.id,
-            nickname=clean_initial_display_text(payload.profile.nickname),
-            real_name=clean_initial_text(payload.profile.real_name),
-            department=clean_initial_text(payload.profile.department),
-            grade=clean_initial_text(payload.profile.grade),
-            joined_at=payload.profile.joined_at,
-            profile_completed=False,
-        )
+    profile = UserProfile(
+        user_id=user.id,
+        nickname=clean_initial_display_text(payload.profile.nickname),
+        real_name=clean_initial_text(payload.profile.real_name),
+        department=clean_initial_text(payload.profile.department),
+        grade=clean_initial_text(payload.profile.grade),
+        joined_at=payload.profile.joined_at,
+        profile_completed=False,
     )
+    db.add(profile)
+    db.flush()
+    db.refresh(user)
+    set_user_departments(db, user, payload.profile.resolved_departments())
     log_admin_operation(
         db,
         admin=admin,
@@ -589,10 +605,13 @@ def list_users(
 ) -> dict:
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
-    statement = select(User).options(selectinload(User.profile)).where(User.deleted_at.is_(None))
-    if keyword or department:
-        statement = statement.join(UserProfile, isouter=True)
+    statement = (
+        select(User)
+        .options(selectinload(User.profile), selectinload(User.departments))
+        .where(User.deleted_at.is_(None))
+    )
     if keyword:
+        statement = statement.join(UserProfile, isouter=True)
         like = f"%{keyword}%"
         statement = statement.where(
             or_(
@@ -606,7 +625,15 @@ def list_users(
     if status:
         statement = statement.where(User.status == status)
     if department:
-        statement = statement.where(UserProfile.department == department)
+        # 「任一部门命中」：用 EXISTS 匹配关联表（成员可属于多个部门）
+        statement = statement.where(
+            select(UserDepartment.id)
+            .where(
+                UserDepartment.user_id == User.id,
+                UserDepartment.department == department,
+            )
+            .exists()
+        )
 
     total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
     if sort_by == "meow_no":
@@ -683,10 +710,11 @@ def update_user_detail(
                 )
         profile.nickname = clean_initial_display_text(payload.profile.nickname)
         profile.real_name = clean_initial_text(payload.profile.real_name)
-        profile.department = clean_initial_text(payload.profile.department)
         profile.grade = clean_initial_text(payload.profile.grade)
         profile.joined_at = payload.profile.joined_at
         profile.contact_info = clean_initial_text(payload.profile.contact_info)
+        # 多部门整体覆盖（回写主部门到 profile.department）
+        set_user_departments(db, user, payload.profile.resolved_departments())
 
     log_admin_operation(
         db,

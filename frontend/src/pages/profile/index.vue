@@ -25,7 +25,17 @@
               <text class="role-pill" :class="rolePillClass">{{ roleLabel }}</text>
             </view>
             <text class="meta-line">喵喵号 {{ dashboard?.profile.meow_no || "--" }}</text>
-            <text class="meta-line">部门：{{ dashboard?.profile.department || "未设置" }}</text>
+            <scroll-view
+              v-if="departmentTags.length"
+              class="dept-scroll"
+              scroll-x
+              :show-scrollbar="false"
+            >
+              <view class="dept-tag-row">
+                <text v-for="dept in departmentTags" :key="dept" class="dept-chip">{{ dept }}</text>
+              </view>
+            </scroll-view>
+            <text v-else class="meta-line">部门：未设置</text>
           </view>
           <text class="chevron">›</text>
           <view class="paw-mark" />
@@ -143,6 +153,14 @@ watch(profileAvatar, () => {
 const currentRole = computed(() => dashboard.value?.profile.role || userStore.currentUser?.role);
 const roleLabel = computed(() => getRoleLabel(currentRole.value));
 const rolePillClass = computed(() => getRolePillClass(currentRole.value));
+const departmentTags = computed(() => {
+  const list = dashboard.value?.profile.departments;
+  if (list && list.length) {
+    return list;
+  }
+  const single = dashboard.value?.profile.department;
+  return single ? [single] : [];
+});
 
 async function loadDashboard() {
   if (isLoading.value) {
@@ -348,6 +366,29 @@ onShow(() => {
   margin-top: 14rpx;
   color: #555c67;
   font-size: 25rpx;
+  line-height: 1.2;
+}
+
+.dept-scroll {
+  margin-top: 14rpx;
+  width: 100%;
+  white-space: nowrap;
+}
+
+.dept-tag-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.dept-chip {
+  flex: 0 0 auto;
+  padding: 7rpx 16rpx;
+  border-radius: 12rpx;
+  background: #e6f6e4;
+  color: #238033;
+  font-size: 22rpx;
+  font-weight: 800;
   line-height: 1.2;
 }
 

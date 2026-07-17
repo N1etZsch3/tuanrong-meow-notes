@@ -136,7 +136,7 @@ describe("profile center pages", () => {
   it("requires confirmation before discarding changed profile fields or avatar", () => {
     const saved = createProfileEditSnapshot({
       nickname: "小林",
-      department: "宣传部",
+      departments: ["宣传部"],
       contact_info: "13800138000",
       avatar_url: "https://cos.example/avatar-a.jpg",
     });
@@ -147,6 +147,9 @@ describe("profile center pages", () => {
     ).toBe(true);
     expect(
       hasUnsavedProfileChanges(saved, { ...saved, avatar_url: "https://cos.example/avatar-b.jpg" }),
+    ).toBe(true);
+    expect(
+      hasUnsavedProfileChanges(saved, { ...saved, departments: ["宣传部", "活动部"] }),
     ).toBe(true);
     expect(profileDetailSource).toContain("createProfileEditSnapshot");
     expect(profileDetailSource).toContain("hasUnsavedProfileChanges");

@@ -187,7 +187,7 @@ describe("admin entry pages", () => {
     const saved = createMemberEditSnapshot({
       nickname: "小林",
       real_name: "林同学",
-      department: "宣传部",
+      departments: ["宣传部"],
       grade: "2025",
       contact_info: "13800138000",
       role: "member",
@@ -201,6 +201,9 @@ describe("admin entry pages", () => {
     ).toBe(true);
     expect(
       hasUnsavedMemberChanges(saved, { ...saved, avatar_url: "https://example.com/avatar-b.jpg" }),
+    ).toBe(true);
+    expect(
+      hasUnsavedMemberChanges(saved, { ...saved, departments: ["宣传部", "秘书部"] }),
     ).toBe(true);
     expect(adminUsersDetailSource).toContain("createMemberEditSnapshot");
     expect(adminUsersDetailSource).toContain("hasUnsavedMemberChanges");

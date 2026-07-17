@@ -13,5 +13,6 @@ export interface CurrentUser {
   must_change_password: boolean;
   profile_completed: boolean;
   department?: string | null;
+  departments?: string[];
   contact_info?: string | null;
 }

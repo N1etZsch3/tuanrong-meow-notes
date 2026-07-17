@@ -59,6 +59,7 @@ export interface CurrentUserResponse {
     avatar_url: string | null;
     real_name?: string;
     department?: string;
+    departments?: string[];
     grade?: string;
     contact_info?: string | null;
   };
@@ -179,6 +180,7 @@ export function normalizeCurrentUser(response: CurrentUserResponse): CurrentUser
     must_change_password: response.must_change_password,
     profile_completed: response.profile_completed,
     department: response.profile.department ?? null,
+    departments: response.profile.departments ?? [],
     contact_info: response.profile.contact_info ?? null,
   };
 }

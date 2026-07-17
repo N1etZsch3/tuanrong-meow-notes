@@ -63,14 +63,7 @@
             <text>部门</text>
             <text class="required">*</text>
           </view>
-          <picker mode="selector" :range="departments" :value="departmentIndex" @change="onDepartmentChange">
-            <view class="picker-field">
-              <text :class="selectedDepartment ? 'picker-value' : 'picker-placeholder'">
-                {{ selectedDepartment || "请选择部门" }}
-              </text>
-              <text class="picker-arrow">⌄</text>
-            </view>
-          </picker>
+          <DepartmentTagPicker v-model="form.departments" placeholder="请添加部门" />
         </view>
 
         <view class="field-group">
@@ -110,6 +103,8 @@ import { HOME_ROUTE, LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
 import { normalizeInitialProfileText } from "./complete-page";
+import DepartmentTagPicker from "@/components/DepartmentTagPicker.vue";
+import { isKnownDepartment } from "@/constants/departments";
 import initIcon from "../../../素材/svg/登录页/初始化用户.svg";
 import userIcon from "../../../素材/登录页素材/登录.svg";
 import avatarIcon from "../../../素材/svg/登录页/头像.svg";
@@ -120,26 +115,21 @@ import defaultAvatar from "../../../素材/svg/萌猫/奶牛猫.svg";
 const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024;
 const PHONE_PATTERN = /^1[3-9]\d{9}$/;
 
-const departments = ["生存保障部", "活动部", "宣传部", "秘书部", "养护部"] as const;
-
 const userStore = useUserStore();
 const isSubmitting = ref(false);
 const avatarUrl = ref<string | null>(null);
 const avatarReviewStatus = ref<"idle" | "pending" | "passed" | "rejected" | "failed">("idle");
 
-const initialDepartment = normalizeInitialProfileText(userStore.currentUser?.department);
+const initialDepartments = (userStore.currentUser?.departments || []).filter((dept) =>
+  isKnownDepartment(dept),
+);
 
 const form = reactive({
   nickname: normalizeInitialProfileText(userStore.currentUser?.nickname),
-  department: departments.includes(initialDepartment as (typeof departments)[number]) ? initialDepartment : "",
+  departments: initialDepartments as string[],
   contact_info: normalizeInitialProfileText(userStore.currentUser?.contact_info),
 });
 
-const selectedDepartment = computed(() => form.department);
-const departmentIndex = computed(() => {
-  const index = departments.findIndex((department) => department === form.department);
-  return index >= 0 ? index : 0;
-});
 const avatarLoadFailed = ref(false);
 const avatarPreview = computed(
   () => resolveUserAvatarContentUrl(avatarUrl.value || userStore.currentUser?.avatar_url) || defaultAvatar,
@@ -158,11 +148,6 @@ const avatarReviewHint = computed(() => {
 watch(avatarPreview, () => {
   avatarLoadFailed.value = false;
 });
-
-function onDepartmentChange(event: any) {
-  const index = Number(event.detail.value);
-  form.department = departments[index] || departments[0];
-}
 
 function chooseAvatar() {
   uni.chooseImage({
@@ -216,8 +201,8 @@ function validateForm(): boolean {
     return false;
   }
 
-  if (!form.department) {
-    uni.showToast({ title: "请选择部门", icon: "none" });
+  if (!form.departments.length) {
+    uni.showToast({ title: "请至少添加一个部门", icon: "none" });
     return false;
   }
 
@@ -244,7 +229,7 @@ async function submitProfile() {
   try {
     await userStore.completeCurrentProfile({
       nickname: form.nickname,
-      department: form.department,
+      departments: form.departments,
       contact_info: form.contact_info,
     });
     uni.showToast({ title: "身份已初始化", icon: "success" });

@@ -29,14 +29,7 @@
 
           <view class="field-group">
             <text class="field-label">部门</text>
-            <picker mode="selector" :range="departments" :value="departmentIndex" @change="onDepartmentChange">
-              <view class="picker-field">
-                <text :class="form.department ? 'picker-value' : 'picker-placeholder'">
-                  {{ form.department || "请选择部门" }}
-                </text>
-                <text class="picker-arrow">⌄</text>
-              </view>
-            </picker>
+            <DepartmentTagPicker v-model="form.departments" placeholder="请添加部门" />
           </view>
 
           <view class="field-group">
@@ -99,11 +92,11 @@ import {
   type ProfileEditSnapshot,
 } from "./profile-edit-guard";
 import { getRoleLabel } from "./profile-page";
+import DepartmentTagPicker from "@/components/DepartmentTagPicker.vue";
 import defaultAvatar from "../../../素材/svg/萌猫/橘猫.svg";
 
 const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024;
 const PHONE_PATTERN = /^1[3-9]\d{9}$/;
-const departments = ["生存保障部", "活动部", "宣传部", "秘书部", "养护部"] as const;
 
 const userStore = useUserStore();
 const profile = ref<MyProfileResponse | null>(null);
@@ -117,7 +110,7 @@ const isGuardContainerClosing = ref(false);
 
 const form = reactive({
   nickname: "",
-  department: "",
+  departments: [] as string[],
   contact_info: "",
 });
 
@@ -135,10 +128,6 @@ watch(avatarPreview, () => {
   avatarLoadFailed.value = false;
 });
 const roleLabel = computed(() => getRoleLabel(profile.value?.role || userStore.currentUser?.role));
-const departmentIndex = computed(() => {
-  const index = departments.findIndex((department) => department === form.department);
-  return index >= 0 ? index : 0;
-});
 const pageLeaveGuard = createPageLeaveGuard(
   () => !isSaving.value && hasPendingProfileChanges(),
 );
@@ -166,11 +155,15 @@ function applyProfile(
     avatarReviewStatus.value = nextProfile.avatar_review_status;
   }
   form.nickname = nextProfile.nickname;
-  form.department = nextProfile.department || "";
+  form.departments = nextProfile.departments?.length
+    ? [...nextProfile.departments]
+    : nextProfile.department
+      ? [nextProfile.department]
+      : [];
   form.contact_info = nextProfile.contact_info || "";
   savedProfileSnapshot.value = createProfileEditSnapshot({
     nickname: form.nickname,
-    department: form.department,
+    departments: form.departments,
     contact_info: form.contact_info,
     avatar_url: avatarUrl.value,
   });
@@ -200,11 +193,6 @@ async function loadProfile() {
     const message = error instanceof Error ? error.message : "资料加载失败";
     uni.showToast({ title: message, icon: "none" });
   }
-}
-
-function onDepartmentChange(event: any) {
-  const index = Number(event.detail.value);
-  form.department = departments[index] || departments[0];
 }
 
 function chooseAvatar() {
@@ -261,8 +249,8 @@ function validateProfile(): boolean {
     uni.showToast({ title: "昵称不能超过 20 个字符", icon: "none" });
     return false;
   }
-  if (!form.department) {
-    uni.showToast({ title: "请选择部门", icon: "none" });
+  if (!form.departments.length) {
+    uni.showToast({ title: "请至少添加一个部门", icon: "none" });
     return false;
   }
   if (!PHONE_PATTERN.test(form.contact_info)) {
@@ -288,7 +276,7 @@ async function saveProfile() {
     const updatedProfile = await updateMyProfile(
       {
         nickname: form.nickname,
-        department: form.department,
+        departments: form.departments,
         contact_info: form.contact_info,
       },
       accessToken,
@@ -300,6 +288,7 @@ async function saveProfile() {
         nickname: updatedProfile.nickname,
         avatar_url: updatedProfile.avatar_url,
         department: updatedProfile.department,
+        departments: updatedProfile.departments,
         contact_info: updatedProfile.contact_info,
       });
     }
@@ -391,7 +380,7 @@ function handleGuardContainerAfterLeave() {
 function hasPendingProfileChanges() {
   return hasUnsavedProfileChanges(savedProfileSnapshot.value, {
     nickname: form.nickname,
-    department: form.department,
+    departments: form.departments,
     contact_info: form.contact_info,
     avatar_url: avatarUrl.value,
   });

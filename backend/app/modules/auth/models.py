@@ -1,7 +1,19 @@
 from datetime import date, datetime
 from uuid import UUID, uuid4
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Integer, String, Text, Uuid, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base import Base
@@ -40,6 +52,31 @@ class User(Base):
         cascade="all, delete-orphan",
         uselist=False,
     )
+    departments: Mapped[list["UserDepartment"]] = relationship(
+        back_populates="user",
+        cascade="all, delete-orphan",
+        order_by="UserDepartment.sort_order",
+    )
+
+
+class UserDepartment(Base):
+    __tablename__ = "user_departments"
+    __table_args__ = (
+        UniqueConstraint("user_id", "department", name="uq_user_departments_user_department"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    department: Mapped[str] = mapped_column(String(128))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+    )
+
+    user: Mapped[User] = relationship(back_populates="departments")
 
 
 class AuthCaptcha(Base):

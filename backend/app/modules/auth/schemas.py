@@ -70,6 +70,7 @@ class CurrentUserProfile(BaseModel):
     avatar_review_status: str = "idle"
     real_name: str | None = None
     department: str | None = None
+    departments: list[str] = Field(default_factory=list)
     grade: str | None = None
     contact_info: str | None = None
 
@@ -106,9 +107,18 @@ class AdminUserProfileRequest(BaseModel):
     avatar_url: str | None = Field(default=None, max_length=512)
     real_name: str | None = Field(default=None, max_length=64)
     department: str | None = Field(default=None, max_length=128)
+    departments: list[str] = Field(default_factory=list, max_length=8)
     grade: str | None = Field(default=None, max_length=32)
     joined_at: date | None = None
     contact_info: str | None = Field(default=None, max_length=128)
+
+    def resolved_departments(self) -> list[str]:
+        """兼容旧客户端：只传 department 单值时视为单元素列表。"""
+        if self.departments:
+            return [value.strip() for value in self.departments if value and value.strip()]
+        if self.department and self.department.strip():
+            return [self.department.strip()]
+        return []
 
 
 class AdminCreateUserRequest(BaseModel):

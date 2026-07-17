@@ -123,11 +123,14 @@ export const useUserStore = defineStore("user", {
 
       const response = await completeProfile(payload, this.accessToken);
       if (this.currentUser) {
+        const departments =
+          payload.departments ?? (payload.department ? [payload.department] : []);
         this.setCurrentUser({
           ...this.currentUser,
           nickname: payload.nickname,
           avatar_url: payload.avatar_url || this.currentUser.avatar_url,
-          department: payload.department,
+          department: departments[0] ?? null,
+          departments,
           contact_info: payload.contact_info,
           profile_completed: response.profile_completed,
         });

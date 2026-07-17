@@ -3,6 +3,7 @@ from datetime import UTC, datetime, time
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
+from app.modules.auth.departments_service import user_department_names
 from app.modules.auth.models import User
 from app.modules.auth.service import clean_initial_display_text, clean_initial_text
 from app.modules.tasks.models import Task, TaskCheckin, TaskCheckinPhoto
@@ -10,6 +11,7 @@ from app.modules.tasks.models import Task, TaskCheckin, TaskCheckinPhoto
 
 def dashboard_payload(db: Session, user: User) -> dict:
     profile = user.profile
+    departments = user_department_names(user)
     now = datetime.now(tz=UTC)
     month_start = datetime.combine(now.date().replace(day=1), time.min, tzinfo=UTC)
     total_completed_tasks = db.scalar(
@@ -34,7 +36,10 @@ def dashboard_payload(db: Session, user: User) -> dict:
             "meow_no": user.student_no,
             "nickname": clean_initial_display_text(profile.nickname if profile else None),
             "avatar_url": profile.avatar_url if profile else None,
-            "department": clean_initial_text(profile.department if profile else None),
+            "department": departments[0]
+            if departments
+            else clean_initial_text(profile.department if profile else None),
+            "departments": departments,
             "role": user.role,
             "show_admin_entry": user.role in {"admin", "super_admin"},
         },

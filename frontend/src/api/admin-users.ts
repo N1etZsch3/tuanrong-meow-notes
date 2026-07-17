@@ -11,6 +11,7 @@ export interface AdminUserProfilePayload {
   avatar_url?: string | null;
   real_name?: string | null;
   department?: string | null;
+  departments?: string[];
   grade?: string | null;
   joined_at?: string | null;
   contact_info?: string | null;
@@ -50,6 +51,7 @@ export interface AdminUserProfileDto {
   avatar_review_status?: "idle" | "pending" | "passed" | "rejected" | "failed";
   real_name: string | null;
   department: string | null;
+  departments: string[];
   grade: string | null;
   contact_info: string | null;
 }

@@ -3,13 +3,14 @@ from uuid import uuid4
 
 from app.core.errors import ErrorCode
 from app.core.security import verify_password
-from app.modules.auth.models import AdminOperationLog, User
+from app.modules.auth.models import AdminOperationLog, User, UserDepartment
 from tests.test_auth_api import create_captcha, create_token, create_user
 
 
 def set_profile_department(db_session, user: User, department: str) -> None:
     user.profile.department = department
     db_session.add(user.profile)
+    db_session.add(UserDepartment(user_id=user.id, department=department, sort_order=0))
     db_session.commit()
     db_session.refresh(user)
 
@@ -793,3 +794,79 @@ def test_admin_cannot_modify_or_reset_admin_account(api_client, db_session):
     assert delete_response.status_code == 403
     db_session.refresh(target_admin)
     assert target_admin.deleted_at is None
+
+
+def test_admin_create_and_update_member_with_multiple_departments(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="admin050",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    token = create_token(admin)
+
+    created = api_client.post(
+        "/api/v1/admin/users",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "student_no": "trmx0050",
+            "initial_password": "Password123",
+            "role": "member",
+            "profile": {
+                "nickname": "多部门成员",
+                "departments": ["生存保障部", "宣传部"],
+            },
+        },
+    )
+    assert created.status_code == 200
+    user_id = created.json()["data"]["id"]
+
+    detail = api_client.get(
+        f"/api/v1/admin/users/{user_id}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail.status_code == 200
+    assert detail.json()["data"]["profile"]["departments"] == ["生存保障部", "宣传部"]
+    assert detail.json()["data"]["profile"]["department"] == "生存保障部"
+
+    updated = api_client.patch(
+        f"/api/v1/admin/users/{user_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"profile": {"nickname": "多部门成员", "departments": ["活动部"]}},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["data"]["profile"]["departments"] == ["活动部"]
+
+
+def test_admin_user_list_department_filter_matches_any_membership(api_client, db_session):
+    from app.modules.auth.models import UserDepartment
+
+    admin = create_user(
+        db_session,
+        student_no="admin051",
+        password="AdminPassword123",
+        role="admin",
+        must_change_password=False,
+    )
+    multi = create_user(db_session, student_no="trmx0060", must_change_password=False)
+    single = create_user(db_session, student_no="trmx0061", must_change_password=False)
+    db_session.add_all(
+        [
+            UserDepartment(user_id=multi.id, department="生存保障部", sort_order=0),
+            UserDepartment(user_id=multi.id, department="活动部", sort_order=1),
+            UserDepartment(user_id=single.id, department="宣传部", sort_order=0),
+        ]
+    )
+    db_session.commit()
+    token = create_token(admin)
+
+    # multi 属于「活动部」，应被「活动部」筛选命中（任一部门命中）
+    response = api_client.get(
+        "/api/v1/admin/users?department=活动部&page_size=10",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+    meow_nos = [item["meow_no"] for item in response.json()["data"]["items"]]
+    assert "trmx0060" in meow_nos
+    assert "trmx0061" not in meow_nos

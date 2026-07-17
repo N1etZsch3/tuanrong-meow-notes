@@ -14,6 +14,7 @@ export interface MyProfileResponse {
   avatar_review_asset_id: string | null;
   avatar_review_status: "idle" | "pending" | "passed" | "rejected" | "failed";
   department: string | null;
+  departments: string[];
   contact_info: string | null;
   profile_completed: boolean;
   profile_completed_at: string | null;
@@ -22,7 +23,8 @@ export interface MyProfileResponse {
 export interface CompleteProfilePayload {
   nickname: string;
   avatar_url?: string | null;
-  department: string;
+  department?: string;
+  departments?: string[];
   contact_info: string;
 }
 
@@ -30,6 +32,7 @@ export interface UpdateProfilePayload {
   nickname?: string;
   avatar_url?: string | null;
   department?: string;
+  departments?: string[];
   contact_info?: string | null;
 }
 

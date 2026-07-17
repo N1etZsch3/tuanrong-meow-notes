@@ -105,7 +105,11 @@
               <text class="role-tag" :class="roleClass(user.role)">
                 {{ roleLabel(user.role) }}
               </text>
-              <text class="department-tag">{{ user.profile.department || "未分部" }}</text>
+              <text
+                v-for="dept in memberDepartments(user)"
+                :key="dept"
+                class="department-tag"
+              >{{ dept }}</text>
             </view>
             <text class="card-arrow">›</text>
           </button>
@@ -131,6 +135,7 @@ import { listAdminUsers, type AdminUserDto } from "@/api/admin-users";
 import { resolveUserAvatarContentUrl } from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import { DEPARTMENTS } from "@/constants/departments";
 
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
@@ -138,7 +143,6 @@ import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 type PickerChangeEvent = { detail: { value: string | number } };
 
 const PAGE_SIZE = 10;
-const departments = ["生存保障部", "活动部", "宣传部", "秘书部", "养护部"];
 const roleOptions = [
   { label: "全部", value: "" },
   { label: "管理员", value: "admin" },
@@ -147,7 +151,7 @@ const roleOptions = [
 ];
 const departmentOptions = [
   { label: "全部", value: "" },
-  ...departments.map((department) => ({ label: department, value: department })),
+  ...DEPARTMENTS.map((department) => ({ label: department, value: department })),
 ];
 const sortOptions = [
   { label: "喵喵号正序", value: "asc" },
@@ -178,6 +182,13 @@ function memberAvatar(user: AdminUserDto): string {
 
 function markAvatarFailed(id: string) {
   failedAvatarUserIds.value = new Set(failedAvatarUserIds.value).add(id);
+}
+
+function memberDepartments(user: AdminUserDto): string[] {
+  if (user.profile.departments?.length) {
+    return user.profile.departments;
+  }
+  return [user.profile.department || "未分部"];
 }
 
 const selectedRoleIndex = computed(() =>

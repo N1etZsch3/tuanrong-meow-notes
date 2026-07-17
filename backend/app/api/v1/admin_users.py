@@ -16,8 +16,28 @@ from app.modules.auth.schemas import (
     AdminUpdateStatusRequest,
     AdminUpdateUserRequest,
 )
+from app.modules.titles import service as titles_service
+from app.modules.titles.dependencies import require_president
+from app.modules.titles.schemas import SetMemberTitleRequest
 
 router = APIRouter(tags=["Admin Users"])
+
+
+@router.patch("/{user_id}/title", summary="Grant or revoke a member title")
+def update_user_title(
+    user_id: UUID,
+    payload: SetMemberTitleRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    president: User = Depends(require_president),
+):
+    data = titles_service.set_member_title(
+        db,
+        actor=president,
+        target_user_id=user_id,
+        title=payload.title,
+    )
+    return api_success(data=data, trace_id=request.state.trace_id, message="成员头衔已更新")
 
 
 @router.get("", summary="List member accounts")

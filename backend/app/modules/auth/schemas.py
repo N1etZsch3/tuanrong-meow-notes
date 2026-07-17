@@ -71,6 +71,9 @@ class CurrentUserProfile(BaseModel):
     real_name: str | None = None
     department: str | None = None
     departments: list[str] = Field(default_factory=list)
+    title: str | None = None
+    title_label: str | None = None
+    title_shield: str | None = None
     grade: str | None = None
     contact_info: str | None = None
 
@@ -108,6 +111,7 @@ class AdminUserProfileRequest(BaseModel):
     real_name: str | None = Field(default=None, max_length=64)
     department: str | None = Field(default=None, max_length=128)
     departments: list[str] = Field(default_factory=list, max_length=8)
+    title: str | None = Field(default=None, max_length=64)
     grade: str | None = Field(default=None, max_length=32)
     joined_at: date | None = None
     contact_info: str | None = Field(default=None, max_length=128)

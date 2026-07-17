@@ -8,6 +8,7 @@ from app.modules.auth.departments_service import (
 from app.modules.auth.models import User, UserProfile
 from app.modules.auth.service import clean_initial_display_text, clean_initial_text, now_utc
 from app.modules.profile.schemas import CompleteProfileRequest, UpdateProfileRequest
+from app.modules.titles.constants import title_payload
 
 
 def profile_payload(user: User) -> dict:
@@ -26,6 +27,7 @@ def profile_payload(user: User) -> dict:
             profile.department if profile else None
         ),
         "departments": departments,
+        **title_payload(profile.title if profile else None),
         "contact_info": clean_initial_text(profile.contact_info if profile else None),
         "profile_completed": bool(profile and profile.profile_completed),
         "profile_completed_at": profile.profile_completed_at if profile else None,

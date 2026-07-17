@@ -7,12 +7,14 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     Uuid,
     func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -97,6 +99,16 @@ class AuthCaptcha(Base):
 
 class UserProfile(Base):
     __tablename__ = "user_profiles"
+    __table_args__ = (
+        # 12 个非 none 头衔全局唯一：部分唯一索引仅约束 title 非空的行
+        Index(
+            "uq_user_profiles_title",
+            "title",
+            unique=True,
+            sqlite_where=text("title IS NOT NULL"),
+            postgresql_where=text("title IS NOT NULL"),
+        ),
+    )
 
     id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
     user_id: Mapped[UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), unique=True)
@@ -109,6 +121,7 @@ class UserProfile(Base):
     avatar_review_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     real_name: Mapped[str | None] = mapped_column(String(64))
     department: Mapped[str | None] = mapped_column(String(128))
+    title: Mapped[str | None] = mapped_column(String(64))
     grade: Mapped[str | None] = mapped_column(String(32))
     joined_at: Mapped[date | None] = mapped_column(Date)
     bio: Mapped[str | None] = mapped_column(Text)

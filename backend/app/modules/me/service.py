@@ -8,6 +8,7 @@ from app.modules.auth.models import User
 from app.modules.auth.service import clean_initial_display_text, clean_initial_text
 from app.modules.notifications import service as notifications_service
 from app.modules.tasks.models import Task, TaskCheckin, TaskCheckinPhoto
+from app.modules.titles.constants import title_payload
 
 
 def dashboard_payload(db: Session, user: User) -> dict:
@@ -41,6 +42,7 @@ def dashboard_payload(db: Session, user: User) -> dict:
             if departments
             else clean_initial_text(profile.department if profile else None),
             "departments": departments,
+            **title_payload(profile.title if profile else None),
             "role": user.role,
             "show_admin_entry": user.role in {"admin", "super_admin"},
         },

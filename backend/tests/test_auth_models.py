@@ -29,3 +29,17 @@ def test_users_table_contains_required_auth_columns():
         "last_wechat_login_at",
     ]:
         assert column_name in users.c
+
+
+def test_user_profiles_table_contains_unique_nullable_title():
+    from app.db.base import Base
+    from app.modules.auth import models  # noqa: F401
+
+    profiles = Base.metadata.tables["user_profiles"]
+
+    assert profiles.c.title.nullable is True
+    title_index = next(
+        index for index in profiles.indexes if index.name == "uq_user_profiles_title"
+    )
+    assert title_index.unique is True
+    assert [column.name for column in title_index.columns] == ["title"]

@@ -5,6 +5,7 @@ from app.api.v1.admin_map import router as admin_map_router
 from app.api.v1.admin_medicines import router as admin_medicines_router
 from app.api.v1.admin_supplies import router as admin_supplies_router
 from app.api.v1.admin_tasks import router as admin_tasks_router
+from app.api.v1.admin_titles import router as admin_titles_router
 from app.api.v1.admin_users import router as admin_users_router
 from app.api.v1.auth import router as auth_router
 from app.api.v1.cats import router as cats_router
@@ -33,6 +34,7 @@ api_router.include_router(admin_map_router, prefix="/admin/map")
 api_router.include_router(admin_medicines_router, prefix="/admin")
 api_router.include_router(admin_supplies_router, prefix="/admin/supply-points")
 api_router.include_router(admin_tasks_router, prefix="/admin/tasks")
+api_router.include_router(admin_titles_router, prefix="/admin/titles")
 api_router.include_router(admin_users_router, prefix="/admin/users")
 api_router.include_router(cats_router, prefix="/cats")
 api_router.include_router(files_router, prefix="/files")

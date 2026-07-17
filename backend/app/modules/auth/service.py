@@ -37,6 +37,7 @@ from app.modules.auth.schemas import (
 )
 from app.modules.auth.wechat import exchange_wechat_code_for_openid
 from app.modules.public.guest_service import record_guest_visit
+from app.modules.titles.constants import title_payload
 
 VALID_ROLES = {"member", "summer_volunteer", "admin"}
 VALID_STATUSES = {"active", "blocked", "left", "deleted"}
@@ -103,6 +104,7 @@ def profile_payload(profile: UserProfile | None) -> dict:
             "real_name": None,
             "department": None,
             "departments": [],
+            **title_payload(None),
             "grade": None,
             "contact_info": None,
         }
@@ -119,6 +121,7 @@ def profile_payload(profile: UserProfile | None) -> dict:
         "real_name": clean_initial_text(profile.real_name),
         "department": departments[0] if departments else clean_initial_text(profile.department),
         "departments": departments,
+        **title_payload(profile.title),
         "grade": clean_initial_text(profile.grade),
         "contact_info": clean_initial_text(profile.contact_info),
     }
@@ -539,8 +542,14 @@ def existing_account_error(user: User) -> APIError:
 
 
 def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequest) -> User:
+    from app.modules.titles import service as titles_service
+
     if payload.role not in VALID_ROLES:
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
+    requested_title = titles_service.normalize_assignable_title(payload.profile.title)
+    if requested_title is not None:
+        titles_service.ensure_president(admin)
+        titles_service.ensure_title_available(db, requested_title)
     account_no = payload.account_no or generate_next_meow_no(db)
     initial_password = payload.initial_password or account_no
     validate_password_strength(initial_password)
@@ -570,12 +579,21 @@ def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequ
         nickname=clean_initial_display_text(payload.profile.nickname),
         real_name=clean_initial_text(payload.profile.real_name),
         department=clean_initial_text(payload.profile.department),
+        title=requested_title,
         grade=clean_initial_text(payload.profile.grade),
         joined_at=payload.profile.joined_at,
         profile_completed=False,
     )
     db.add(profile)
-    db.flush()
+    try:
+        db.flush()
+    except IntegrityError as exc:
+        db.rollback()
+        raise APIError(
+            code=ErrorCode.TITLE_OCCUPIED,
+            message="该头衔已被其他成员使用",
+            status_code=409,
+        ) from exc
     db.refresh(user)
     set_user_departments(db, user, payload.profile.resolved_departments())
     log_admin_operation(
@@ -584,7 +602,7 @@ def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequ
         operation_type="user_create",
         target_id=user.id,
         summary=f"创建成员账号 {user.student_no}",
-        after_data={"meow_no": user.student_no, "role": user.role},
+        after_data={"meow_no": user.student_no, "role": user.role, "title": requested_title},
     )
     db.commit()
     db.refresh(user)

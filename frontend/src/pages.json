@@ -176,6 +176,13 @@
 			}
 		},
 		{
+			"path": "pages/profile/notifications",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "消息通知"
+			}
+		},
+		{
 			"path": "pages/profile/reset-password",
 			"style": {
 				"navigationStyle": "custom",

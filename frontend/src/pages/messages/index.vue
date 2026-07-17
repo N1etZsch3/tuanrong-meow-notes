@@ -52,7 +52,9 @@
         :refresher-enabled="!isSwipeRefreshBlocked"
         :refresher-triggered="isRefreshing"
         :show-scrollbar="false"
+        lower-threshold="140"
         @refresherrefresh="refreshMessages"
+        @scrolltolower="loadMoreMessages"
       >
         <view class="messages-body">
           <view v-if="visibleMessages.length === 0" class="empty-card">
@@ -156,9 +158,12 @@
             </view>
 
             <view class="list-footer">
-              <text class="footer-paw">🐾</text>
-              <text>没有更多了～</text>
-              <text class="footer-paw">🐾</text>
+              <text v-if="isLoadingMore">正在加载更多消息...</text>
+              <template v-else-if="!hasMoreMessages">
+                <text class="footer-paw">🐾</text>
+                <text>没有更多了～</text>
+                <text class="footer-paw">🐾</text>
+              </template>
             </view>
           </view>
         </view>
@@ -285,6 +290,12 @@ import { computed, nextTick, ref } from "vue";
 import { onHide, onShow, onUnload } from "@dcloudio/uni-app";
 
 import AppTabBar from "@/components/AppTabBar.vue";
+import {
+  getNotifications,
+  markAllNotificationsRead,
+  markNotificationRead,
+} from "@/api/notifications";
+import { appEnv } from "@/config/app-env";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { publishMessagesUnreadIndicator } from "@/services/message-unread-indicator";
 import {
@@ -332,7 +343,6 @@ import {
   updateCardGesture,
   type CardGestureState,
 } from "./message-card-gesture";
-import { MOCK_NOTIFICATIONS, buildMockPushes } from "./mock-notifications";
 
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 import titleMascotIcon from "../../../素材/svg/萌猫/奶牛猫.svg";
@@ -390,6 +400,11 @@ const messages = ref<NotificationView[]>([]);
 const activeTab = ref<MessagesTabKey>("all");
 const isRefreshing = ref(false);
 const socketStatus = ref<NotificationSocketStatus>("closed");
+const MESSAGES_PAGE_SIZE = 10;
+const currentPage = ref(0);
+const hasMoreMessages = ref(false);
+const isLoadingMore = ref(false);
+const isLoadingMessages = ref(false);
 const nowTick = ref(Date.now());
 
 const menuTarget = ref<NotificationView | null>(null);
@@ -532,10 +547,62 @@ async function resolveAccessToken() {
   return accessToken;
 }
 
-function loadInitialMessages() {
-  const locals = loadStoredLocalStates();
-  const base = MOCK_NOTIFICATIONS.map((dto) => toNotificationView(dto, locals[dto.id]));
-  setMessages(mergeIncomingNotifications(base, []));
+async function loadInitialMessages() {
+  if (isLoadingMessages.value) {
+    return;
+  }
+  const accessToken = await resolveAccessToken();
+  if (!accessToken) {
+    return;
+  }
+  isLoadingMessages.value = true;
+  try {
+    const page = await getNotifications(accessToken, {
+      page: 1,
+      page_size: MESSAGES_PAGE_SIZE,
+    });
+    const locals = loadStoredLocalStates();
+    const base = page.items.map((dto) => toNotificationView(dto, locals[dto.id]));
+    setMessages(mergeIncomingNotifications(base, []));
+    currentPage.value = page.page;
+    hasMoreMessages.value = page.has_more;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "消息加载失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    isLoadingMessages.value = false;
+  }
+}
+
+async function loadMoreMessages() {
+  if (
+    isLoadingMore.value ||
+    isLoadingMessages.value ||
+    !hasMoreMessages.value ||
+    hasBlockingCardInteraction()
+  ) {
+    return;
+  }
+  const accessToken = await resolveAccessToken();
+  if (!accessToken) {
+    return;
+  }
+  isLoadingMore.value = true;
+  try {
+    const page = await getNotifications(accessToken, {
+      page: currentPage.value + 1,
+      page_size: MESSAGES_PAGE_SIZE,
+    });
+    setMessages(
+      mergeIncomingNotifications(messages.value, page.items, loadStoredLocalStates()),
+    );
+    currentPage.value = page.page;
+    hasMoreMessages.value = page.has_more;
+  } catch {
+    // 加载更多失败保持已加载内容，静默处理。
+  } finally {
+    isLoadingMore.value = false;
+  }
 }
 
 function hasBlockingCardInteraction(): boolean {
@@ -606,15 +673,25 @@ function openChannel() {
   if (channelHandle) {
     return;
   }
-  channelHandle = connectNotificationChannel(
-    { mode: "mock", pushes: buildMockPushes(Date.now()) },
-    {
-      onNotification: handleIncomingNotification,
-      onStatusChange: (status) => {
-        socketStatus.value = status;
+  void (async () => {
+    const accessToken = await userStore.ensureFreshAccessToken();
+    if (!accessToken || channelHandle) {
+      return;
+    }
+    channelHandle = connectNotificationChannel(
+      {
+        mode: "live",
+        api_base_url: appEnv.apiBaseUrl,
+        access_token: accessToken,
       },
-    },
-  );
+      {
+        onNotification: handleIncomingNotification,
+        onStatusChange: (status) => {
+          socketStatus.value = status;
+        },
+      },
+    );
+  })();
 }
 
 function closeChannel() {
@@ -628,12 +705,26 @@ async function refreshMessages() {
     return;
   }
   isRefreshing.value = true;
-  const locals = loadStoredLocalStates();
-  const base = MOCK_NOTIFICATIONS.map((dto) => toNotificationView(dto, locals[dto.id]));
-  setMessages(mergeIncomingNotifications(messages.value, base));
-  setTimeout(() => {
-    isRefreshing.value = false;
-  }, 420);
+  try {
+    const accessToken = await resolveAccessToken();
+    if (accessToken) {
+      const page = await getNotifications(accessToken, {
+        page: 1,
+        page_size: MESSAGES_PAGE_SIZE,
+      });
+      setMessages(
+        mergeIncomingNotifications(messages.value, page.items, loadStoredLocalStates()),
+      );
+      currentPage.value = page.page;
+      hasMoreMessages.value = page.has_more;
+    }
+  } catch {
+    // 刷新失败保留现有列表。
+  } finally {
+    setTimeout(() => {
+      isRefreshing.value = false;
+    }, 420);
+  }
 }
 
 // ---- 页签与清除未读 ----
@@ -660,6 +751,32 @@ function handleClearAllUnread() {
   applyMessages(markAllRead(messages.value));
   isClearConfirmVisible.value = false;
   uni.showToast({ title: "未读已清除", icon: "none" });
+  void syncReadAllToServer();
+}
+
+/** 已读状态同步到服务端（尽力而为；本地态先行，失败不打扰用户）。 */
+async function syncReadToServer(notificationId: string) {
+  const accessToken = await userStore.ensureFreshAccessToken();
+  if (!accessToken) {
+    return;
+  }
+  try {
+    await markNotificationRead(accessToken, notificationId);
+  } catch {
+    // 静默：本地已读体验不受影响，下次全量加载会重新对齐。
+  }
+}
+
+async function syncReadAllToServer() {
+  const accessToken = await userStore.ensureFreshAccessToken();
+  if (!accessToken) {
+    return;
+  }
+  try {
+    await markAllNotificationsRead(accessToken);
+  } catch {
+    // 静默。
+  }
 }
 
 // ---- 左滑操作 ----
@@ -797,9 +914,13 @@ function handleCardTouchCancel(id: string, event: CardTouchEvent) {
 async function handleSwipeRead(msg: NotificationView) {
   await applySwipeListMutation(msg.id, () => {
     const target = messages.value.find((item) => item.id === msg.id) ?? msg;
+    const willRead = !target.is_read;
     applyMessages(
       target.is_read ? markUnread(messages.value, msg.id) : markRead(messages.value, msg.id),
     );
+    if (willRead) {
+      void syncReadToServer(msg.id);
+    }
   });
 }
 
@@ -857,6 +978,7 @@ function handleCardTap(msg: NotificationView) {
       const target = messages.value.find((item) => item.id === msg.id);
       if (target && !target.is_read) {
         applyMessages(markRead(messages.value, msg.id));
+        void syncReadToServer(msg.id);
       }
     },
   });
@@ -929,9 +1051,13 @@ function handleMenuToggleRead() {
     return;
   }
   const target = menuTarget.value;
+  const willRead = !target.is_read;
   applyMessages(
     target.is_read ? markUnread(messages.value, target.id) : markRead(messages.value, target.id),
   );
+  if (willRead) {
+    void syncReadToServer(target.id);
+  }
   closeActionMenu();
 }
 
@@ -963,7 +1089,7 @@ onShow(async () => {
   if (!accessToken) {
     return;
   }
-  loadInitialMessages();
+  await loadInitialMessages();
   openChannel();
   nowTick.value = Date.now();
   if (!clockTimer) {

@@ -106,17 +106,12 @@ import { onLoad } from "@dcloudio/uni-app";
 
 import {
   MESSAGES_DETAIL_SNAPSHOT_STORAGE_KEY,
-  MESSAGES_LOCAL_STATE_STORAGE_KEY,
   getNotificationLabel,
-  indexLocalStates,
   resolveNotificationChannel,
-  toNotificationView,
   type NotificationChannelKey,
   type NotificationRelatedType,
   type NotificationView,
-  type StoredLocalState,
 } from "./messages-page";
-import { MOCK_NOTIFICATIONS } from "./mock-notifications";
 
 import loadingBackground from "../../../素材/加载页素材/背景.jpg";
 import emptyMessagesIllustration from "../../../素材/svg/缺省页/消息空荡荡的.svg";
@@ -196,15 +191,6 @@ const fullTime = computed(() => {
   )}:${pad(date.getMinutes())}`;
 });
 
-function loadStoredLocalStates() {
-  try {
-    const raw = uni.getStorageSync(MESSAGES_LOCAL_STATE_STORAGE_KEY) as StoredLocalState[] | "";
-    return indexLocalStates(Array.isArray(raw) ? raw : null);
-  } catch {
-    return {};
-  }
-}
-
 function goBack() {
   const pages = getCurrentPages();
   if (pages.length > 1) {
@@ -247,13 +233,8 @@ onLoad((query) => {
     message.value = { ...snapshot, is_read: true };
     return;
   }
-  const dto = MOCK_NOTIFICATIONS.find((item) => item.id === id) ?? null;
-  if (!dto) {
-    message.value = null;
-    return;
-  }
-  const locals = loadStoredLocalStates();
-  message.value = toNotificationView({ ...dto, is_read: true }, locals[dto.id]);
+  // 无快照（异常直达）时不再回退 mock，直接展示未找到。
+  message.value = null;
 });
 </script>
 

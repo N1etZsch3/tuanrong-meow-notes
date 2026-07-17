@@ -89,8 +89,7 @@ function goBack() {
 }
 
 function goNotificationSettings() {
-  // 阶段④通知后端落地后，这里改为跳转真正的通知开关设置页 /pages/profile/notifications。
-  uni.showToast({ title: "消息通知设置暂未开放", icon: "none" });
+  uni.navigateTo({ url: "/pages/profile/notifications" });
 }
 
 function goHelpFeedback() {

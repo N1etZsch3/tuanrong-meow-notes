@@ -18,6 +18,7 @@ def db_session() -> Generator[Session, None, None]:
     import app.modules.files.models  # noqa: F401
     import app.modules.map.models  # noqa: F401
     import app.modules.medicines.models  # noqa: F401
+    import app.modules.notifications.models  # noqa: F401
     import app.modules.public.models  # noqa: F401
     import app.modules.supplies.models  # noqa: F401
     import app.modules.tasks.models  # noqa: F401

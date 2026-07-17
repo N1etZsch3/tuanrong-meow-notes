@@ -124,6 +124,12 @@ export const API_ENDPOINTS = {
     checkins: "/me/checkins",
     observations: "/me/observations",
     favoriteCats: "/me/favorite-cats",
+    notifications: "/me/notifications",
+    notificationUnreadCount: "/me/notifications/unread-count",
+    notificationRead: (notificationId: ApiPathParam) =>
+      `/me/notifications/${encodePathParam(notificationId)}/read`,
+    notificationReadAll: "/me/notifications/read-all",
+    notificationSettings: "/me/notification-settings",
   },
   medicineCategories: "/medicine-categories",
   medicines: {

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.modules.auth.departments_service import user_department_names
 from app.modules.auth.models import User
 from app.modules.auth.service import clean_initial_display_text, clean_initial_text
+from app.modules.notifications import service as notifications_service
 from app.modules.tasks.models import Task, TaskCheckin, TaskCheckinPhoto
 
 
@@ -51,7 +52,7 @@ def dashboard_payload(db: Session, user: User) -> dict:
             "favorite_cats": 0,
         },
         "todo": {
-            "unread_notifications": 0,
+            "unread_notifications": notifications_service.unread_count(db, user=user),
             "pending_assignments": 0,
             "today_duty_count": 0,
             "in_progress_task_count": 0,

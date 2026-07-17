@@ -35,7 +35,6 @@ import {
   type NotificationItemDto,
   type NotificationView,
 } from "@/pages/messages/messages-page";
-import { MOCK_NOTIFICATIONS, buildMockPushes } from "@/pages/messages/mock-notifications";
 
 function buildDto(overrides: Partial<NotificationItemDto> = {}): NotificationItemDto {
   return {
@@ -370,21 +369,6 @@ describe("messages page notification model", () => {
     expect(formatNotificationTime("not-a-date", now)).toBe("");
   });
 
-  it("ships mock data aligned with the notification contract", () => {
-    expect(MOCK_NOTIFICATIONS.length).toBeGreaterThanOrEqual(6);
-    for (const item of MOCK_NOTIFICATIONS) {
-      expect(item.id).toBeTruthy();
-      expect(item.created_at).toBeTruthy();
-      expect(typeof item.is_read).toBe("boolean");
-      expect(resolveNotificationChannel(item.notification_type).title).toBeTruthy();
-    }
-    const pushes = buildMockPushes(Date.now());
-    expect(pushes.length).toBeGreaterThan(0);
-    for (const push of pushes) {
-      expect(push.delay_ms).toBeGreaterThan(0);
-      expect(push.notification.is_read).toBe(false);
-    }
-  });
 });
 
 describe("messages page wiring", () => {
@@ -410,10 +394,14 @@ describe("messages page wiring", () => {
     expect(messagesPageSource).not.toContain("calc(env(safe-area-inset-bottom) + 154rpx)");
   });
 
-  it("wires the mock websocket channel and unread management flows", () => {
+  it("wires the live websocket channel and server-backed notification flows", () => {
     expect(messagesPageSource).toContain("connectNotificationChannel");
-    expect(messagesPageSource).toContain('mode: "mock"');
-    expect(messagesPageSource).toContain("buildMockPushes");
+    expect(messagesPageSource).toContain('mode: "live"');
+    expect(messagesPageSource).toContain("getNotifications");
+    expect(messagesPageSource).toContain("markNotificationRead");
+    expect(messagesPageSource).toContain("markAllNotificationsRead");
+    expect(messagesPageSource).toContain('@scrolltolower="loadMoreMessages"');
+    expect(messagesPageSource).not.toContain("mock-notifications");
     expect(messagesPageSource).toContain("markAllRead");
     expect(messagesPageSource).toContain("@longpress");
     expect(messagesPageSource).toContain('@longpress="handleCardLongPress(msg, $event)"');
@@ -431,7 +419,9 @@ describe("messages page wiring", () => {
     expect(messagesPageSource).toContain("scroll-y");
     expect(messagesPageSource).toContain(':enhanced="true"');
     expect(messagesPageSource).toContain(':refresher-enabled="!isSwipeRefreshBlocked"');
-    expect(messagesPageSource).toContain("mergeIncomingNotifications(messages.value, base)");
+    expect(messagesPageSource).toContain(
+      "mergeIncomingNotifications(messages.value, page.items, loadStoredLocalStates())",
+    );
     expect(messagesPageSource).toContain("async function applySwipeListMutation");
     expect(messagesPageSource).toContain("await nextTick()");
     expect(messagesPageSource).toContain("swipeMutationPending");

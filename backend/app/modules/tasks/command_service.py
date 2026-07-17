@@ -11,6 +11,7 @@ from datetime import UTC, date, datetime, time
 from decimal import Decimal
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.errors import APIError
@@ -18,6 +19,7 @@ from app.modules.auth.models import AdminOperationLog, User
 from app.modules.files.service import resolve_business_image
 from app.modules.map.models import MapPoint
 from app.modules.map.service import get_default_campus
+from app.modules.notifications.dispatch import create_notifications, push_created
 from app.modules.tasks.constants import (
     EXECUTION_REMOVED_CANCEL_REASON,
     EXECUTION_STATUS_LABELS,
@@ -303,7 +305,27 @@ def publish_summer_feeding_task(
             after_data={"task_id": str(task.id), "map_point_id": str(point.id)},
         )
     )
+    # 通知除发布者外的全部在册成员（按各自频道开关过滤）
+    recipient_ids = list(
+        db.scalars(
+            select(User.id).where(
+                User.deleted_at.is_(None),
+                User.status == "active",
+                User.id != admin.id,
+            )
+        ).all()
+    )
+    created_notifications = create_notifications(
+        db,
+        user_ids=recipient_ids,
+        notification_type="emergency_task" if task.priority == "urgent" else "new_task",
+        title="新任务已发布",
+        content=f"{task.title}已发布，位置在{point.location_name or point.name}，请及时查看。",
+        related_type="task",
+        related_id=task.id,
+    )
     db.commit()
+    push_created(created_notifications)
     return {
         "task_id": task.id,
         "task_no": task.task_no,

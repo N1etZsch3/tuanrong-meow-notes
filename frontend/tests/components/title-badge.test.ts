@@ -20,7 +20,7 @@ describe("title badge", () => {
     );
     expect(getTitleDefinition("president")?.label).toBe("会长");
     expect(getTitleDefinition("president")?.name_color).toBe("#a52828");
-    expect(getTitleDefinition("vice_president")?.name_color).toBe("#8a6817");
+    expect(getTitleDefinition("vice_president")?.name_color).toBe("#5a56a6");
     expect(getTitleDefinition("survival_head")?.name_color).toBe(
       DEPARTMENT_THEMES.生存保障部.head_title,
     );
@@ -40,6 +40,7 @@ describe("title badge", () => {
     expect(titleIdentityNameSource).toContain("TITLE_SHIELD_ASSETS[definition.shield_asset]");
     expect(titleShieldAssetsSource.match(/盾牌-.*?\.svg/g)).toHaveLength(12);
     expect(titleIdentityNameSource).toContain("definition?.name_color");
+    expect(titleIdentityNameSource).toContain('props.display === "title"');
     expect(titleIdentityNameSource).not.toContain("definition.label");
     expect(titleIdentityNameSource).toContain("width: 100%");
     expect(titleIdentityNameSource).toContain("text-overflow: ellipsis");

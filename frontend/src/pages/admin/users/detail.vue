@@ -31,8 +31,8 @@
             />
             <view v-if="userDetail?.profile.title" class="avatar-title">
               <TitleIdentityName
-                :name="userDetail.profile.nickname"
                 :title="userDetail.profile.title"
+                display="title"
                 size="detail"
               />
             </view>

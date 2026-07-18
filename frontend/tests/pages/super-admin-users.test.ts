@@ -37,6 +37,15 @@ describe("super administrator frontend contract", () => {
     expect(identityAvatarSource).toContain("border-color: #d94343");
   });
 
+  it("shows the title label rather than duplicating the nickname below the detail avatar", () => {
+    expect(memberDetailSource).toMatch(
+      /<TitleIdentityName[\s\S]*:title="userDetail\.profile\.title"[\s\S]*display="title"/,
+    );
+    expect(memberDetailSource).not.toMatch(
+      /<TitleIdentityName[\s\S]*:name="userDetail\.profile\.nickname"[\s\S]*size="detail"/,
+    );
+  });
+
   it("removes the role pill and renders title identity through the nickname", () => {
     expect(profileIndexSource).not.toContain('class="role-pill"');
     expect(profileIndexSource).toContain("TitleIdentityName");

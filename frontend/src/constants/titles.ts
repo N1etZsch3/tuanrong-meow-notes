@@ -44,9 +44,9 @@ export const TITLE_DEFINITIONS: readonly TitleDefinition[] = [
     label: "副会长",
     shield: "purple",
     shield_asset: "vice_president",
-    tag_background: "#f3e9ce",
-    tag_color: "#8a6817",
-    name_color: "#8a6817",
+    tag_background: "#e9e8f8",
+    tag_color: "#5a56a6",
+    name_color: "#5a56a6",
     rank: "vice_president",
   },
   {

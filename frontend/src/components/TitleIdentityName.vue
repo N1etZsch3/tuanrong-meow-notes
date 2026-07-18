@@ -9,7 +9,7 @@
     <text
       class="title-identity-name__text"
       :style="{ color: definition?.name_color || fallbackColor }"
-    >{{ name || fallbackName }}</text>
+    >{{ displayText }}</text>
   </view>
 </template>
 
@@ -23,6 +23,7 @@ const props = withDefaults(
   defineProps<{
     name?: string | null;
     title?: string | null;
+    display?: "name" | "title";
     size?: "list" | "profile" | "detail";
     fallbackName?: string;
     fallbackColor?: string;
@@ -30,6 +31,7 @@ const props = withDefaults(
   {
     name: "",
     title: null,
+    display: "name",
     size: "list",
     fallbackName: "未命名成员",
     fallbackColor: "#111827",
@@ -37,6 +39,12 @@ const props = withDefaults(
 );
 
 const definition = computed(() => getTitleDefinition(props.title));
+const displayText = computed(() => {
+  if (props.display === "title") {
+    return definition.value?.label || "";
+  }
+  return props.name || props.fallbackName;
+});
 </script>
 
 <style scoped>

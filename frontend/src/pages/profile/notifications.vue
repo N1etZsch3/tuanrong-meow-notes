@@ -1,7 +1,7 @@
 <template>
   <view class="notify-page">
     <image class="page-bg" :src="pageBackground" mode="aspectFill" />
-    <scroll-view class="notify-scroll" scroll-y :show-scrollbar="false">
+    <scroll-view class="notify-scroll" scroll-y enhanced :show-scrollbar="false">
       <view class="notify-inner">
         <view class="nav-row">
           <button class="back-button" @tap="goBack">‹</button>

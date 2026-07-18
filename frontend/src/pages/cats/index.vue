@@ -127,6 +127,7 @@
       <scroll-view
         class="cats-scroll"
         scroll-y
+        enhanced
         refresher-enabled
         :refresher-triggered="isRefreshing"
         lower-threshold="180"

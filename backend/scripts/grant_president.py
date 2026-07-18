@@ -5,6 +5,7 @@ from sqlalchemy import select
 from app.core.errors import APIError
 from app.db.session import SessionLocal, configure_session
 from app.modules.auth.models import User
+from app.modules.files.models import FileAsset, FileAssetVariant  # noqa: F401
 from app.modules.titles.service import seed_president
 
 

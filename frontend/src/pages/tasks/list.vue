@@ -116,6 +116,7 @@
       <scroll-view
         class="task-scroll"
         scroll-y
+        enhanced
         :show-scrollbar="false"
         lower-threshold="140"
         @scrolltolower="loadMore"

@@ -23,7 +23,13 @@
       </view>
     </view>
 
-    <scroll-view class="pub-body" scroll-y @scrolltolower="loadMore">
+    <scroll-view
+      class="pub-body"
+      scroll-y
+      enhanced
+      :show-scrollbar="false"
+      @scrolltolower="loadMore"
+    >
       <view class="pub-content">
         <view v-if="loading && cats.length === 0" class="pub-state">
           <text class="pub-state-emoji">🐾</text>

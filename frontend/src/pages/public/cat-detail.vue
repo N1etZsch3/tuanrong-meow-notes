@@ -35,7 +35,12 @@
                 circular
               >
                 <swiper-item v-for="(photo, index) in photos" :key="index">
-                  <image class="album-img" :src="resolvePublicImage(photo.file_url)" mode="aspectFill" />
+                  <image
+                    class="album-img"
+                    :src="resolvePublicImage(photo.file_url)"
+                    mode="aspectFill"
+                    @tap="previewPhoto(photo.file_url)"
+                  />
                 </swiper-item>
               </swiper>
               <image
@@ -43,6 +48,7 @@
                 class="album-img"
                 :src="resolvePublicImage(photos[0].file_url)"
                 mode="aspectFill"
+                @tap="previewPhoto(photos[0].file_url)"
               />
               <view v-else class="album-img album-empty">
                 <text class="pub-state-emoji">🐱</text>
@@ -105,6 +111,7 @@ import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 
 import { getPublicCatDetail, type PublicCatDetail } from "@/api/public";
+import { previewPublicImage } from "./image-preview";
 import { resolvePublicImage } from "./public-assets";
 import { useStatusBarHeight } from "./use-status-bar";
 
@@ -162,6 +169,13 @@ function neuterLabel(status: string): string {
 }
 function coatLabel(color: string): string {
   return COAT_LABELS[color] ?? color;
+}
+
+function previewPhoto(fileUrl: string) {
+  previewPublicImage(
+    fileUrl,
+    photos.value.map((photo) => photo.file_url),
+  );
 }
 
 async function loadCat(catId: string) {

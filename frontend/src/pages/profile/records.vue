@@ -10,6 +10,7 @@
         v-if="isCompletedTaskRecordPage && completedTaskRecords.length"
         class="record-list"
         scroll-y
+        enhanced
         :show-scrollbar="false"
         lower-threshold="140"
         @scrolltolower="loadMoreRecords"

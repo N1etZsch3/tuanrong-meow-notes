@@ -69,6 +69,7 @@
       <scroll-view
         class="member-scroll"
         scroll-y
+        enhanced
         lower-threshold="140"
         :show-scrollbar="false"
         @scrolltolower="loadMoreUsers"
@@ -84,36 +85,76 @@
         </view>
 
         <view v-else class="member-list">
-          <button
+          <view
             v-for="user in users"
             :key="user.id"
             class="member-card"
             hover-class="member-card-hover"
             @tap="goUserDetail(user.id)"
           >
-            <image
-              class="member-avatar"
-              :src="memberAvatar(user)"
-              mode="aspectFill"
-              @error="markAvatarFailed(user.id)"
-            />
-            <view class="member-main">
-              <text class="member-name">{{ user.profile.nickname || "未命名成员" }}</text>
-              <TitleBadge :title="user.profile.title" />
-              <text class="member-no">喵喵号 {{ user.meow_no }}</text>
+            <view class="member-avatar-shell" :class="roleAvatarClass(user.role)">
+              <image
+                class="member-avatar"
+                :src="memberAvatar(user)"
+                mode="aspectFill"
+                @error="markAvatarFailed(user.id)"
+              />
+              <image
+                v-if="isAdminRole(user.role)"
+                class="member-admin-badge"
+                :src="academicCapIcon"
+                mode="aspectFit"
+              />
             </view>
-            <view class="tag-column">
-              <text class="role-tag" :class="roleClass(user.role)">
-                {{ roleLabel(user.role) }}
-              </text>
-              <text
-                v-for="dept in memberDepartments(user)"
-                :key="dept"
-                class="department-tag"
-              >{{ dept }}</text>
+            <view class="member-main">
+              <view class="member-name-row">
+                <text class="member-name">{{ user.profile.nickname || "未命名成员" }}</text>
+                <TitleBadge :title="user.profile.title" />
+              </view>
+              <text class="member-no">{{ user.meow_no }}</text>
+            </view>
+            <view
+              class="department-panel"
+              :class="{ 'is-single': memberDepartments(user).length === 1 }"
+            >
+              <swiper
+                v-if="memberDepartmentPages(user).length > 1"
+                class="department-swiper"
+                vertical
+                :duration="220"
+                @touchstart.stop="stopDepartmentGesture"
+                @touchmove.stop="stopDepartmentGesture"
+                @touchend.stop="stopDepartmentGesture"
+                @touchcancel.stop="stopDepartmentGesture"
+                @tap.stop="stopDepartmentGesture"
+              >
+                <swiper-item
+                  v-for="(page, pageIndex) in memberDepartmentPages(user)"
+                  :key="`${user.id}-departments-${pageIndex}`"
+                >
+                  <view class="department-stack">
+                    <text
+                      v-for="dept in page"
+                      :key="dept"
+                      class="department-tag"
+                      :style="getDepartmentTagStyle(dept)"
+                    >{{ dept }}</text>
+                  </view>
+                </swiper-item>
+              </swiper>
+              <view v-else class="department-stack">
+                <template v-for="page in memberDepartmentPages(user)" :key="page.join('|')">
+                  <text
+                    v-for="dept in page"
+                    :key="dept"
+                    class="department-tag"
+                    :style="getDepartmentTagStyle(dept)"
+                  >{{ dept }}</text>
+                </template>
+              </view>
             </view>
             <text class="card-arrow">›</text>
-          </button>
+          </view>
           <view class="list-footer">
             <text v-if="isLoadingMore">正在加载更多成员...</text>
             <text v-else-if="!hasMore">已展示全部 {{ total }} 位成员</text>
@@ -136,9 +177,10 @@ import { listAdminUsers, type AdminUserDto } from "@/api/admin-users";
 import { resolveUserAvatarContentUrl } from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
-import { DEPARTMENTS } from "@/constants/departments";
+import { DEPARTMENTS, getDepartmentTagStyle } from "@/constants/departments";
 import TitleBadge from "@/components/TitleBadge.vue";
 
+import academicCapIcon from "../../../../素材/svg/人员管理/学士帽.svg";
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 
@@ -191,6 +233,19 @@ function memberDepartments(user: AdminUserDto): string[] {
     return user.profile.departments;
   }
   return [user.profile.department || "未分部"];
+}
+
+function memberDepartmentPages(user: AdminUserDto): string[][] {
+  const departments = memberDepartments(user);
+  const pages: string[][] = [];
+  for (let index = 0; index < departments.length; index += 2) {
+    pages.push(departments.slice(index, index + 2));
+  }
+  return pages;
+}
+
+function stopDepartmentGesture() {
+  // 阻止纵向 swiper 的触摸事件冒泡到外层人员列表，保留 swiper 自身默认翻页。
 }
 
 const selectedRoleIndex = computed(() =>
@@ -284,24 +339,18 @@ function selectSort(event: PickerChangeEvent) {
   reloadUsers();
 }
 
-function roleLabel(role: string): string {
-  if (role === "admin" || role === "super_admin") {
-    return "管理员";
-  }
-  if (role === "summer_volunteer") {
-    return "暑期志愿者";
-  }
-  return "成员";
+function isAdminRole(role: string): boolean {
+  return role === "admin" || role === "super_admin";
 }
 
-function roleClass(role: string): string {
-  if (role === "admin" || role === "super_admin") {
-    return "role-admin";
+function roleAvatarClass(role: string): string {
+  if (isAdminRole(role)) {
+    return "avatar-role-admin";
   }
   if (role === "summer_volunteer") {
-    return "role-volunteer";
+    return "avatar-role-volunteer";
   }
-  return "role-member";
+  return "avatar-role-member";
 }
 
 function goUserDetail(userId: string) {
@@ -507,7 +556,8 @@ onShow(() => {
 
 .member-card {
   position: relative;
-  min-height: 154rpx;
+  box-sizing: border-box;
+  height: 168rpx;
   border-radius: 26rpx;
   padding: 22rpx 58rpx 22rpx 22rpx;
   color: #111827;
@@ -523,12 +573,53 @@ onShow(() => {
   transform: translateY(2rpx);
 }
 
-.member-avatar {
-  width: 108rpx;
-  height: 108rpx;
+.member-avatar-shell {
+  position: relative;
+  box-sizing: border-box;
+  width: 118rpx;
+  height: 118rpx;
+  padding: 7rpx;
+  border: 4rpx solid transparent;
   border-radius: 50%;
-  background: #edf8e8;
   flex: 0 0 auto;
+}
+
+.member-avatar {
+  display: block;
+  width: 96rpx;
+  height: 96rpx;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.avatar-role-admin {
+  background: #e2f6df;
+  border-color: #72bd6d;
+}
+
+.avatar-role-volunteer {
+  background: #fff0d9;
+  border-color: #e6a64d;
+}
+
+.avatar-role-member {
+  background: #dff1ff;
+  border-color: #6ca9d8;
+}
+
+.member-admin-badge {
+  position: absolute;
+  z-index: 1;
+  left: -10rpx;
+  top: -10rpx;
+  box-sizing: border-box;
+  width: 46rpx;
+  height: 46rpx;
+  padding: 7rpx;
+  border: 3rpx solid #72bd6d;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6rpx 14rpx rgba(36, 124, 50, 0.15);
 }
 
 .member-main {
@@ -536,11 +627,21 @@ onShow(() => {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8rpx;
+  gap: 0;
   flex: 1;
 }
 
+.member-name-row {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
 .member-name {
+  min-width: 0;
+  flex: 0 1 auto;
   overflow: hidden;
   color: #111827;
   font-size: 34rpx;
@@ -551,52 +652,46 @@ onShow(() => {
 }
 
 .member-no {
-  margin-top: 12rpx;
+  margin-top: 7rpx;
   color: #6b7280;
   font-size: 25rpx;
   font-weight: 800;
 }
 
-.tag-column {
-  width: 170rpx;
+.department-panel {
+  width: 156rpx;
+  height: 84rpx;
   flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 12rpx;
 }
 
-.role-tag,
+.department-swiper {
+  width: 100%;
+  height: 84rpx;
+}
+
+.department-stack {
+  min-height: 84rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10rpx;
+}
+
 .department-tag {
-  max-width: 170rpx;
+  box-sizing: border-box;
+  max-width: 156rpx;
   border-radius: 15rpx;
-  padding: 8rpx 14rpx;
+  padding: 6rpx 13rpx;
   overflow: hidden;
-  font-size: 23rpx;
+  font-size: 21rpx;
   font-weight: 900;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.role-admin {
-  background: #e2f6df;
-  color: #247c32;
-}
-
-.role-volunteer {
-  background: #fff0d9;
-  color: #a45b00;
-}
-
-.role-member {
-  background: #dff1ff;
-  color: #1d6fb8;
-}
-
-.department-tag {
-  background: #edf0f3;
-  color: #526070;
+.department-panel.is-single .department-stack {
+  justify-content: center;
 }
 
 .card-arrow {

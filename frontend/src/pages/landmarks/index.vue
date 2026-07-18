@@ -31,6 +31,7 @@
       <scroll-view
         class="point-scroll"
         scroll-y
+        enhanced
         :show-scrollbar="false"
         lower-threshold="140"
         @scrolltolower="loadMore"

@@ -39,6 +39,18 @@ page {
   font-family: "Songti SC", "STSong", "SimSun", "Noto Serif CJK SC", serif;
 }
 
+scroll-view {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+scroll-view::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+  color: transparent;
+}
+
 view,
 text,
 input,

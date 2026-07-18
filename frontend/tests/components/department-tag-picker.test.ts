@@ -7,14 +7,21 @@ import profileCompleteSource from "../../src/pages/profile/complete.vue?raw";
 import adminCreateUserSource from "../../src/pages/admin/create-user.vue?raw";
 import adminUsersDetailSource from "../../src/pages/admin/users/detail.vue?raw";
 import adminUsersIndexSource from "../../src/pages/admin/users/index.vue?raw";
-import { DEPARTMENTS, isKnownDepartment } from "../../src/constants/departments";
+import {
+  DEPARTMENTS,
+  getDepartmentTagColors,
+  getDepartmentTagStyle,
+  isKnownDepartment,
+} from "../../src/constants/departments";
 
 describe("department tag picker component", () => {
   it("renders removable tags and adds via native action sheet", () => {
     expect(pickerSource).toContain('emit("update:modelValue"');
     expect(pickerSource).toContain("removeDepartment");
     expect(pickerSource).toContain("uni.showActionSheet");
-    expect(pickerSource).toContain("＋ 添加部门");
+    expect(pickerSource).toContain('aria-label="添加部门"');
+    expect(pickerSource).toContain('class="dept-add-icon"');
+    expect(pickerSource).not.toContain("＋ 添加部门");
     expect(pickerSource).toContain('class="dept-tag-remove"');
     expect(pickerSource).toContain("×");
     expect(pickerSource).toContain('from "@/constants/departments"');
@@ -30,6 +37,15 @@ describe("department tag picker component", () => {
     ]);
     expect(isKnownDepartment("活动部")).toBe(true);
     expect(isKnownDepartment("计算机学院")).toBe(false);
+    expect(new Set(DEPARTMENTS.map((department) => getDepartmentTagColors(department).background)).size).toBe(5);
+    expect(getDepartmentTagStyle("宣传部")).toEqual({
+      backgroundColor: "#eee6ff",
+      color: "#6c4a9c",
+    });
+    expect(getDepartmentTagStyle("未分部")).toEqual({
+      backgroundColor: "#edf0f3",
+      color: "#526070",
+    });
   });
 });
 
@@ -52,6 +68,7 @@ describe("multi-department forms", () => {
 
   it("keeps the member edit control disabled in readonly mode", () => {
     expect(adminUsersDetailSource).toContain(':disabled="readonlyMode"');
+    expect(adminUsersDetailSource).toContain('size="large"');
   });
 
   it("renders the profile card departments as a horizontally scrollable tag row", () => {
@@ -64,7 +81,40 @@ describe("multi-department forms", () => {
 
   it("shows every department of a member on the admin list card", () => {
     expect(adminUsersIndexSource).toContain("memberDepartments");
-    expect(adminUsersIndexSource).toContain('v-for="dept in memberDepartments(user)"');
+    expect(adminUsersIndexSource).toContain('v-for="dept in page"');
     expect(adminUsersIndexSource).toContain('from "@/constants/departments"');
+    expect(adminUsersIndexSource).toContain("getDepartmentTagStyle(dept)");
+    expect(adminUsersIndexSource).toContain("memberDepartmentPages");
+    expect(adminUsersIndexSource).toContain('class="department-swiper"');
+    expect(adminUsersIndexSource).toContain("vertical");
+    expect(adminUsersIndexSource).toContain('@touchmove.stop="stopDepartmentGesture"');
+    expect(adminUsersIndexSource).toContain("departments.slice(index, index + 2)");
+    expect(adminUsersIndexSource).toContain("'is-single': memberDepartments(user).length === 1");
+  });
+
+  it("uses role-colored avatar rings and an academic-cap badge instead of role tags", () => {
+    expect(adminUsersIndexSource).toContain('class="member-avatar-shell"');
+    expect(adminUsersIndexSource).toContain('class="member-admin-badge"');
+    expect(adminUsersIndexSource).toContain('v-if="isAdminRole(user.role)"');
+    expect(adminUsersIndexSource).toContain("素材/svg/人员管理/学士帽.svg");
+    expect(adminUsersIndexSource).toContain("background: #e2f6df");
+    expect(adminUsersIndexSource).toContain("background: #fff0d9");
+    expect(adminUsersIndexSource).toContain("background: #dff1ff");
+    expect(adminUsersIndexSource).not.toContain('class="role-tag"');
+    expect(adminUsersIndexSource).not.toContain("function roleLabel(");
+  });
+
+  it("places an optional title directly after the member name", () => {
+    expect(adminUsersIndexSource).toContain('class="member-name-row"');
+    expect(adminUsersIndexSource).toMatch(
+      /class="member-name-row"[\s\S]*class="member-name"[\s\S]*<TitleBadge :title="user\.profile\.title"/,
+    );
+  });
+
+  it("keeps personnel cards uniform and places the raw member number near the name", () => {
+    expect(adminUsersIndexSource).toContain("height: 168rpx");
+    expect(adminUsersIndexSource).toContain('class="member-no">{{ user.meow_no }}</text>');
+    expect(adminUsersIndexSource).toContain("margin-top: 7rpx");
+    expect(adminUsersIndexSource).not.toContain("喵喵号 {{ user.meow_no }}");
   });
 });

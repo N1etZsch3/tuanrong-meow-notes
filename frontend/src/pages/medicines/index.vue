@@ -68,6 +68,7 @@
       <scroll-view
         class="medicine-scroll"
         scroll-y
+        enhanced
         :show-scrollbar="false"
         lower-threshold="140"
         @scrolltolower="loadMoreMedicines"

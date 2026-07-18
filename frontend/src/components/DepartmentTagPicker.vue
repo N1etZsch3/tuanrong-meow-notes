@@ -1,43 +1,54 @@
 <template>
-  <view class="dept-picker">
-    <view v-if="modelValue.length" class="dept-tags">
-      <view v-for="dept in modelValue" :key="dept" class="dept-tag">
-        <text class="dept-tag-text">{{ dept }}</text>
-        <text
-          v-if="!disabled"
-          class="dept-tag-remove"
-          @tap.stop="removeDepartment(dept)"
+  <view class="dept-picker" :class="{ 'is-large': size === 'large' }">
+    <view class="dept-picker-row">
+      <view v-if="modelValue.length" class="dept-tags">
+        <view
+          v-for="dept in modelValue"
+          :key="dept"
+          class="dept-tag"
+          :style="getDepartmentTagStyle(dept)"
         >
-          ×
-        </text>
+          <text class="dept-tag-text">{{ dept }}</text>
+          <text
+            v-if="!disabled"
+            class="dept-tag-remove"
+            @tap.stop="removeDepartment(dept)"
+          >
+            ×
+          </text>
+        </view>
       </view>
-    </view>
-    <text v-else class="dept-empty">{{ placeholder }}</text>
+      <text v-else class="dept-empty">{{ placeholder }}</text>
 
-    <button
-      v-if="!disabled && availableDepartments.length"
-      class="dept-add"
-      @tap="openDepartmentPicker"
-    >
-      ＋ 添加部门
-    </button>
+      <button
+        v-if="!disabled && availableDepartments.length"
+        class="dept-add"
+        aria-label="添加部门"
+        hover-class="dept-add-hover"
+        @tap="openDepartmentPicker"
+      >
+        <text class="dept-add-icon">+</text>
+      </button>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { computed } from "vue";
 
-import { DEPARTMENTS } from "@/constants/departments";
+import { DEPARTMENTS, getDepartmentTagStyle } from "@/constants/departments";
 
 const props = withDefaults(
   defineProps<{
     modelValue: string[];
     disabled?: boolean;
     placeholder?: string;
+    size?: "default" | "large";
   }>(),
   {
     disabled: false,
     placeholder: "请添加部门",
+    size: "default",
   },
 );
 
@@ -76,12 +87,19 @@ function openDepartmentPicker() {
 
 <style scoped>
 .dept-picker {
+  width: 100%;
+}
+
+.dept-picker-row {
+  width: 100%;
   display: flex;
-  flex-direction: column;
-  gap: 16rpx;
+  align-items: center;
+  gap: 14rpx;
 }
 
 .dept-tags {
+  min-width: 0;
+  flex: 1;
   display: flex;
   flex-wrap: wrap;
   gap: 14rpx;
@@ -93,11 +111,10 @@ function openDepartmentPicker() {
   gap: 8rpx;
   padding: 8rpx 10rpx 8rpx 18rpx;
   border-radius: 14rpx;
-  background: #e6f6e4;
 }
 
 .dept-tag-text {
-  color: #238033;
+  color: inherit;
   font-size: 24rpx;
   font-weight: 900;
   line-height: 1;
@@ -107,8 +124,8 @@ function openDepartmentPicker() {
   width: 34rpx;
   height: 34rpx;
   border-radius: 50%;
-  background: rgba(35, 128, 51, 0.16);
-  color: #238033;
+  background: rgba(255, 255, 255, 0.52);
+  color: inherit;
   font-size: 30rpx;
   font-weight: 900;
   line-height: 34rpx;
@@ -116,26 +133,67 @@ function openDepartmentPicker() {
 }
 
 .dept-empty {
+  min-width: 0;
+  flex: 1;
   color: #9aa1ac;
   font-size: 26rpx;
   line-height: 1.4;
 }
 
 .dept-add {
-  align-self: flex-start;
+  box-sizing: border-box;
+  flex: 0 0 auto;
   margin: 0;
-  padding: 0 22rpx;
-  height: 60rpx;
+  padding: 0;
+  width: 58rpx;
+  height: 58rpx;
   border: 2rpx dashed rgba(47, 128, 55, 0.5);
-  border-radius: 16rpx;
+  border-radius: 50%;
   background: rgba(47, 128, 55, 0.06);
   color: #2f8037;
-  font-size: 24rpx;
-  font-weight: 900;
-  line-height: 56rpx;
+  line-height: 54rpx;
+}
+
+.dept-add-icon {
+  display: block;
+  font-size: 42rpx;
+  font-weight: 500;
+  line-height: 52rpx;
+  text-align: center;
+}
+
+.dept-add-hover {
+  background: rgba(47, 128, 55, 0.14);
 }
 
 .dept-add::after {
   border: 0;
+}
+
+.dept-picker.is-large .dept-tag {
+  padding: 12rpx 14rpx 12rpx 22rpx;
+  border-radius: 18rpx;
+}
+
+.dept-picker.is-large .dept-tag-text {
+  font-size: 29rpx;
+}
+
+.dept-picker.is-large .dept-tag-remove {
+  width: 40rpx;
+  height: 40rpx;
+  font-size: 34rpx;
+  line-height: 40rpx;
+}
+
+.dept-picker.is-large .dept-add {
+  width: 66rpx;
+  height: 66rpx;
+  line-height: 62rpx;
+}
+
+.dept-picker.is-large .dept-add-icon {
+  font-size: 48rpx;
+  line-height: 60rpx;
 }
 </style>

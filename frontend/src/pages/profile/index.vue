@@ -33,7 +33,12 @@
               :show-scrollbar="false"
             >
               <view class="dept-tag-row">
-                <text v-for="dept in departmentTags" :key="dept" class="dept-chip">{{ dept }}</text>
+                <text
+                  v-for="dept in departmentTags"
+                  :key="dept"
+                  class="dept-chip"
+                  :style="getDepartmentTagStyle(dept)"
+                >{{ dept }}</text>
               </view>
             </scroll-view>
             <text v-else class="meta-line">部门：未设置</text>
@@ -106,6 +111,7 @@ import AppTabBar from "@/components/AppTabBar.vue";
 import TitleBadge from "@/components/TitleBadge.vue";
 import { LOGIN_ROUTE, PUBLIC_HOME_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
+import { getDepartmentTagStyle } from "@/constants/departments";
 
 import {
   PROFILE_STAT_ENTRIES,
@@ -388,8 +394,6 @@ onShow(() => {
   flex: 0 0 auto;
   padding: 7rpx 16rpx;
   border-radius: 12rpx;
-  background: #e6f6e4;
-  color: #238033;
   font-size: 22rpx;
   font-weight: 800;
   line-height: 1.2;

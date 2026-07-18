@@ -1,7 +1,7 @@
 <template>
   <view class="holding-page">
     <image class="page-bg" :src="loadingBackground" mode="aspectFill" />
-    <scroll-view class="holding-scroll" scroll-y :show-scrollbar="false">
+    <scroll-view class="holding-scroll" scroll-y enhanced :show-scrollbar="false">
       <view class="holding-inner">
         <view class="nav-row">
           <button class="back-button" hover-class="button-hover" @tap="goBack">‹</button>

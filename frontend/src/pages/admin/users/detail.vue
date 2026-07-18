@@ -63,6 +63,7 @@
                 v-model="form.departments"
                 :disabled="readonlyMode"
                 placeholder="请添加部门"
+                size="large"
               />
             </view>
             <view class="field-group">

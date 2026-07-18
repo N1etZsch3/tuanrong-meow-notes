@@ -28,7 +28,12 @@
           <view v-if="post.cover_url" class="album-wrap">
             <view class="pub-print cover-print">
               <view class="pub-tape" />
-              <image class="pub-print-img cover-img" :src="resolvePublicImage(post.cover_url)" mode="aspectFill" />
+              <image
+                class="pub-print-img cover-img"
+                :src="resolvePublicImage(post.cover_url)"
+                mode="aspectFill"
+                @tap="previewPostImage(post.cover_url)"
+              />
             </view>
           </view>
 
@@ -37,7 +42,12 @@
               <text v-if="block.block_type === 'text' && block.text" class="content-text">{{ block.text }}</text>
               <view v-else-if="block.block_type === 'image' && block.image_url" class="pub-print content-print">
                 <view class="pub-tape" />
-                <image class="pub-print-img content-img" :src="resolvePublicImage(block.image_url)" mode="widthFix" />
+                <image
+                  class="pub-print-img content-img"
+                  :src="resolvePublicImage(block.image_url)"
+                  mode="widthFix"
+                  @tap="previewPostImage(block.image_url)"
+                />
               </view>
             </block>
           </view>
@@ -62,6 +72,7 @@ import { computed, ref } from "vue";
 import { onLoad } from "@dcloudio/uni-app";
 
 import { getPublicPostDetail, type PublicPostDetail } from "@/api/public";
+import { previewPublicImage } from "./image-preview";
 import { resolvePublicImage } from "./public-assets";
 import { useStatusBarHeight } from "./use-status-bar";
 
@@ -79,6 +90,22 @@ const typeLabel = computed(() =>
 const navTitle = computed(() =>
   post.value?.post_type === "merch" ? "周边详情" : "趣事详情",
 );
+
+const previewImageUrls = computed(() => {
+  if (!post.value) {
+    return [];
+  }
+  return [
+    post.value.cover_url,
+    ...post.value.blocks
+      .filter((block) => block.block_type === "image")
+      .map((block) => block.image_url),
+  ];
+});
+
+function previewPostImage(imageUrl: string | null) {
+  previewPublicImage(imageUrl, previewImageUrls.value);
+}
 
 async function loadPost(postId: string) {
   loading.value = true;

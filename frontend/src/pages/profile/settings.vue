@@ -54,6 +54,20 @@
               <text class="row-title">微信解绑</text>
               <text class="row-chevron">›</text>
             </button>
+            <template v-if="canResignTitle">
+              <view class="row-divider" />
+              <button
+                class="settings-row"
+                :disabled="isResigningTitle"
+                @tap="confirmTitleResignation"
+              >
+                <view class="row-icon-shell is-title">
+                  <image class="row-icon" :src="titleIcon" mode="aspectFit" />
+                </view>
+                <text class="row-title">退出头衔</text>
+                <text class="row-chevron">›</text>
+              </button>
+            </template>
           </view>
         </view>
 
@@ -70,8 +84,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, ref } from "vue";
 
+import { resignMyTitle } from "@/api/titles";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
@@ -79,10 +94,15 @@ import passwordIcon from "../../../素材/svg/登录页/修改密码.svg";
 import wechatIcon from "../../../素材/svg/用户页/设置.svg";
 import notificationIcon from "../../../素材/svg/用户页/通知.svg";
 import feedbackIcon from "../../../素材/svg/用户页/帮助和反馈.svg";
+import titleIcon from "../../../素材/svg/头衔/盾牌-绿.svg";
 import pageBackground from "../../../素材/加载页素材/背景.jpg";
 
 const userStore = useUserStore();
 const isUnbindingWechat = ref(false);
+const isResigningTitle = ref(false);
+const canResignTitle = computed(
+  () => Boolean(userStore.currentUser?.title && userStore.currentUser.title !== "president"),
+);
 
 function goBack() {
   uni.navigateBack();
@@ -98,6 +118,52 @@ function goHelpFeedback() {
 
 function goResetPassword() {
   uni.navigateTo({ url: "/pages/profile/reset-password" });
+}
+
+function confirmTitleResignation() {
+  if (!canResignTitle.value || isResigningTitle.value) {
+    return;
+  }
+  uni.showModal({
+    title: "退出头衔",
+    content: `确认退出“${userStore.currentUser?.title_label || "当前头衔"}”吗？退出后该头衔会立即开放给其他成员。`,
+    confirmText: "确认退出",
+    confirmColor: "#c34839",
+    success: (result) => {
+      if (result.confirm) {
+        void resignTitle();
+      }
+    },
+  });
+}
+
+async function resignTitle() {
+  if (!canResignTitle.value || isResigningTitle.value) {
+    return;
+  }
+  const accessToken = await userStore.ensureFreshAccessToken();
+  if (!accessToken) {
+    uni.reLaunch({ url: LOGIN_ROUTE });
+    return;
+  }
+  isResigningTitle.value = true;
+  try {
+    const result = await resignMyTitle(accessToken);
+    if (userStore.currentUser) {
+      userStore.setCurrentUser({
+        ...userStore.currentUser,
+        title: result.title,
+        title_label: result.title_label,
+        title_shield: result.title_shield,
+      });
+    }
+    uni.showToast({ title: "已退出头衔", icon: "success" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "退出头衔失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    isResigningTitle.value = false;
+  }
 }
 
 function confirmWechatUnbind() {
@@ -293,6 +359,10 @@ function confirmLogout() {
 
 .row-icon-shell.is-feedback {
   background: #fff4e8;
+}
+
+.row-icon-shell.is-title {
+  background: #edf6ea;
 }
 
 .row-icon {

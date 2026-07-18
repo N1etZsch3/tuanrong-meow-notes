@@ -52,7 +52,11 @@ export const API_ENDPOINTS = {
   },
   admin: {
     users: "/admin/users",
+    titles: "/admin/titles",
+    titleTransfer: "/admin/titles/transfer",
     user: (userId: ApiPathParam) => `/admin/users/${encodePathParam(userId)}`,
+    userTitle: (userId: ApiPathParam) =>
+      `/admin/users/${encodePathParam(userId)}/title`,
     userRestore: (userId: ApiPathParam) =>
       `/admin/users/${encodePathParam(userId)}/restore`,
     userResetPassword: (userId: ApiPathParam) =>
@@ -176,6 +180,7 @@ export const API_ENDPOINTS = {
   profile: {
     me: "/profile/me",
     complete: "/profile/me/complete",
+    titleResign: "/profile/me/title/resign",
   },
   public: {
     stats: "/public/stats",

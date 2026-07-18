@@ -99,6 +99,7 @@
             />
             <view class="member-main">
               <text class="member-name">{{ user.profile.nickname || "未命名成员" }}</text>
+              <TitleBadge :title="user.profile.title" />
               <text class="member-no">喵喵号 {{ user.meow_no }}</text>
             </view>
             <view class="tag-column">
@@ -136,6 +137,7 @@ import { resolveUserAvatarContentUrl } from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import { DEPARTMENTS } from "@/constants/departments";
+import TitleBadge from "@/components/TitleBadge.vue";
 
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
@@ -531,6 +533,10 @@ onShow(() => {
 
 .member-main {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8rpx;
   flex: 1;
 }
 

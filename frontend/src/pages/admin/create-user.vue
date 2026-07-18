@@ -52,6 +52,23 @@
             </picker>
           </view>
 
+          <view v-if="isPresident" class="field-group">
+            <text class="field-label">头衔</text>
+            <picker
+              mode="selector"
+              :range="titleOptions"
+              range-key="label"
+              :value="titleIndex"
+              @change="onTitleChange"
+            >
+              <view class="picker-field">
+                <text>{{ titleOptions[titleIndex]?.label || "无头衔" }}</text>
+                <text class="picker-arrow">⌄</text>
+              </view>
+            </picker>
+            <text v-if="titleCatalogError" class="field-hint is-error">{{ titleCatalogError }}</text>
+          </view>
+
           <label class="switch-row">
             <switch :checked="form.must_change_password" color="#2f8037" @change="onMustChangePasswordChange" />
             <text>首次登录必须修改密码</text>
@@ -149,12 +166,15 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref } from "vue";
+import { onShow } from "@dcloudio/uni-app";
 
 import {
   createAdminUser,
   restoreAdminUser,
   type AdminCreateUserResponse,
 } from "@/api/admin-users";
+import { getTitleCatalog, type TitleCatalogItem } from "@/api/titles";
+import type { UserTitle } from "@/constants/titles";
 import {
   parseDeletedAccountConflict,
   type DeletedAccountConflict,
@@ -177,6 +197,11 @@ const createdAccount = ref<AdminCreateUserResponse | null>(null);
 const createdPassword = ref("");
 const resultMode = ref<"created" | "restored" | null>(null);
 const restoreConflict = ref<DeletedAccountConflict | null>(null);
+const titleCatalogError = ref("");
+const titleOptions = ref<Array<{ key: UserTitle; label: string }>>([
+  { key: null, label: "无头衔" },
+]);
+const isPresident = computed(() => userStore.currentUser?.title === "president");
 
 const form = reactive<{
   meow_no: string;
@@ -185,6 +210,7 @@ const form = reactive<{
   departments: string[];
   role: UserRole;
   must_change_password: boolean;
+  title: UserTitle;
 }>({
   meow_no: "",
   initial_password: "",
@@ -192,13 +218,50 @@ const form = reactive<{
   departments: [DEPARTMENTS[0]],
   role: "member" as UserRole,
   must_change_password: true,
+  title: null,
 });
 
 const roleIndex = computed(() => roles.findIndex((role) => role === form.role));
+const titleIndex = computed(() =>
+  Math.max(0, titleOptions.value.findIndex((item) => item.key === form.title)),
+);
 
 function onRoleChange(event: any) {
   const index = Number(event.detail.value);
   form.role = roles[index] || "member";
+}
+
+function onTitleChange(event: any) {
+  form.title = titleOptions.value[Number(event.detail.value) || 0]?.key ?? null;
+}
+
+async function loadTitleOptions() {
+  if (!isPresident.value) {
+    form.title = null;
+    titleOptions.value = [{ key: null, label: "无头衔" }];
+    return;
+  }
+  const accessToken = await userStore.ensureFreshAccessToken();
+  if (!accessToken) {
+    return;
+  }
+  titleCatalogError.value = "";
+  try {
+    const response = await getTitleCatalog(accessToken);
+    const available = response.items.filter(
+      (item: TitleCatalogItem) => item.key !== "president" && item.is_available,
+    );
+    titleOptions.value = [
+      { key: null, label: "无头衔" },
+      ...available.map((item) => ({ key: item.key, label: item.label })),
+    ];
+    if (!titleOptions.value.some((item) => item.key === form.title)) {
+      form.title = null;
+    }
+  } catch (error) {
+    titleCatalogError.value = error instanceof Error ? error.message : "头衔列表加载失败";
+    form.title = null;
+  }
 }
 
 function onMustChangePasswordChange(event: any) {
@@ -243,6 +306,7 @@ async function submitCreateUser() {
         profile: {
           nickname: form.nickname,
           departments: form.departments,
+          title: isPresident.value ? form.title : null,
         },
         must_change_password: form.must_change_password,
       },
@@ -304,6 +368,10 @@ async function confirmRestoreAccount() {
 function goBack() {
   uni.navigateBack();
 }
+
+onShow(() => {
+  void loadTitleOptions();
+});
 </script>
 
 <style scoped>
@@ -390,6 +458,17 @@ function goBack() {
   color: #20242a;
   font-size: 27rpx;
   font-weight: 900;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 10rpx;
+  color: #6e7780;
+  font-size: 22rpx;
+}
+
+.field-hint.is-error {
+  color: #c34839;
 }
 
 .field-input,

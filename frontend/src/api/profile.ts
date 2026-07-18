@@ -1,6 +1,7 @@
 import { request } from "@/services/request";
 import { API_ENDPOINTS } from "@/api/routes";
 import type { UserRole } from "@/types/user";
+import type { TitleShield, UserTitle } from "@/constants/titles";
 
 export type ProfileNextAction = "enter_app";
 
@@ -18,6 +19,9 @@ export interface MyProfileResponse {
   contact_info: string | null;
   profile_completed: boolean;
   profile_completed_at: string | null;
+  title: UserTitle;
+  title_label: string | null;
+  title_shield: TitleShield | null;
 }
 
 export interface CompleteProfilePayload {

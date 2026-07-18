@@ -5,6 +5,7 @@ import {
   compactDefinedApiParams,
 } from "@/api/routes";
 import type { UserRole, UserStatus } from "@/types/user";
+import type { TitleShield, UserTitle } from "@/constants/titles";
 
 export interface AdminUserProfilePayload {
   nickname?: string;
@@ -15,6 +16,7 @@ export interface AdminUserProfilePayload {
   grade?: string | null;
   joined_at?: string | null;
   contact_info?: string | null;
+  title?: UserTitle;
 }
 
 export interface AdminCreateUserPayload {
@@ -54,6 +56,9 @@ export interface AdminUserProfileDto {
   departments: string[];
   grade: string | null;
   contact_info: string | null;
+  title: UserTitle;
+  title_label: string | null;
+  title_shield: TitleShield | null;
 }
 
 export interface AdminUserDto {

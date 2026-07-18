@@ -23,6 +23,7 @@
             <view class="name-row">
               <text class="nickname">{{ dashboard?.profile.nickname || "未命名成员" }}</text>
               <text class="role-pill" :class="rolePillClass">{{ roleLabel }}</text>
+              <TitleBadge :title="dashboard?.profile.title || userStore.currentUser?.title" />
             </view>
             <text class="meta-line">喵喵号 {{ dashboard?.profile.meow_no || "--" }}</text>
             <scroll-view
@@ -102,6 +103,7 @@ import { onShow } from "@dcloudio/uni-app";
 import { resolveUserAvatarContentUrl } from "@/api/files";
 import { getMeDashboard, type MeDashboardResponse } from "@/api/me";
 import AppTabBar from "@/components/AppTabBar.vue";
+import TitleBadge from "@/components/TitleBadge.vue";
 import { LOGIN_ROUTE, PUBLIC_HOME_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 
@@ -324,6 +326,7 @@ onShow(() => {
 .name-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16rpx;
   min-width: 0;
 }

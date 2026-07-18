@@ -1,6 +1,7 @@
 import { request } from "@/services/request";
 import { API_ENDPOINTS } from "@/api/routes";
 import type { CurrentUser, UserRole, UserStatus } from "@/types/user";
+import type { TitleShield, UserTitle } from "@/constants/titles";
 
 export interface CaptchaResponse {
   captcha_id: string;
@@ -28,6 +29,9 @@ export interface LoginUser {
   role: UserRole;
   status: UserStatus;
   profile_completed: boolean;
+  title?: UserTitle;
+  title_label?: string | null;
+  title_shield?: TitleShield | null;
 }
 
 export interface LoginResponse {
@@ -62,6 +66,9 @@ export interface CurrentUserResponse {
     departments?: string[];
     grade?: string;
     contact_info?: string | null;
+    title: UserTitle;
+    title_label: string | null;
+    title_shield: TitleShield | null;
   };
 }
 
@@ -182,5 +189,8 @@ export function normalizeCurrentUser(response: CurrentUserResponse): CurrentUser
     department: response.profile.department ?? null,
     departments: response.profile.departments ?? [],
     contact_info: response.profile.contact_info ?? null,
+    title: response.profile.title,
+    title_label: response.profile.title_label,
+    title_shield: response.profile.title_shield,
   };
 }

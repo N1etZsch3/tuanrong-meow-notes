@@ -90,6 +90,13 @@
               <view class="readonly-field">{{ userDetail?.meow_no || "--" }}</view>
             </view>
             <view class="field-group">
+              <text class="field-label">当前头衔</text>
+              <view class="readonly-field title-current">
+                <TitleBadge :title="userDetail?.profile.title" />
+                <text v-if="!userDetail?.profile.title" class="title-empty">无头衔</text>
+              </view>
+            </view>
+            <view class="field-group">
               <text class="field-label">身份</text>
               <picker
                 :disabled="readonlyMode"
@@ -119,6 +126,38 @@
                 </view>
               </picker>
             </view>
+          </view>
+
+          <view v-if="canManageTitles" class="title-actions-card">
+            <text class="title-actions-heading">头衔管理</text>
+            <text class="title-actions-note">仅会长可操作；已被占用的头衔不会出现在选择器中。</text>
+            <picker
+              v-if="titleOptions.length"
+              mode="selector"
+              :range="titleOptions"
+              range-key="label"
+              :value="0"
+              :disabled="isTitleActionPending"
+              @change="selectAssignableTitle"
+            >
+              <view class="title-action-button is-primary">授予或变更头衔</view>
+            </picker>
+            <button
+              v-if="canRevokeTargetTitle"
+              class="title-action-button"
+              :disabled="isTitleActionPending"
+              @tap="confirmRevokeTitle"
+            >
+              剥夺当前头衔
+            </button>
+            <button
+              class="title-action-button is-transfer"
+              :disabled="isTitleActionPending"
+              @tap="confirmPresidentTransfer"
+            >
+              转让会长
+            </button>
+            <text v-if="titleCatalogError" class="title-actions-error">{{ titleCatalogError }}</text>
           </view>
 
           <view v-if="!readonlyMode" class="detail-actions">
@@ -195,6 +234,13 @@ import {
   type AdminUserDto,
 } from "@/api/admin-users";
 import { resolveUserAvatarContentUrl, uploadUserAvatar } from "@/api/files";
+import {
+  getTitleCatalog,
+  setMemberTitle,
+  transferPresident,
+  type TitleCatalogItem,
+} from "@/api/titles";
+import type { UserTitle } from "@/constants/titles";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import { consumeAvatarReviewFailureNotice } from "@/utils/avatar-review-notice";
@@ -206,6 +252,7 @@ import {
 } from "@/utils/page-leave-guard";
 
 import DepartmentTagPicker from "@/components/DepartmentTagPicker.vue";
+import TitleBadge from "@/components/TitleBadge.vue";
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 import {
@@ -213,6 +260,10 @@ import {
   hasUnsavedMemberChanges,
   type MemberEditSnapshot,
 } from "./member-edit-guard";
+import {
+  availableAssignableTitles,
+  canManageMemberTitles,
+} from "./title-actions";
 
 type PickerChangeEvent = { detail: { value: string | number } };
 
@@ -242,6 +293,9 @@ const resetPassword = ref("");
 const isResetting = ref(false);
 const isClearingWechatBinding = ref(false);
 const isDeleting = ref(false);
+const isTitleActionPending = ref(false);
+const titleCatalog = ref<TitleCatalogItem[]>([]);
+const titleCatalogError = ref("");
 const savedMemberSnapshot = ref<MemberEditSnapshot | null>(null);
 const nativePageLeaveGuardReady = ref(true);
 const isNavigatingAway = ref(false);
@@ -258,6 +312,20 @@ const form = reactive({
 });
 
 const readonlyMode = computed(() => !userDetail.value?.editable);
+const canManageTitles = computed(() =>
+  canManageMemberTitles(
+    userStore.currentUser?.title,
+    userStore.currentUser?.id,
+    userDetail.value?.id,
+  ),
+);
+const titleOptions = computed(() =>
+  availableAssignableTitles(titleCatalog.value, userDetail.value?.id || ""),
+);
+const canRevokeTargetTitle = computed(() => {
+  const title = userDetail.value?.profile.title;
+  return Boolean(title && title !== "president");
+});
 const canResetPassword = computed(() => Boolean(userDetail.value?.can_reset_password));
 const avatarLoadFailed = ref(false);
 const isAccountActionPending = computed(
@@ -265,7 +333,8 @@ const isAccountActionPending = computed(
     isSaving.value ||
     isResetting.value ||
     isClearingWechatBinding.value ||
-    isDeleting.value,
+    isDeleting.value ||
+    isTitleActionPending.value,
 );
 const avatarPreview = computed(() => avatarUrl.value || userDetail.value?.profile.avatar_url || defaultAvatar);
 const avatarDisplay = computed(() => (avatarLoadFailed.value ? defaultAvatar : avatarPreview.value));
@@ -353,6 +422,12 @@ async function loadUser() {
   try {
     const user = await getAdminUserDetail(token, userId.value);
     applyUser(user);
+    if (canManageTitles.value) {
+      await loadTitleCatalog();
+    } else {
+      titleCatalog.value = [];
+      titleCatalogError.value = "";
+    }
     if (
       consumeAvatarReviewFailureNotice(
         user.id,
@@ -366,6 +441,130 @@ async function loadUser() {
   } catch (error) {
     loadState.value = "error";
     errorMessage.value = error instanceof Error ? error.message : "成员资料加载失败";
+  }
+}
+
+async function loadTitleCatalog() {
+  const token = await getAccessToken();
+  if (!token || !canManageTitles.value) {
+    return;
+  }
+  titleCatalogError.value = "";
+  try {
+    titleCatalog.value = (await getTitleCatalog(token)).items;
+  } catch (error) {
+    titleCatalog.value = [];
+    titleCatalogError.value = error instanceof Error ? error.message : "头衔列表加载失败";
+  }
+}
+
+function selectAssignableTitle(event: PickerChangeEvent) {
+  const selected = titleOptions.value[Number(event.detail.value) || 0];
+  if (!selected) {
+    return;
+  }
+  confirmSetTitle(selected.key, selected.label);
+}
+
+function confirmSetTitle(title: UserTitle, label: string) {
+  if (!canManageTitles.value || isTitleActionPending.value) {
+    return;
+  }
+  uni.showModal({
+    title: "确认授予头衔",
+    content: `确认将“${label}”授予 ${userDetail.value?.profile.nickname || userDetail.value?.meow_no || "该成员"} 吗？`,
+    confirmText: "确认授予",
+    confirmColor: "#2f8037",
+    success: (result) => {
+      if (result.confirm) {
+        void applyTitle(title);
+      }
+    },
+  });
+}
+
+function confirmRevokeTitle() {
+  if (!canManageTitles.value || !canRevokeTargetTitle.value || isTitleActionPending.value) {
+    return;
+  }
+  uni.showModal({
+    title: "剥夺头衔",
+    content: `确认移除 ${userDetail.value?.profile.nickname || "该成员"} 的“${userDetail.value?.profile.title_label || "当前头衔"}”吗？`,
+    confirmText: "确认移除",
+    confirmColor: "#c34839",
+    success: (result) => {
+      if (result.confirm) {
+        void applyTitle(null);
+      }
+    },
+  });
+}
+
+async function applyTitle(title: UserTitle) {
+  if (!canManageTitles.value || isTitleActionPending.value || !userId.value) {
+    return;
+  }
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  isTitleActionPending.value = true;
+  try {
+    applyUser(await setMemberTitle(token, userId.value, title), {
+      preservePendingAvatar: true,
+    });
+    await loadTitleCatalog();
+    uni.showToast({ title: title ? "头衔已更新" : "头衔已移除", icon: "success" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "头衔更新失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    isTitleActionPending.value = false;
+  }
+}
+
+function confirmPresidentTransfer() {
+  if (!canManageTitles.value || isTitleActionPending.value) {
+    return;
+  }
+  const targetName = userDetail.value?.profile.nickname || userDetail.value?.meow_no || "该成员";
+  const promotionNotice =
+    userDetail.value?.role === "admin" || userDetail.value?.role === "super_admin"
+      ? ""
+      : "接任后该成员会自动成为管理员，原登录令牌会失效。";
+  uni.showModal({
+    title: "转让会长",
+    content: `确认将会长头衔转让给 ${targetName} 吗？转让完成后你将失去头衔。${promotionNotice}`,
+    confirmText: "确认转让",
+    confirmColor: "#b7791f",
+    success: (result) => {
+      if (result.confirm) {
+        void applyPresidentTransfer();
+      }
+    },
+  });
+}
+
+async function applyPresidentTransfer() {
+  if (!canManageTitles.value || isTitleActionPending.value || !userId.value) {
+    return;
+  }
+  const token = await getAccessToken();
+  if (!token) {
+    return;
+  }
+  isTitleActionPending.value = true;
+  try {
+    const result = await transferPresident(token, userId.value);
+    applyUser(result.successor, { preservePendingAvatar: true });
+    await userStore.refreshCurrentUser();
+    titleCatalog.value = [];
+    uni.showToast({ title: "会长已转让", icon: "success" });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "会长转让失败";
+    uni.showToast({ title: message, icon: "none" });
+  } finally {
+    isTitleActionPending.value = false;
   }
 }
 
@@ -718,9 +917,14 @@ function confirmDiscardMemberChanges() {
   });
 }
 
-onLoad((query) => {
+onLoad(async (query) => {
   userId.value = typeof query?.user_id === "string" ? query.user_id : "";
-  void loadUser();
+  try {
+    await userStore.refreshCurrentUser();
+  } catch {
+    // 成员详情请求仍会返回明确的认证错误，避免在这里重复提示。
+  }
+  await loadUser();
 });
 </script>
 
@@ -763,6 +967,7 @@ onLoad((query) => {
 .back-button,
 .save-button,
 .account-actions-button,
+.title-action-button,
 .modal-cancel,
 .modal-confirm {
   margin: 0;
@@ -784,6 +989,7 @@ onLoad((query) => {
 .back-button::after,
 .save-button::after,
 .account-actions-button::after,
+.title-action-button::after,
 .modal-cancel::after,
 .modal-confirm::after {
   border: 0;
@@ -913,6 +1119,70 @@ onLoad((query) => {
 .picker-field,
 .readonly-field {
   background: rgba(247, 251, 239, 0.86);
+}
+
+.title-current {
+  justify-content: flex-start;
+}
+
+.title-empty {
+  color: #8a929b;
+}
+
+.title-actions-card {
+  margin-top: 28rpx;
+  padding: 28rpx;
+  border: 2rpx solid rgba(203, 222, 197, 0.9);
+  border-radius: 26rpx;
+  background: rgba(250, 255, 247, 0.96);
+}
+
+.title-actions-heading,
+.title-actions-note,
+.title-actions-error {
+  display: block;
+}
+
+.title-actions-heading {
+  color: #204d28;
+  font-size: 29rpx;
+  font-weight: 900;
+}
+
+.title-actions-note {
+  margin-top: 10rpx;
+  color: #68756b;
+  font-size: 22rpx;
+  line-height: 1.5;
+}
+
+.title-action-button {
+  width: 100%;
+  height: 78rpx;
+  margin: 18rpx 0 0;
+  border: 2rpx solid #6b9c6b;
+  border-radius: 18rpx;
+  background: rgba(255, 255, 255, 0.96);
+  color: #37643d;
+  font-size: 26rpx;
+  font-weight: 900;
+  line-height: 78rpx;
+}
+
+.title-action-button.is-primary {
+  background: #2f8037;
+  color: #ffffff;
+}
+
+.title-action-button.is-transfer {
+  border-color: #c59a3c;
+  color: #8a6216;
+}
+
+.title-actions-error {
+  margin-top: 14rpx;
+  color: #c34839;
+  font-size: 22rpx;
 }
 
 .picker-field,

@@ -1,6 +1,7 @@
 import { request } from "@/services/request";
 import { API_ENDPOINTS, compactApiParams } from "@/api/routes";
 import type { UserRole } from "@/types/user";
+import type { TitleShield, UserTitle } from "@/constants/titles";
 
 export interface MeDashboardProfile {
   user_id: string;
@@ -12,6 +13,9 @@ export interface MeDashboardProfile {
   departments: string[];
   role: UserRole;
   show_admin_entry: boolean;
+  title: UserTitle;
+  title_label: string | null;
+  title_shield: TitleShield | null;
 }
 
 export interface MeDashboardStats {

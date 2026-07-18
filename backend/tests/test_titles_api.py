@@ -16,12 +16,10 @@ def create_president(db_session, *, student_no: str = "trmx7199") -> User:
     user = create_user(
         db_session,
         student_no=student_no,
-        role="admin",
         must_change_password=False,
         profile_completed=True,
     )
-    assign_title(db_session, user, "president")
-    return user
+    return seed_president(db_session, user=user)
 
 
 def assert_vice_president_payload(payload: dict) -> None:
@@ -71,14 +69,7 @@ def test_title_fields_are_exposed_by_current_profile_dashboard_and_admin_payload
 
 
 def test_president_can_list_all_title_slots_with_current_holders(api_client, db_session):
-    president = create_user(
-        db_session,
-        student_no="trmx7111",
-        role="admin",
-        must_change_password=False,
-        profile_completed=True,
-    )
-    assign_title(db_session, president, "president")
+    president = create_president(db_session, student_no="trmx7111")
     vice_president = create_user(
         db_session,
         student_no="trmx7112",
@@ -338,6 +329,7 @@ def test_president_cannot_resign_without_transferring(api_client, db_session):
 
 def test_president_transfer_is_atomic_and_promotes_a_member(api_client, db_session):
     president = create_president(db_session, student_no="trmx7134")
+    president_token_version = president.token_version
     successor = create_user(
         db_session,
         student_no="trmx7135",
@@ -365,7 +357,9 @@ def test_president_transfer_is_atomic_and_promotes_a_member(api_client, db_sessi
     db_session.refresh(successor.profile)
     assert president.profile.title is None
     assert successor.profile.title == "president"
-    assert successor.role == "admin"
+    assert president.role == "admin"
+    assert president.token_version == president_token_version + 1
+    assert successor.role == "super_admin"
     assert successor.token_version == previous_token_version + 1
     assert (
         db_session.query(AdminOperationLog).filter_by(operation_type="president_transfer").count()
@@ -373,7 +367,7 @@ def test_president_transfer_is_atomic_and_promotes_a_member(api_client, db_sessi
     )
 
 
-def test_president_transfer_keeps_existing_admin_token_version(api_client, db_session):
+def test_president_transfer_promotes_existing_admin_and_invalidates_token(api_client, db_session):
     president = create_president(db_session, student_no="trmx7136")
     successor = create_user(
         db_session,
@@ -392,7 +386,8 @@ def test_president_transfer_keeps_existing_admin_token_version(api_client, db_se
 
     assert response.status_code == 200
     db_session.refresh(successor)
-    assert successor.token_version == previous_token_version
+    assert successor.role == "super_admin"
+    assert successor.token_version == previous_token_version + 1
 
 
 def test_president_transfer_rejects_self_and_non_president_actor(api_client, db_session):
@@ -425,6 +420,33 @@ def test_president_transfer_rejects_self_and_non_president_actor(api_client, db_
     )
     assert rejected.status_code == 403
     assert rejected.json()["code"] == 63010
+
+
+def test_president_transfer_rejects_an_inactive_successor(api_client, db_session):
+    president = create_president(db_session, student_no="trmx7145")
+    successor = create_user(
+        db_session,
+        student_no="trmx7146",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    successor.status = "blocked"
+    db_session.commit()
+
+    response = api_client.post(
+        "/api/v1/admin/titles/transfer",
+        headers=auth_headers(create_token(president)),
+        json={"successor_id": str(successor.id)},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["code"] == 63011
+    db_session.refresh(president)
+    db_session.refresh(successor)
+    assert president.role == "super_admin"
+    assert president.profile.title == "president"
+    assert successor.role == "member"
+    assert successor.profile.title is None
 
 
 def test_soft_deleting_a_titled_member_releases_the_title(api_client, db_session):
@@ -465,7 +487,7 @@ def test_seed_president_promotes_user_and_rejects_a_second_president(db_session)
     seeded = seed_president(db_session, user=first)
 
     assert seeded.profile.title == "president"
-    assert seeded.role == "admin"
+    assert seeded.role == "super_admin"
     assert seeded.token_version == previous_token_version + 1
 
     second = create_user(

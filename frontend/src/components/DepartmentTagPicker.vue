@@ -1,5 +1,17 @@
 <template>
   <view class="dept-picker" :class="{ 'is-large': size === 'large' }">
+    <view v-if="$slots.label" class="dept-picker-header">
+      <slot name="label" />
+      <button
+        v-if="!disabled && availableDepartments.length"
+        class="dept-add"
+        aria-label="添加部门"
+        hover-class="dept-add-hover"
+        @tap="openDepartmentPicker"
+      >
+        <text class="dept-add-icon">+</text>
+      </button>
+    </view>
     <view class="dept-picker-row">
       <view v-if="modelValue.length" class="dept-tags">
         <view
@@ -18,10 +30,10 @@
           </text>
         </view>
       </view>
-      <text v-else class="dept-empty">{{ placeholder }}</text>
+      <text v-else class="dept-empty">暂无部门</text>
 
       <button
-        v-if="!disabled && availableDepartments.length"
+        v-if="!$slots.label && !disabled && availableDepartments.length"
         class="dept-add"
         aria-label="添加部门"
         hover-class="dept-add-hover"
@@ -42,12 +54,10 @@ const props = withDefaults(
   defineProps<{
     modelValue: string[];
     disabled?: boolean;
-    placeholder?: string;
     size?: "default" | "large";
   }>(),
   {
     disabled: false,
-    placeholder: "请添加部门",
     size: "default",
   },
 );
@@ -88,6 +98,19 @@ function openDepartmentPicker() {
 <style scoped>
 .dept-picker {
   width: 100%;
+}
+
+.dept-picker-header {
+  min-height: 48rpx;
+  margin-bottom: 14rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.dept-picker-header :deep(.field-label) {
+  margin: 0;
 }
 
 .dept-picker-row {
@@ -133,11 +156,14 @@ function openDepartmentPicker() {
 }
 
 .dept-empty {
-  min-width: 0;
-  flex: 1;
-  color: #9aa1ac;
-  font-size: 26rpx;
-  line-height: 1.4;
+  flex: 0 0 auto;
+  padding: 8rpx 16rpx;
+  border-radius: 14rpx;
+  background: #edf0f3;
+  color: #7a838e;
+  font-size: 23rpx;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .dept-add {
@@ -145,20 +171,20 @@ function openDepartmentPicker() {
   flex: 0 0 auto;
   margin: 0;
   padding: 0;
-  width: 58rpx;
-  height: 58rpx;
+  width: 46rpx;
+  height: 46rpx;
   border: 2rpx dashed rgba(47, 128, 55, 0.5);
   border-radius: 50%;
   background: rgba(47, 128, 55, 0.06);
   color: #2f8037;
-  line-height: 54rpx;
+  line-height: 42rpx;
 }
 
 .dept-add-icon {
   display: block;
-  font-size: 42rpx;
+  font-size: 32rpx;
   font-weight: 500;
-  line-height: 52rpx;
+  line-height: 40rpx;
   text-align: center;
 }
 
@@ -186,14 +212,8 @@ function openDepartmentPicker() {
   line-height: 40rpx;
 }
 
-.dept-picker.is-large .dept-add {
-  width: 66rpx;
-  height: 66rpx;
-  line-height: 62rpx;
-}
-
-.dept-picker.is-large .dept-add-icon {
-  font-size: 48rpx;
-  line-height: 60rpx;
+.dept-picker.is-large .dept-empty {
+  padding: 10rpx 18rpx;
+  font-size: 26rpx;
 }
 </style>

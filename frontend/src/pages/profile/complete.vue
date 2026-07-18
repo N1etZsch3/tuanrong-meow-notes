@@ -58,12 +58,15 @@
         </view>
 
         <view class="field-group">
-          <view class="field-label">
-            <image class="field-icon" :src="departmentIcon" mode="aspectFit" />
-            <text>部门</text>
-            <text class="required">*</text>
-          </view>
-          <DepartmentTagPicker v-model="form.departments" placeholder="请添加部门" />
+          <DepartmentTagPicker v-model="form.departments">
+            <template #label>
+              <view class="field-label">
+                <image class="field-icon" :src="departmentIcon" mode="aspectFit" />
+                <text>部门</text>
+                <text class="required">*</text>
+              </view>
+            </template>
+          </DepartmentTagPicker>
         </view>
 
         <view class="field-group">

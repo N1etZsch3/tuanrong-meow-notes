@@ -64,6 +64,7 @@ def list_users(
         department=department,
         sort_by=sort_by,
         sort_order=sort_order,
+        actor=admin,
     )
     return api_success(data=data, trace_id=request.state.trace_id)
 
@@ -94,7 +95,7 @@ def get_user_detail(
     db: Session = Depends(get_db),
     admin: User = Depends(require_admin),
 ):
-    data = service.get_user_detail(db, user_id=user_id)
+    data = service.get_user_detail(db, actor=admin, user_id=user_id)
     return api_success(data=data, trace_id=request.state.trace_id)
 
 

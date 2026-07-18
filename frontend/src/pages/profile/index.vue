@@ -13,16 +13,15 @@
         </view>
 
         <view class="profile-card" @tap="goProfileDetail">
-          <image
-            class="avatar"
+          <IdentityAvatar
             :src="avatarDisplay"
-            mode="aspectFill"
+            :role="currentRole"
+            size="card"
             @error="avatarLoadFailed = true"
           />
           <view class="profile-main">
             <view class="name-row">
               <text class="nickname">{{ dashboard?.profile.nickname || "未命名成员" }}</text>
-              <text class="role-pill" :class="rolePillClass">{{ roleLabel }}</text>
               <TitleBadge :title="dashboard?.profile.title || userStore.currentUser?.title" />
             </view>
             <text class="meta-line">喵喵号 {{ dashboard?.profile.meow_no || "--" }}</text>
@@ -108,6 +107,7 @@ import { onShow } from "@dcloudio/uni-app";
 import { resolveUserAvatarContentUrl } from "@/api/files";
 import { getMeDashboard, type MeDashboardResponse } from "@/api/me";
 import AppTabBar from "@/components/AppTabBar.vue";
+import IdentityAvatar from "@/components/IdentityAvatar.vue";
 import TitleBadge from "@/components/TitleBadge.vue";
 import { LOGIN_ROUTE, PUBLIC_HOME_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
@@ -116,8 +116,6 @@ import { getDepartmentTagStyle } from "@/constants/departments";
 import {
   PROFILE_STAT_ENTRIES,
   buildRecordRoute,
-  getRoleLabel,
-  getRolePillClass,
   getStatValue,
   type ProfileRecordType,
 } from "./profile-page";
@@ -159,8 +157,6 @@ watch(profileAvatar, () => {
   avatarLoadFailed.value = false;
 });
 const currentRole = computed(() => dashboard.value?.profile.role || userStore.currentUser?.role);
-const roleLabel = computed(() => getRoleLabel(currentRole.value));
-const rolePillClass = computed(() => getRolePillClass(currentRole.value));
 const departmentTags = computed(() => {
   const list = dashboard.value?.profile.departments;
   if (list && list.length) {
@@ -313,15 +309,6 @@ onShow(() => {
   overflow: hidden;
 }
 
-.avatar {
-  width: 132rpx;
-  height: 132rpx;
-  border: 6rpx solid #ffffff;
-  border-radius: 50%;
-  background: #edf6e9;
-  flex: 0 0 auto;
-}
-
 .profile-main {
   position: relative;
   z-index: 1;
@@ -345,29 +332,6 @@ onShow(() => {
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.role-pill {
-  border-radius: 12rpx;
-  flex: 0 0 auto;
-  font-size: 22rpx;
-  font-weight: 800;
-  padding: 8rpx 14rpx;
-}
-
-.role-pill--admin {
-  background: #e3f1d6;
-  color: #2f8037;
-}
-
-.role-pill--member {
-  background: #e8f1ff;
-  color: #2f68d8;
-}
-
-.role-pill--volunteer {
-  background: #fff1df;
-  color: #df7426;
 }
 
 .meta-line {

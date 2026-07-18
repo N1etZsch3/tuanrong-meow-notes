@@ -424,8 +424,9 @@ def test_admin_can_list_reset_status_and_role(api_client, db_session):
         headers={"Authorization": f"Bearer {token}"},
         json={"role": "admin"},
     )
-    assert role_response.status_code == 200
-    assert role_response.json()["data"]["role"] == "admin"
+    assert role_response.status_code == 400
+    db_session.refresh(member)
+    assert member.role == "member"
 
 
 def test_admin_user_list_filters_by_department_and_sorts_by_meow_no(api_client, db_session):

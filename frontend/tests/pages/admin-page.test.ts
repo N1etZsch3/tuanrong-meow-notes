@@ -158,9 +158,10 @@ describe("admin entry pages", () => {
     expect(adminUsersDetailSource).toContain("deleteAdminUser");
     expect(adminUsersDetailSource).toContain("openAccountActions");
     expect(adminUsersDetailSource).toContain("uni.showActionSheet");
-    expect(adminUsersDetailSource).toContain(
-      '["重置密码", "重置微信绑定", "删除账号"]',
-    );
+    expect(adminUsersDetailSource).toContain('id: "reset_password", label: "重置密码"');
+    expect(adminUsersDetailSource).toContain('id: "reset_wechat", label: "重置微信绑定"');
+    expect(adminUsersDetailSource).toContain('id: "manage_title", label: "头衔管理"');
+    expect(adminUsersDetailSource).toContain('id: "delete_account", label: "删除账号"');
     expect(adminUsersDetailSource).toContain("confirmDeleteAccount");
     expect(adminUsersDetailSource).toContain('v-if="!readonlyMode"');
     expect(adminUsersDetailSource).toContain('class="detail-actions"');

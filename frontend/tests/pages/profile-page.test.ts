@@ -332,12 +332,14 @@ describe("profile center pages", () => {
 
   it("uses role-specific labels and badge classes", () => {
     expect(getRoleLabel("admin")).toBe("猫协管理员");
+    expect(getRoleLabel("super_admin")).toBe("超级管理员");
     expect(getRoleLabel("member")).toBe("猫协成员");
     expect(getRoleLabel("summer_volunteer")).toBe("暑期志愿者");
     expect(getRolePillClass("admin")).toBe("role-pill--admin");
     expect(getRolePillClass("member")).toBe("role-pill--member");
     expect(getRolePillClass("summer_volunteer")).toBe("role-pill--volunteer");
-    expect(profileIndexSource).toContain(":class=\"rolePillClass\"");
+    expect(profileIndexSource).not.toContain(":class=\"rolePillClass\"");
+    expect(profileIndexSource).toContain("IdentityAvatar");
   });
 
   it("uses shared map-title metrics on profile secondary pages", () => {

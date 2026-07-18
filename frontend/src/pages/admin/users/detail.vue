@@ -7,7 +7,7 @@
           <button class="back-button" hover-class="button-hover" @tap="goBack">‹</button>
           <view>
             <text class="nav-title">成员资料</text>
-            <text class="nav-subtitle">{{ readonlyMode ? "管理员账号仅可查看" : "编辑成员基础信息" }}</text>
+            <text class="nav-subtitle">{{ navSubtitle }}</text>
           </view>
         </view>
 
@@ -21,18 +21,17 @@
 
         <view v-else class="detail-content">
           <view class="avatar-panel">
-            <view class="avatar-shell" @tap="chooseAvatar">
-              <image
-                class="avatar"
-                :src="avatarDisplay"
-                mode="aspectFill"
-                @error="avatarLoadFailed = true"
-              />
-              <text v-if="!readonlyMode" class="avatar-plus">+</text>
+            <IdentityAvatar
+              :src="avatarDisplay"
+              :role="userDetail?.role"
+              size="detail"
+              :editable="!readonlyMode"
+              @tap="chooseAvatar"
+              @error="avatarLoadFailed = true"
+            />
+            <view v-if="userDetail?.profile.title" class="avatar-title">
+              <TitleBadge :title="userDetail.profile.title" />
             </view>
-            <text class="avatar-note">
-              {{ readonlyMode ? "管理员账号资料不可修改" : "点击更换头像，图片不超过 2MB" }}
-            </text>
             <text v-if="avatarReviewHint" class="avatar-review-hint">{{ avatarReviewHint }}</text>
           </view>
 
@@ -58,13 +57,13 @@
               />
             </view>
             <view class="field-group">
-              <text class="field-label">部门</text>
               <DepartmentTagPicker
                 v-model="form.departments"
                 :disabled="readonlyMode"
-                placeholder="请添加部门"
                 size="large"
-              />
+              >
+                <template #label><text class="field-label">部门</text></template>
+              </DepartmentTagPicker>
             </view>
             <view class="field-group">
               <text class="field-label">年级</text>
@@ -89,13 +88,6 @@
             <view class="field-group">
               <text class="field-label">喵喵号</text>
               <view class="readonly-field">{{ userDetail?.meow_no || "--" }}</view>
-            </view>
-            <view class="field-group">
-              <text class="field-label">当前头衔</text>
-              <view class="readonly-field title-current">
-                <TitleBadge :title="userDetail?.profile.title" />
-                <text v-if="!userDetail?.profile.title" class="title-empty">无头衔</text>
-              </view>
             </view>
             <view class="field-group">
               <text class="field-label">身份</text>
@@ -129,40 +121,13 @@
             </view>
           </view>
 
-          <view v-if="canManageTitles" class="title-actions-card">
-            <text class="title-actions-heading">头衔管理</text>
-            <text class="title-actions-note">仅会长可操作；已被占用的头衔不会出现在选择器中。</text>
-            <picker
-              v-if="titleOptions.length"
-              mode="selector"
-              :range="titleOptions"
-              range-key="label"
-              :value="0"
-              :disabled="isTitleActionPending"
-              @change="selectAssignableTitle"
-            >
-              <view class="title-action-button is-primary">授予或变更头衔</view>
-            </picker>
+          <view
+            v-if="accountActions.length || !readonlyMode"
+            class="detail-actions"
+            :class="{ 'is-single': readonlyMode || !accountActions.length }"
+          >
             <button
-              v-if="canRevokeTargetTitle"
-              class="title-action-button"
-              :disabled="isTitleActionPending"
-              @tap="confirmRevokeTitle"
-            >
-              剥夺当前头衔
-            </button>
-            <button
-              class="title-action-button is-transfer"
-              :disabled="isTitleActionPending"
-              @tap="confirmPresidentTransfer"
-            >
-              转让会长
-            </button>
-            <text v-if="titleCatalogError" class="title-actions-error">{{ titleCatalogError }}</text>
-          </view>
-
-          <view v-if="!readonlyMode" class="detail-actions">
-            <button
+              v-if="accountActions.length"
               class="account-actions-button"
               :disabled="isAccountActionPending"
               hover-class="button-hover"
@@ -171,6 +136,7 @@
               账号操作
             </button>
             <button
+              v-if="!readonlyMode"
               class="save-button"
               :disabled="isAccountActionPending"
               :loading="isSaving"
@@ -210,6 +176,19 @@
         </view>
       </view>
     </view>
+
+    <MemberTitleActionsModal
+      :visible="titleManagementVisible"
+      :current-title="userDetail?.profile.title"
+      :options="titleOptions"
+      :can-revoke="canRevokeTargetTitle"
+      :pending="isTitleActionPending"
+      :error-message="titleCatalogError"
+      @close="closeTitleManagement"
+      @select="selectAssignableTitle"
+      @revoke="confirmRevokeTitle"
+      @transfer="confirmPresidentTransfer"
+    />
     <!-- #ifdef MP-WEIXIN -->
     <page-container
       :show="pageLeaveGuardArmed"
@@ -228,10 +207,14 @@ import { onLoad } from "@dcloudio/uni-app";
 
 import {
   clearAdminUserWechatBinding,
+  clearSuperAdminUserWechatBinding,
   deleteAdminUser,
+  deleteSuperAdminUser,
   getAdminUserDetail,
   resetAdminUserPassword,
+  resetSuperAdminUserPassword,
   updateAdminUser,
+  updateSuperAdminUser,
   type AdminUserDto,
 } from "@/api/admin-users";
 import { resolveUserAvatarContentUrl, uploadUserAvatar } from "@/api/files";
@@ -253,6 +236,8 @@ import {
 } from "@/utils/page-leave-guard";
 
 import DepartmentTagPicker from "@/components/DepartmentTagPicker.vue";
+import IdentityAvatar from "@/components/IdentityAvatar.vue";
+import MemberTitleActionsModal from "@/components/MemberTitleActionsModal.vue";
 import TitleBadge from "@/components/TitleBadge.vue";
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
@@ -269,12 +254,17 @@ import {
 type PickerChangeEvent = { detail: { value: string | number } };
 
 const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024;
-const ACCOUNT_ACTIONS = ["重置密码", "重置微信绑定", "删除账号"] as const;
-const roleOptions = [
+type AccountActionId = "reset_password" | "reset_wechat" | "manage_title" | "delete_account";
+const BASE_ROLE_OPTIONS = [
   { label: "成员", value: "member" },
   { label: "暑期志愿者", value: "summer_volunteer" },
-  { label: "管理员", value: "admin" },
-];
+] as const;
+const ROLE_LABELS: Record<string, string> = {
+  member: "成员",
+  summer_volunteer: "暑期志愿者",
+  admin: "管理员",
+  super_admin: "超级管理员",
+};
 const statusOptions = [
   { label: "正常", value: "active" },
   { label: "禁用", value: "blocked" },
@@ -295,6 +285,7 @@ const isResetting = ref(false);
 const isClearingWechatBinding = ref(false);
 const isDeleting = ref(false);
 const isTitleActionPending = ref(false);
+const titleManagementVisible = ref(false);
 const titleCatalog = ref<TitleCatalogItem[]>([]);
 const titleCatalogError = ref("");
 const savedMemberSnapshot = ref<MemberEditSnapshot | null>(null);
@@ -313,8 +304,18 @@ const form = reactive({
 });
 
 const readonlyMode = computed(() => !userDetail.value?.editable);
+const isSuperAdmin = computed(
+  () =>
+    userStore.currentUser?.role === "super_admin" &&
+    userStore.currentUser?.title === "president",
+);
+const roleOptions = computed(() => [
+  ...BASE_ROLE_OPTIONS,
+  ...(isSuperAdmin.value ? [{ label: "管理员", value: "admin" }] : []),
+]);
 const canManageTitles = computed(() =>
   canManageMemberTitles(
+    userStore.currentUser?.role,
     userStore.currentUser?.title,
     userStore.currentUser?.id,
     userDetail.value?.id,
@@ -328,6 +329,36 @@ const canRevokeTargetTitle = computed(() => {
   return Boolean(title && title !== "president");
 });
 const canResetPassword = computed(() => Boolean(userDetail.value?.can_reset_password));
+const usesSuperAdminApi = computed(
+  () =>
+    isSuperAdmin.value &&
+    (userDetail.value?.role === "admin" || form.role === "admin"),
+);
+const accountActions = computed<Array<{ id: AccountActionId; label: string }>>(() => {
+  if (readonlyMode.value && !canManageTitles.value) {
+    return [];
+  }
+  const actions: Array<{ id: AccountActionId; label: string }> = [];
+  if (canResetPassword.value) {
+    actions.push({ id: "reset_password", label: "重置密码" });
+    actions.push({ id: "reset_wechat", label: "重置微信绑定" });
+  }
+  if (canManageTitles.value) {
+    actions.push({ id: "manage_title", label: "头衔管理" });
+  }
+  if (!readonlyMode.value) {
+    actions.push({ id: "delete_account", label: "删除账号" });
+  }
+  return actions;
+});
+const navSubtitle = computed(() => {
+  if (readonlyMode.value) {
+    return userDetail.value?.role === "super_admin"
+      ? "超级管理员账号仅可查看"
+      : "管理员账号仅可查看";
+  }
+  return userDetail.value?.role === "admin" ? "编辑管理员资料" : "编辑成员基础信息";
+});
 const avatarLoadFailed = ref(false);
 const isAccountActionPending = computed(
   () =>
@@ -349,9 +380,11 @@ const avatarReviewHint = computed(() => {
 watch(avatarPreview, () => {
   avatarLoadFailed.value = false;
 });
-const roleIndex = computed(() => Math.max(0, roleOptions.findIndex((item) => item.value === form.role)));
+const roleIndex = computed(() =>
+  Math.max(0, roleOptions.value.findIndex((item) => item.value === form.role)),
+);
 const statusIndex = computed(() => Math.max(0, statusOptions.findIndex((item) => item.value === form.status)));
-const currentRoleLabel = computed(() => roleOptions[roleIndex.value]?.label || "成员");
+const currentRoleLabel = computed(() => ROLE_LABELS[form.role] || "成员");
 const currentStatusLabel = computed(() => statusOptions[statusIndex.value]?.label || "正常");
 const pageLeaveGuard = createPageLeaveGuard(
   () => !isSaving.value && hasPendingMemberChanges(),
@@ -529,13 +562,9 @@ function confirmPresidentTransfer() {
     return;
   }
   const targetName = userDetail.value?.profile.nickname || userDetail.value?.meow_no || "该成员";
-  const promotionNotice =
-    userDetail.value?.role === "admin" || userDetail.value?.role === "super_admin"
-      ? ""
-      : "接任后该成员会自动成为管理员，原登录令牌会失效。";
   uni.showModal({
     title: "转让会长",
-    content: `确认将会长头衔转让给 ${targetName} 吗？转让完成后你将失去头衔。${promotionNotice}`,
+    content: `确认将会长头衔转让给 ${targetName} 吗？接任者会自动成为超级管理员，转让后双方都需要重新登录。`,
     confirmText: "确认转让",
     confirmColor: "#b7791f",
     success: (result) => {
@@ -556,11 +585,14 @@ async function applyPresidentTransfer() {
   }
   isTitleActionPending.value = true;
   try {
-    const result = await transferPresident(token, userId.value);
-    applyUser(result.successor, { preservePendingAvatar: true });
-    await userStore.refreshCurrentUser();
+    await transferPresident(token, userId.value);
     titleCatalog.value = [];
-    uni.showToast({ title: "会长已转让", icon: "success" });
+    titleManagementVisible.value = false;
+    userStore.clearSession();
+    uni.showToast({ title: "会长已转让，请重新登录", icon: "none" });
+    setTimeout(() => {
+      uni.reLaunch({ url: LOGIN_ROUTE });
+    }, 700);
   } catch (error) {
     const message = error instanceof Error ? error.message : "会长转让失败";
     uni.showToast({ title: message, icon: "none" });
@@ -570,7 +602,7 @@ async function applyPresidentTransfer() {
 }
 
 function selectRole(event: PickerChangeEvent) {
-  form.role = roleOptions[Number(event.detail.value) || 0]?.value || "member";
+  form.role = roleOptions.value[Number(event.detail.value) || 0]?.value || "member";
 }
 
 function selectStatus(event: PickerChangeEvent) {
@@ -644,7 +676,8 @@ async function saveMember() {
   }
   isSaving.value = true;
   try {
-    const updated = await updateAdminUser(token, userId.value, {
+    const updateUser = usesSuperAdminApi.value ? updateSuperAdminUser : updateAdminUser;
+    const updated = await updateUser(token, userId.value, {
       role: form.role,
       status: form.status,
       profile: {
@@ -677,29 +710,44 @@ function closeResetModal() {
 }
 
 function openAccountActions() {
-  if (readonlyMode.value || isAccountActionPending.value) {
+  if (!accountActions.value.length || isAccountActionPending.value) {
     return;
   }
   uni.showActionSheet({
-    itemList: [...ACCOUNT_ACTIONS],
+    itemList: accountActions.value.map((item) => item.label),
     success: (result) => {
-      if (result.tapIndex === 0 && canResetPassword.value) {
+      const action = accountActions.value[result.tapIndex]?.id;
+      if (action === "reset_password") {
         openResetModal();
-        return;
-      }
-      if (result.tapIndex === 1) {
+      } else if (action === "reset_wechat") {
         if (!userDetail.value?.wechat_bound) {
           uni.showToast({ title: "当前成员尚未绑定微信", icon: "none" });
           return;
         }
         confirmClearWechatBinding();
-        return;
-      }
-      if (result.tapIndex === 2) {
+      } else if (action === "manage_title") {
+        openTitleManagement();
+      } else if (action === "delete_account") {
         confirmDeleteAccount();
       }
     },
   });
+}
+
+function openTitleManagement() {
+  if (!canManageTitles.value || isTitleActionPending.value) {
+    return;
+  }
+  titleManagementVisible.value = true;
+  if (!titleCatalog.value.length) {
+    void loadTitleCatalog();
+  }
+}
+
+function closeTitleManagement() {
+  if (!isTitleActionPending.value) {
+    titleManagementVisible.value = false;
+  }
 }
 
 async function submitResetPassword() {
@@ -713,7 +761,10 @@ async function submitResetPassword() {
   }
   isResetting.value = true;
   try {
-    await resetAdminUserPassword(token, userId.value, {
+    const resetPasswordRequest = usesSuperAdminApi.value
+      ? resetSuperAdminUserPassword
+      : resetAdminUserPassword;
+    await resetPasswordRequest(token, userId.value, {
       new_password: resetPassword.value,
       must_change_password: true,
     });
@@ -755,7 +806,10 @@ async function clearWechatBinding() {
   }
   isClearingWechatBinding.value = true;
   try {
-    await clearAdminUserWechatBinding(token, userId.value);
+    const clearBindingRequest = usesSuperAdminApi.value
+      ? clearSuperAdminUserWechatBinding
+      : clearAdminUserWechatBinding;
+    await clearBindingRequest(token, userId.value);
     if (userDetail.value) {
       userDetail.value = { ...userDetail.value, wechat_bound: false };
     }
@@ -795,7 +849,8 @@ async function deleteAccount() {
   }
   isDeleting.value = true;
   try {
-    await deleteAdminUser(token, userId.value);
+    const deleteUserRequest = usesSuperAdminApi.value ? deleteSuperAdminUser : deleteAdminUser;
+    await deleteUserRequest(token, userId.value);
     uni.showToast({ title: "账号已删除", icon: "success" });
     setTimeout(() => {
       uni.redirectTo({ url: "/pages/admin/users/index" });
@@ -1045,37 +1100,10 @@ onLoad(async (query) => {
   align-items: center;
 }
 
-.avatar-shell {
-  position: relative;
-}
-
-.avatar {
-  width: 164rpx;
-  height: 164rpx;
-  border: 8rpx solid #ffffff;
-  border-radius: 50%;
-  background: #edf6e9;
-  box-shadow: 0 18rpx 38rpx rgba(42, 63, 43, 0.14);
-}
-
-.avatar-plus {
-  position: absolute;
-  right: 0;
-  bottom: 10rpx;
-  width: 50rpx;
-  height: 50rpx;
-  border-radius: 50%;
-  background: #2f8037;
-  color: #ffffff;
-  font-size: 36rpx;
-  line-height: 46rpx;
-  text-align: center;
-}
-
-.avatar-note {
+.avatar-title {
   margin-top: 18rpx;
-  color: #737b84;
-  font-size: 24rpx;
+  display: flex;
+  justify-content: center;
 }
 
 .avatar-review-hint {
@@ -1122,70 +1150,6 @@ onLoad(async (query) => {
   background: rgba(247, 251, 239, 0.86);
 }
 
-.title-current {
-  justify-content: flex-start;
-}
-
-.title-empty {
-  color: #8a929b;
-}
-
-.title-actions-card {
-  margin-top: 28rpx;
-  padding: 28rpx;
-  border: 2rpx solid rgba(203, 222, 197, 0.9);
-  border-radius: 26rpx;
-  background: rgba(250, 255, 247, 0.96);
-}
-
-.title-actions-heading,
-.title-actions-note,
-.title-actions-error {
-  display: block;
-}
-
-.title-actions-heading {
-  color: #204d28;
-  font-size: 29rpx;
-  font-weight: 900;
-}
-
-.title-actions-note {
-  margin-top: 10rpx;
-  color: #68756b;
-  font-size: 22rpx;
-  line-height: 1.5;
-}
-
-.title-action-button {
-  width: 100%;
-  height: 78rpx;
-  margin: 18rpx 0 0;
-  border: 2rpx solid #6b9c6b;
-  border-radius: 18rpx;
-  background: rgba(255, 255, 255, 0.96);
-  color: #37643d;
-  font-size: 26rpx;
-  font-weight: 900;
-  line-height: 78rpx;
-}
-
-.title-action-button.is-primary {
-  background: #2f8037;
-  color: #ffffff;
-}
-
-.title-action-button.is-transfer {
-  border-color: #c59a3c;
-  color: #8a6216;
-}
-
-.title-actions-error {
-  margin-top: 14rpx;
-  color: #c34839;
-  font-size: 22rpx;
-}
-
 .picker-field,
 .readonly-field {
   display: flex;
@@ -1207,6 +1171,10 @@ onLoad(async (query) => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 18rpx;
+}
+
+.detail-actions.is-single {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .account-actions-button,

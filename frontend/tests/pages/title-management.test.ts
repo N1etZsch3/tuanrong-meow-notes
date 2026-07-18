@@ -4,6 +4,7 @@ import createUserSource from "../../src/pages/admin/create-user.vue?raw";
 import memberDetailSource from "../../src/pages/admin/users/detail.vue?raw";
 import profileIndexSource from "../../src/pages/profile/index.vue?raw";
 import settingsSource from "../../src/pages/profile/settings.vue?raw";
+import titleModalSource from "../../src/components/MemberTitleActionsModal.vue?raw";
 import {
   availableAssignableTitles,
   canManageMemberTitles,
@@ -28,9 +29,18 @@ describe("title management pages", () => {
   });
 
   it("keeps title management exclusive to the president and excludes self", () => {
-    expect(canManageMemberTitles("president", "president-id", "member-id")).toBe(true);
-    expect(canManageMemberTitles("vice_president", "vice-id", "member-id")).toBe(false);
-    expect(canManageMemberTitles("president", "same-id", "same-id")).toBe(false);
+    expect(
+      canManageMemberTitles("super_admin", "president", "president-id", "member-id"),
+    ).toBe(true);
+    expect(
+      canManageMemberTitles("admin", "president", "president-id", "member-id"),
+    ).toBe(false);
+    expect(
+      canManageMemberTitles("admin", "vice_president", "vice-id", "member-id"),
+    ).toBe(false);
+    expect(
+      canManageMemberTitles("super_admin", "president", "same-id", "same-id"),
+    ).toBe(false);
   });
 
   it("integrates title identity, creation, resignation, grant, and transfer flows", () => {
@@ -42,5 +52,10 @@ describe("title management pages", () => {
     expect(memberDetailSource).toContain("setMemberTitle");
     expect(memberDetailSource).toContain("transferPresident");
     expect(memberDetailSource).toContain("uni.showModal");
+    expect(memberDetailSource).toContain("MemberTitleActionsModal");
+    expect(memberDetailSource).not.toContain("当前头衔</text>");
+    expect(memberDetailSource).not.toContain('class="title-actions-card"');
+    expect(titleModalSource).toContain("授予或变更头衔");
+    expect(titleModalSource).toContain("同时转移超级管理员权限");
   });
 });

@@ -135,6 +135,18 @@ export function createAdminUser(
   });
 }
 
+export function createSuperAdminUser(
+  payload: AdminCreateUserPayload,
+  accessToken: string,
+): Promise<AdminCreateUserResponse> {
+  return request<AdminCreateUserResponse, AdminCreateUserPayload & Record<string, unknown>>({
+    url: API_ENDPOINTS.superAdmin.admins,
+    method: "POST",
+    data: { ...payload, role: "admin" },
+    token: accessToken,
+  });
+}
+
 export function restoreAdminUser(
   accessToken: string,
   userId: string,
@@ -142,6 +154,19 @@ export function restoreAdminUser(
 ): Promise<AdminRestoreUserResponse> {
   return request<AdminRestoreUserResponse, AdminRestoreUserPayload & Record<string, unknown>>({
     url: API_ENDPOINTS.admin.userRestore(userId),
+    method: "POST",
+    data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function restoreSuperAdminUser(
+  accessToken: string,
+  userId: string,
+  payload: AdminRestoreUserPayload,
+): Promise<AdminRestoreUserResponse> {
+  return request<AdminRestoreUserResponse, AdminRestoreUserPayload & Record<string, unknown>>({
+    url: API_ENDPOINTS.superAdmin.userRestore(userId),
     method: "POST",
     data: { ...payload },
     token: accessToken,
@@ -184,6 +209,19 @@ export function updateAdminUser(
   });
 }
 
+export function updateSuperAdminUser(
+  accessToken: string,
+  userId: string,
+  payload: AdminUpdateUserPayload,
+): Promise<AdminUserDto> {
+  return request<AdminUserDto, AdminUpdateUserPayload & Record<string, unknown>>({
+    url: API_ENDPOINTS.superAdmin.user(userId),
+    method: "PATCH",
+    data: compactDefinedApiParams(payload),
+    token: accessToken,
+  });
+}
+
 export function resetAdminUserPassword(
   accessToken: string,
   userId: string,
@@ -191,6 +229,19 @@ export function resetAdminUserPassword(
 ): Promise<AdminResetPasswordResponse> {
   return request<AdminResetPasswordResponse, AdminResetPasswordPayload & Record<string, unknown>>({
     url: API_ENDPOINTS.admin.userResetPassword(userId),
+    method: "PATCH",
+    data: { ...payload },
+    token: accessToken,
+  });
+}
+
+export function resetSuperAdminUserPassword(
+  accessToken: string,
+  userId: string,
+  payload: AdminResetPasswordPayload,
+): Promise<AdminResetPasswordResponse> {
+  return request<AdminResetPasswordResponse, AdminResetPasswordPayload & Record<string, unknown>>({
+    url: API_ENDPOINTS.superAdmin.userResetPassword(userId),
     method: "PATCH",
     data: { ...payload },
     token: accessToken,
@@ -208,12 +259,34 @@ export function clearAdminUserWechatBinding(
   });
 }
 
+export function clearSuperAdminUserWechatBinding(
+  accessToken: string,
+  userId: string,
+): Promise<AdminClearWeChatBindingResponse> {
+  return request<AdminClearWeChatBindingResponse>({
+    url: API_ENDPOINTS.superAdmin.userWechatBinding(userId),
+    method: "DELETE",
+    token: accessToken,
+  });
+}
+
 export function deleteAdminUser(
   accessToken: string,
   userId: string,
 ): Promise<AdminDeleteUserResponse> {
   return request<AdminDeleteUserResponse>({
     url: API_ENDPOINTS.admin.user(userId),
+    method: "DELETE",
+    token: accessToken,
+  });
+}
+
+export function deleteSuperAdminUser(
+  accessToken: string,
+  userId: string,
+): Promise<AdminDeleteUserResponse> {
+  return request<AdminDeleteUserResponse>({
+    url: API_ENDPOINTS.superAdmin.user(userId),
     method: "DELETE",
     token: accessToken,
   });

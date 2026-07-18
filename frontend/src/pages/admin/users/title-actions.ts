@@ -12,12 +12,14 @@ export function availableAssignableTitles(
 }
 
 export function canManageMemberTitles(
+  currentRole: string | null | undefined,
   currentTitle: string | null | undefined,
   currentUserId: string | undefined,
   targetUserId: string | undefined,
 ): boolean {
   return Boolean(
-    currentTitle === "president" &&
+    currentRole === "super_admin" &&
+      currentTitle === "president" &&
       currentUserId &&
       targetUserId &&
       currentUserId !== targetUserId,

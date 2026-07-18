@@ -18,7 +18,11 @@ from app.modules.titles.constants import (
 
 
 def ensure_president(actor: User) -> None:
-    if actor.profile is None or actor.profile.title != PRESIDENT:
+    if (
+        actor.role != "super_admin"
+        or actor.profile is None
+        or actor.profile.title != PRESIDENT
+    ):
         raise APIError(
             code=ErrorCode.TITLE_PRESIDENT_REQUIRED,
             message="仅会长可执行此操作",
@@ -141,7 +145,7 @@ def set_member_title(
             status_code=409,
         ) from exc
     db.refresh(target)
-    return auth_service.admin_user_payload(target)
+    return auth_service.admin_user_payload(target, actor=actor)
 
 
 def resign_title(db: Session, *, user: User) -> dict:
@@ -188,7 +192,30 @@ def transfer_president(
             status_code=422,
         )
 
-    successor = auth_service.get_target_user(db, successor_id)
+    locked_users = db.scalars(
+        select(User)
+        .where(
+            User.id.in_([actor.id, successor_id]),
+            User.deleted_at.is_(None),
+        )
+        .order_by(User.id)
+        .with_for_update()
+    ).all()
+    users_by_id = {user.id: user for user in locked_users}
+    actor = users_by_id.get(actor.id) or actor
+    successor = users_by_id.get(successor_id)
+    if successor is None:
+        raise APIError(
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="用户不存在",
+            status_code=404,
+        )
+    if successor.status != "active":
+        raise APIError(
+            code=ErrorCode.TITLE_INVALID,
+            message="只能将会长转让给正常状态的成员",
+            status_code=422,
+        )
     profiles = db.scalars(
         select(UserProfile)
         .where(UserProfile.user_id.in_([actor.id, successor.id]))
@@ -211,11 +238,15 @@ def transfer_president(
 
     successor_previous_title = successor_profile.title
     successor_previous_role = successor.role
+    actor_previous_role = actor.role
     actor_profile.title = None
     db.flush()
     successor_profile.title = PRESIDENT
-    if successor.role not in {"admin", "super_admin"}:
-        successor.role = "admin"
+    if actor.role != "admin":
+        actor.role = "admin"
+        actor.token_version += 1
+    if successor.role != "super_admin":
+        successor.role = "super_admin"
         successor.token_version += 1
 
     auth_service.log_admin_operation(
@@ -226,11 +257,13 @@ def transfer_president(
         summary=f"转让会长头衔给 {successor.student_no}",
         before_data={
             "president_user_id": str(actor.id),
+            "president_role": actor_previous_role,
             "successor_title": successor_previous_title,
             "successor_role": successor_previous_role,
         },
         after_data={
             "president_user_id": str(successor.id),
+            "previous_president_role": actor.role,
             "successor_title": PRESIDENT,
             "successor_role": successor.role,
         },
@@ -254,6 +287,7 @@ def transfer_president(
 
 
 def seed_president(db: Session, *, user: User) -> User:
+    user = db.scalar(select(User).where(User.id == user.id).with_for_update()) or user
     existing_profile = db.scalar(
         select(UserProfile)
         .where(UserProfile.title == PRESIDENT)
@@ -279,8 +313,8 @@ def seed_president(db: Session, *, user: User) -> User:
     before_title = profile.title
     before_role = user.role
     profile.title = PRESIDENT
-    if user.role not in {"admin", "super_admin"}:
-        user.role = "admin"
+    if user.role != "super_admin":
+        user.role = "super_admin"
         user.token_version += 1
     if before_title != PRESIDENT or before_role != user.role:
         auth_service.log_admin_operation(

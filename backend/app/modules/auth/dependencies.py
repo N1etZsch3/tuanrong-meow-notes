@@ -8,6 +8,7 @@ from app.core.errors import APIError, ErrorCode
 from app.core.security import decode_access_token, is_invalid_token_error
 from app.db.session import get_db
 from app.modules.auth.models import User
+from app.modules.titles.constants import PRESIDENT
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -64,4 +65,14 @@ def require_profile_completed(user: User = Depends(require_password_changed)) ->
 def require_admin(user: User = Depends(require_password_changed)) -> User:
     if user.role not in {"admin", "super_admin"}:
         raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
+    return user
+
+
+def require_super_admin(user: User = Depends(require_password_changed)) -> User:
+    if (
+        user.role != "super_admin"
+        or user.profile is None
+        or user.profile.title != PRESIDENT
+    ):
+        raise APIError(code=ErrorCode.FORBIDDEN, message="需要超级管理员权限", status_code=403)
     return user

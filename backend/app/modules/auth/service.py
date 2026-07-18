@@ -37,9 +37,11 @@ from app.modules.auth.schemas import (
 )
 from app.modules.auth.wechat import exchange_wechat_code_for_openid
 from app.modules.public.guest_service import record_guest_visit
-from app.modules.titles.constants import title_payload
+from app.modules.titles.constants import PRESIDENT, title_payload
 
 VALID_ROLES = {"member", "summer_volunteer", "admin"}
+STANDARD_ADMIN_ROLES = {"member", "summer_volunteer"}
+SUPER_ADMIN_ROLE = "super_admin"
 VALID_STATUSES = {"active", "blocked", "left", "deleted"}
 ADMIN_ROLES = {"admin", "super_admin"}
 MEOW_NO_PREFIX = "trmx"
@@ -496,7 +498,24 @@ def is_admin_account(user: User) -> bool:
     return user.role in ADMIN_ROLES
 
 
-def admin_user_payload(user: User) -> dict:
+def is_super_admin_account(user: User) -> bool:
+    return (
+        user.role == SUPER_ADMIN_ROLE
+        and user.profile is not None
+        and user.profile.title == PRESIDENT
+    )
+
+
+def can_edit_admin_target(actor: User | None, target: User) -> bool:
+    if actor is None or actor.id == target.id or target.role == SUPER_ADMIN_ROLE:
+        return False
+    if target.role == "admin":
+        return is_super_admin_account(actor)
+    return is_admin_account(actor)
+
+
+def admin_user_payload(user: User, *, actor: User | None = None) -> dict:
+    editable = can_edit_admin_target(actor, user)
     return {
         "id": user.id,
         "student_no": user.student_no,
@@ -508,13 +527,16 @@ def admin_user_payload(user: User) -> dict:
         "last_login_at": user.last_login_at,
         "wechat_bound": bool(user.wechat_openid),
         "profile": profile_payload(user.profile),
-        "editable": not is_admin_account(user),
-        "can_reset_password": not is_admin_account(user),
+        "editable": editable,
+        "can_reset_password": editable,
     }
 
 
 def admin_user_log_payload(user: User) -> dict:
-    return jsonable_encoder(admin_user_payload(user))
+    payload = admin_user_payload(user)
+    payload.pop("editable", None)
+    payload.pop("can_reset_password", None)
+    return jsonable_encoder(payload)
 
 
 def existing_account_error(user: User) -> APIError:
@@ -541,10 +563,16 @@ def existing_account_error(user: User) -> APIError:
     )
 
 
-def create_member_account(db: Session, admin: User, payload: AdminCreateUserRequest) -> User:
+def create_member_account(
+    db: Session,
+    admin: User,
+    payload: AdminCreateUserRequest,
+    *,
+    allowed_roles: set[str] | None = None,
+) -> User:
     from app.modules.titles import service as titles_service
 
-    if payload.role not in VALID_ROLES:
+    if payload.role not in (allowed_roles or STANDARD_ADMIN_ROLES):
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
     requested_title = titles_service.normalize_assignable_title(payload.profile.title)
     if requested_title is not None:
@@ -620,6 +648,7 @@ def list_users(
     department: str | None = None,
     sort_by: str | None = None,
     sort_order: str = "desc",
+    actor: User | None = None,
 ) -> dict:
     page = max(page, 1)
     page_size = min(max(page_size, 1), 100)
@@ -662,7 +691,7 @@ def list_users(
         statement.order_by(order_clause).offset((page - 1) * page_size).limit(page_size)
     ).all()
     return {
-        "items": [admin_user_payload(user) for user in users],
+        "items": [admin_user_payload(user, actor=actor) for user in users],
         "page": page,
         "page_size": page_size,
         "total": total,
@@ -681,12 +710,21 @@ def get_target_user(db: Session, user_id: UUID) -> User:
     return user
 
 
-def get_user_detail(db: Session, *, user_id: UUID) -> dict:
-    return admin_user_payload(get_target_user(db, user_id))
+def get_user_detail(db: Session, *, actor: User, user_id: UUID) -> dict:
+    return admin_user_payload(get_target_user(db, user_id), actor=actor)
 
 
-def ensure_target_is_editable(user: User) -> None:
-    if is_admin_account(user):
+def ensure_target_is_editable(
+    actor: User,
+    user: User,
+    *,
+    allow_admin_target: bool = False,
+) -> None:
+    if actor.id == user.id or user.role == SUPER_ADMIN_ROLE:
+        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
+    if user.role == "admin" and not (
+        allow_admin_target and is_super_admin_account(actor)
+    ):
         raise APIError(code=ErrorCode.FORBIDDEN, message="不能修改管理员账号", status_code=403)
 
 
@@ -696,15 +734,15 @@ def update_user_detail(
     admin: User,
     user_id: UUID,
     payload: AdminUpdateUserRequest,
+    allow_admin_target: bool = False,
+    allowed_roles: set[str] | None = None,
 ) -> dict:
-    if admin.id == user_id:
-        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
     user = get_target_user(db, user_id)
-    ensure_target_is_editable(user)
+    ensure_target_is_editable(admin, user, allow_admin_target=allow_admin_target)
     before = admin_user_log_payload(user)
 
     if payload.role is not None:
-        if payload.role not in VALID_ROLES:
+        if payload.role not in (allowed_roles or STANDARD_ADMIN_ROLES):
             raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
         user.role = payload.role
         user.token_version += 1
@@ -745,7 +783,7 @@ def update_user_detail(
     )
     db.commit()
     db.refresh(user)
-    return admin_user_payload(user)
+    return admin_user_payload(user, actor=admin)
 
 
 def reset_user_password(
@@ -754,10 +792,11 @@ def reset_user_password(
     admin: User,
     user_id: UUID,
     payload: AdminResetPasswordRequest,
+    allow_admin_target: bool = False,
 ) -> User:
     validate_password_strength(payload.new_password)
     user = get_target_user(db, user_id)
-    ensure_target_is_editable(user)
+    ensure_target_is_editable(admin, user, allow_admin_target=allow_admin_target)
     before = {
         "must_change_password": user.must_change_password,
         "token_version": user.token_version,
@@ -788,13 +827,12 @@ def update_user_status(
     admin: User,
     user_id: UUID,
     payload: AdminUpdateStatusRequest,
+    allow_admin_target: bool = False,
 ) -> User:
     if payload.status not in VALID_STATUSES:
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
-    if admin.id == user_id:
-        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
     user = get_target_user(db, user_id)
-    ensure_target_is_editable(user)
+    ensure_target_is_editable(admin, user, allow_admin_target=allow_admin_target)
     before = {"status": user.status, "token_version": user.token_version}
     user.status = payload.status
     if payload.status != "active":
@@ -818,11 +856,10 @@ def soft_delete_user(
     *,
     admin: User,
     user_id: UUID,
+    allow_admin_target: bool = False,
 ) -> User:
-    if admin.id == user_id:
-        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
     user = get_target_user(db, user_id)
-    ensure_target_is_editable(user)
+    ensure_target_is_editable(admin, user, allow_admin_target=allow_admin_target)
     before = {
         "status": user.status,
         "token_version": user.token_version,
@@ -858,6 +895,7 @@ def restore_user(
     admin: User,
     user_id: UUID,
     payload: AdminRestoreUserRequest,
+    allow_admin_target: bool = False,
 ) -> User:
     user = db.scalar(
         select(User)
@@ -873,7 +911,7 @@ def restore_user(
             message="账号已经处于启用状态",
             status_code=409,
         )
-    ensure_target_is_editable(user)
+    ensure_target_is_editable(admin, user, allow_admin_target=allow_admin_target)
 
     initial_password = payload.initial_password or user.student_no
     validate_password_strength(initial_password)
@@ -919,13 +957,13 @@ def update_user_role(
     admin: User,
     user_id: UUID,
     payload: AdminUpdateRoleRequest,
+    allow_admin_target: bool = False,
+    allowed_roles: set[str] | None = None,
 ) -> User:
-    if payload.role not in VALID_ROLES:
+    if payload.role not in (allowed_roles or STANDARD_ADMIN_ROLES):
         raise APIError(code=ErrorCode.PARAM_ERROR, message="参数错误", status_code=400)
-    if admin.id == user_id:
-        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
     user = get_target_user(db, user_id)
-    ensure_target_is_editable(user)
+    ensure_target_is_editable(admin, user, allow_admin_target=allow_admin_target)
     before = {"role": user.role, "token_version": user.token_version}
     user.role = payload.role
     user.token_version += 1
@@ -948,11 +986,10 @@ def clear_user_wechat_binding(
     *,
     admin: User,
     user_id: UUID,
+    allow_admin_target: bool = False,
 ) -> User:
-    if admin.id == user_id:
-        raise APIError(code=ErrorCode.FORBIDDEN, message="权限不足", status_code=403)
     user = get_target_user(db, user_id)
-    ensure_target_is_editable(user)
+    ensure_target_is_editable(admin, user, allow_admin_target=allow_admin_target)
     before = {
         "wechat_bound": bool(user.wechat_openid),
         "token_version": user.token_version,

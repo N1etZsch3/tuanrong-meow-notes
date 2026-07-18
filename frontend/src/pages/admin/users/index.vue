@@ -92,20 +92,12 @@
             hover-class="member-card-hover"
             @tap="goUserDetail(user.id)"
           >
-            <view class="member-avatar-shell" :class="roleAvatarClass(user.role)">
-              <image
-                class="member-avatar"
-                :src="memberAvatar(user)"
-                mode="aspectFill"
-                @error="markAvatarFailed(user.id)"
-              />
-              <image
-                v-if="isAdminRole(user.role)"
-                class="member-admin-badge"
-                :src="academicCapIcon"
-                mode="aspectFit"
-              />
-            </view>
+            <IdentityAvatar
+              :src="memberAvatar(user)"
+              :role="user.role"
+              size="list"
+              @error="markAvatarFailed(user.id)"
+            />
             <view class="member-main">
               <view class="member-name-row">
                 <text class="member-name">{{ user.profile.nickname || "未命名成员" }}</text>
@@ -179,8 +171,8 @@ import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import { DEPARTMENTS, getDepartmentTagStyle } from "@/constants/departments";
 import TitleBadge from "@/components/TitleBadge.vue";
+import IdentityAvatar from "@/components/IdentityAvatar.vue";
 
-import academicCapIcon from "../../../../素材/svg/人员管理/学士帽.svg";
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 
@@ -189,6 +181,7 @@ type PickerChangeEvent = { detail: { value: string | number } };
 const PAGE_SIZE = 10;
 const roleOptions = [
   { label: "全部", value: "" },
+  { label: "超级管理员", value: "super_admin" },
   { label: "管理员", value: "admin" },
   { label: "成员", value: "member" },
   { label: "暑期志愿者", value: "summer_volunteer" },
@@ -337,20 +330,6 @@ function selectDepartment(event: PickerChangeEvent) {
 function selectSort(event: PickerChangeEvent) {
   selectedSort.value = (sortOptions[pickerIndex(event)]?.value || "asc") as "asc" | "desc";
   reloadUsers();
-}
-
-function isAdminRole(role: string): boolean {
-  return role === "admin" || role === "super_admin";
-}
-
-function roleAvatarClass(role: string): string {
-  if (isAdminRole(role)) {
-    return "avatar-role-admin";
-  }
-  if (role === "summer_volunteer") {
-    return "avatar-role-volunteer";
-  }
-  return "avatar-role-member";
 }
 
 function goUserDetail(userId: string) {
@@ -571,55 +550,6 @@ onShow(() => {
 .button-hover {
   opacity: 0.9;
   transform: translateY(2rpx);
-}
-
-.member-avatar-shell {
-  position: relative;
-  box-sizing: border-box;
-  width: 118rpx;
-  height: 118rpx;
-  padding: 7rpx;
-  border: 4rpx solid transparent;
-  border-radius: 50%;
-  flex: 0 0 auto;
-}
-
-.member-avatar {
-  display: block;
-  width: 96rpx;
-  height: 96rpx;
-  border-radius: 50%;
-  background: #ffffff;
-}
-
-.avatar-role-admin {
-  background: #e2f6df;
-  border-color: #72bd6d;
-}
-
-.avatar-role-volunteer {
-  background: #fff0d9;
-  border-color: #e6a64d;
-}
-
-.avatar-role-member {
-  background: #dff1ff;
-  border-color: #6ca9d8;
-}
-
-.member-admin-badge {
-  position: absolute;
-  z-index: 1;
-  left: -10rpx;
-  top: -10rpx;
-  box-sizing: border-box;
-  width: 46rpx;
-  height: 46rpx;
-  padding: 7rpx;
-  border: 3rpx solid #72bd6d;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 6rpx 14rpx rgba(36, 124, 50, 0.15);
 }
 
 .member-main {

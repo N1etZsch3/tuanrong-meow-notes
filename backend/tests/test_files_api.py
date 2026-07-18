@@ -13,6 +13,7 @@ from app.modules.files.content_security import (
 )
 from app.modules.files.dependencies import get_object_storage, get_optional_object_storage
 from app.modules.files.models import FileAsset, FileAssetVariant
+from app.modules.titles.service import seed_president
 from tests.test_auth_api import auth_headers, create_token, create_user
 
 
@@ -1090,3 +1091,53 @@ def test_enforced_avatar_upload_requires_fresh_wechat_code(api_client, db_sessio
     )
     assert response.status_code == 400
     assert response.json()["code"] == int(ErrorCode.FILE_SECURITY_CODE_REQUIRED)
+
+
+def test_only_super_admin_can_upload_another_admin_avatar(api_client, db_session):
+    install_fake_storage(api_client)
+    admin = create_user(
+        db_session,
+        student_no="trmx-avatar-admin",
+        role="admin",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    target_admin = create_user(
+        db_session,
+        student_no="trmx-avatar-target",
+        role="admin",
+        must_change_password=False,
+        profile_completed=True,
+    )
+
+    rejected = api_client.post(
+        "/api/v1/files/images",
+        headers=auth_headers(create_token(admin)),
+        data={
+            "usage_type": "user_avatar",
+            "owner_type": "user",
+            "owner_id": str(target_admin.id),
+        },
+        files={"file": ("avatar.jpg", image_bytes(), "image/jpeg")},
+    )
+    assert rejected.status_code == 403
+    assert rejected.json()["code"] == int(ErrorCode.FILE_FORBIDDEN)
+
+    president = create_user(
+        db_session,
+        student_no="trmx-avatar-president",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    super_admin = seed_president(db_session, user=president)
+    uploaded = api_client.post(
+        "/api/v1/files/images",
+        headers=auth_headers(create_token(super_admin)),
+        data={
+            "usage_type": "user_avatar",
+            "owner_type": "user",
+            "owner_id": str(target_admin.id),
+        },
+        files={"file": ("avatar.jpg", image_bytes(), "image/jpeg")},
+    )
+    assert uploaded.status_code == 200

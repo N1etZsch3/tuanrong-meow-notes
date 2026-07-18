@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import Settings, get_settings
 from app.core.errors import APIError, ErrorCode
+from app.modules.auth import service as auth_service
 from app.modules.auth.models import User, UserProfile
 from app.modules.auth.wechat import exchange_wechat_code_for_openid
 from app.modules.files.content_security import ContentSecurityClient
@@ -63,6 +64,7 @@ def upload_image(
         current_user=current_user,
     )
     final_owner_type, final_owner_id = _resolve_upload_owner(
+        db=db,
         usage_type=usage_type,
         owner_type=owner_type,
         owner_id=owner_id,
@@ -706,6 +708,7 @@ def _validate_upload_request(
 
 def _resolve_upload_owner(
     *,
+    db: Session,
     usage_type: str,
     owner_type: str | None,
     owner_id: UUID | None,
@@ -720,7 +723,16 @@ def _resolve_upload_owner(
             status_code=400,
         )
     target_user_id = owner_id or current_user.id
-    if current_user.role not in {"admin", "super_admin"} and target_user_id != current_user.id:
+    if target_user_id == current_user.id:
+        return "user", target_user_id
+    target_user = db.get(User, target_user_id)
+    if target_user is None or target_user.deleted_at is not None:
+        raise APIError(
+            code=ErrorCode.RESOURCE_NOT_FOUND,
+            message="用户不存在",
+            status_code=404,
+        )
+    if not auth_service.can_edit_admin_target(current_user, target_user):
         raise APIError(code=ErrorCode.FILE_FORBIDDEN, message="无权修改该头像", status_code=403)
     return "user", target_user_id
 

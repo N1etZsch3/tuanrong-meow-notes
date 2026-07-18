@@ -77,7 +77,10 @@ export function getStatValue(
 }
 
 export function getRoleLabel(role: string | undefined): string {
-  if (role === "admin" || role === "super_admin") {
+  if (role === "super_admin") {
+    return "超级管理员";
+  }
+  if (role === "admin") {
     return "猫协管理员";
   }
   if (role === "summer_volunteer") {

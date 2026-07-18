@@ -19,6 +19,9 @@ describe("department tag picker component", () => {
     expect(pickerSource).toContain('emit("update:modelValue"');
     expect(pickerSource).toContain("removeDepartment");
     expect(pickerSource).toContain("uni.showActionSheet");
+    expect(pickerSource).toContain('class="dept-picker-header"');
+    expect(pickerSource).toContain("暂无部门");
+    expect(pickerSource).toContain("width: 46rpx");
     expect(pickerSource).toContain('aria-label="添加部门"');
     expect(pickerSource).toContain('class="dept-add-icon"');
     expect(pickerSource).not.toContain("＋ 添加部门");
@@ -92,14 +95,9 @@ describe("multi-department forms", () => {
     expect(adminUsersIndexSource).toContain("'is-single': memberDepartments(user).length === 1");
   });
 
-  it("uses role-colored avatar rings and an academic-cap badge instead of role tags", () => {
-    expect(adminUsersIndexSource).toContain('class="member-avatar-shell"');
-    expect(adminUsersIndexSource).toContain('class="member-admin-badge"');
-    expect(adminUsersIndexSource).toContain('v-if="isAdminRole(user.role)"');
-    expect(adminUsersIndexSource).toContain("素材/svg/人员管理/学士帽.svg");
-    expect(adminUsersIndexSource).toContain("background: #e2f6df");
-    expect(adminUsersIndexSource).toContain("background: #fff0d9");
-    expect(adminUsersIndexSource).toContain("background: #dff1ff");
+  it("uses the shared identity avatar instead of role tags", () => {
+    expect(adminUsersIndexSource).toContain("IdentityAvatar");
+    expect(adminUsersIndexSource).toContain(':role="user.role"');
     expect(adminUsersIndexSource).not.toContain('class="role-tag"');
     expect(adminUsersIndexSource).not.toContain("function roleLabel(");
   });

@@ -93,6 +93,16 @@ export const API_ENDPOINTS = {
     mapPointLocation: (pointId: ApiPathParam) =>
       `/admin/map/points/${encodePathParam(pointId)}/location`,
   },
+  superAdmin: {
+    admins: "/super-admin/users/admins",
+    user: (userId: ApiPathParam) => `/super-admin/users/${encodePathParam(userId)}`,
+    userRestore: (userId: ApiPathParam) =>
+      `/super-admin/users/${encodePathParam(userId)}/restore`,
+    userResetPassword: (userId: ApiPathParam) =>
+      `/super-admin/users/${encodePathParam(userId)}/reset-password`,
+    userWechatBinding: (userId: ApiPathParam) =>
+      `/super-admin/users/${encodePathParam(userId)}/wechat-binding`,
+  },
   cats: {
     list: "/cats",
     stats: "/cats/stats",

@@ -22,6 +22,7 @@ from app.api.v1.medicines import router as medicines_router
 from app.api.v1.profile import router as profile_router
 from app.api.v1.profile_titles import router as profile_titles_router
 from app.api.v1.public import router as public_router
+from app.api.v1.super_admin_users import router as super_admin_users_router
 from app.api.v1.supplies import router as supplies_router
 from app.api.v1.tasks import router as tasks_router
 from app.api.v1.wechat_content_security import router as wechat_content_security_router
@@ -37,6 +38,7 @@ api_router.include_router(admin_supplies_router, prefix="/admin/supply-points")
 api_router.include_router(admin_tasks_router, prefix="/admin/tasks")
 api_router.include_router(admin_titles_router, prefix="/admin/titles")
 api_router.include_router(admin_users_router, prefix="/admin/users")
+api_router.include_router(super_admin_users_router, prefix="/super-admin/users")
 api_router.include_router(cats_router, prefix="/cats")
 api_router.include_router(files_router, prefix="/files")
 api_router.include_router(landmarks_router, prefix="/landmarks")

@@ -38,21 +38,28 @@
           </view>
 
           <view class="field-group">
-            <text class="field-label">部门</text>
-            <DepartmentTagPicker v-model="form.departments" placeholder="请添加部门" />
+            <DepartmentTagPicker v-model="form.departments">
+              <template #label><text class="field-label">部门</text></template>
+            </DepartmentTagPicker>
           </view>
 
           <view class="field-group">
             <text class="field-label">角色</text>
-            <picker mode="selector" :range="roleLabels" :value="roleIndex" @change="onRoleChange">
+            <picker
+              mode="selector"
+              :range="roleOptions"
+              range-key="label"
+              :value="roleIndex"
+              @change="onRoleChange"
+            >
               <view class="picker-field">
-                <text>{{ roleLabels[roleIndex] }}</text>
+                <text>{{ roleOptions[roleIndex]?.label || "普通成员" }}</text>
                 <text class="picker-arrow">⌄</text>
               </view>
             </picker>
           </view>
 
-          <view v-if="isPresident" class="field-group">
+          <view v-if="isSuperAdmin" class="field-group">
             <text class="field-label">头衔</text>
             <picker
               mode="selector"
@@ -170,7 +177,9 @@ import { onShow } from "@dcloudio/uni-app";
 
 import {
   createAdminUser,
+  createSuperAdminUser,
   restoreAdminUser,
+  restoreSuperAdminUser,
   type AdminCreateUserResponse,
 } from "@/api/admin-users";
 import { getTitleCatalog, type TitleCatalogItem } from "@/api/titles";
@@ -187,9 +196,6 @@ import { DEPARTMENTS } from "@/constants/departments";
 
 import restorePawIcon from "../../../素材/svg/登录页/猫爪1.svg";
 
-const roles: UserRole[] = ["member", "summer_volunteer", "admin"];
-const roleLabels = ["普通成员", "暑期志愿者", "管理员"];
-
 const userStore = useUserStore();
 const isSubmitting = ref(false);
 const isRestoring = ref(false);
@@ -202,6 +208,14 @@ const titleOptions = ref<Array<{ key: UserTitle; label: string }>>([
   { key: null, label: "无头衔" },
 ]);
 const isPresident = computed(() => userStore.currentUser?.title === "president");
+const isSuperAdmin = computed(
+  () => userStore.currentUser?.role === "super_admin" && isPresident.value,
+);
+const roleOptions = computed<Array<{ label: string; value: UserRole }>>(() => [
+  { label: "普通成员", value: "member" },
+  { label: "暑期志愿者", value: "summer_volunteer" },
+  ...(isSuperAdmin.value ? [{ label: "管理员", value: "admin" as UserRole }] : []),
+]);
 
 const form = reactive<{
   meow_no: string;
@@ -221,14 +235,16 @@ const form = reactive<{
   title: null,
 });
 
-const roleIndex = computed(() => roles.findIndex((role) => role === form.role));
+const roleIndex = computed(() =>
+  Math.max(0, roleOptions.value.findIndex((item) => item.value === form.role)),
+);
 const titleIndex = computed(() =>
   Math.max(0, titleOptions.value.findIndex((item) => item.key === form.title)),
 );
 
 function onRoleChange(event: any) {
   const index = Number(event.detail.value);
-  form.role = roles[index] || "member";
+  form.role = roleOptions.value[index]?.value || "member";
 }
 
 function onTitleChange(event: any) {
@@ -236,7 +252,7 @@ function onTitleChange(event: any) {
 }
 
 async function loadTitleOptions() {
-  if (!isPresident.value) {
+  if (!isSuperAdmin.value) {
     form.title = null;
     titleOptions.value = [{ key: null, label: "无头衔" }];
     return;
@@ -298,7 +314,8 @@ async function submitCreateUser() {
   createdAccount.value = null;
   resultMode.value = null;
   try {
-    const response = await createAdminUser(
+    const createUser = form.role === "admin" ? createSuperAdminUser : createAdminUser;
+    const response = await createUser(
       {
         meow_no: form.meow_no || undefined,
         initial_password: form.initial_password || undefined,
@@ -306,7 +323,7 @@ async function submitCreateUser() {
         profile: {
           nickname: form.nickname,
           departments: form.departments,
-          title: isPresident.value ? form.title : null,
+          title: isSuperAdmin.value ? form.title : null,
         },
         must_change_password: form.must_change_password,
       },
@@ -349,7 +366,8 @@ async function confirmRestoreAccount() {
 
   isRestoring.value = true;
   try {
-    const response = await restoreAdminUser(accessToken, conflict.user_id, {
+    const restoreUser = form.role === "admin" ? restoreSuperAdminUser : restoreAdminUser;
+    const response = await restoreUser(accessToken, conflict.user_id, {
       initial_password: form.initial_password || undefined,
     });
     createdAccount.value = response;

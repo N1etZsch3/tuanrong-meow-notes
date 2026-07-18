@@ -8,15 +8,14 @@
         </view>
 
         <view class="avatar-panel">
-          <view class="avatar-shell" @tap="chooseAvatar">
-            <image
-              class="avatar"
-              :src="avatarDisplay"
-              mode="aspectFill"
-              @error="avatarLoadFailed = true"
-            />
-            <text class="avatar-plus">+</text>
-          </view>
+          <IdentityAvatar
+            :src="avatarDisplay"
+            :role="currentRole"
+            size="detail"
+            editable
+            @tap="chooseAvatar"
+            @error="avatarLoadFailed = true"
+          />
           <text class="avatar-note">点击更换头像，图片不超过 2MB</text>
           <text v-if="avatarReviewHint" class="avatar-review-hint">{{ avatarReviewHint }}</text>
         </view>
@@ -28,8 +27,9 @@
           </view>
 
           <view class="field-group">
-            <text class="field-label">部门</text>
-            <DepartmentTagPicker v-model="form.departments" placeholder="请添加部门" />
+            <DepartmentTagPicker v-model="form.departments">
+              <template #label><text class="field-label">部门</text></template>
+            </DepartmentTagPicker>
           </view>
 
           <view class="field-group">
@@ -93,6 +93,7 @@ import {
 } from "./profile-edit-guard";
 import { getRoleLabel } from "./profile-page";
 import DepartmentTagPicker from "@/components/DepartmentTagPicker.vue";
+import IdentityAvatar from "@/components/IdentityAvatar.vue";
 import defaultAvatar from "../../../素材/svg/萌猫/橘猫.svg";
 
 const AVATAR_MAX_SIZE_BYTES = 2 * 1024 * 1024;
@@ -127,7 +128,8 @@ const avatarReviewHint = computed(() => {
 watch(avatarPreview, () => {
   avatarLoadFailed.value = false;
 });
-const roleLabel = computed(() => getRoleLabel(profile.value?.role || userStore.currentUser?.role));
+const currentRole = computed(() => profile.value?.role || userStore.currentUser?.role);
+const roleLabel = computed(() => getRoleLabel(currentRole.value));
 const pageLeaveGuard = createPageLeaveGuard(
   () => !isSaving.value && hasPendingProfileChanges(),
 );
@@ -465,33 +467,6 @@ onShow(() => {
   display: flex;
   flex-direction: column;
   align-items: center;
-}
-
-.avatar-shell {
-  position: relative;
-}
-
-.avatar {
-  width: 164rpx;
-  height: 164rpx;
-  border: 8rpx solid #ffffff;
-  border-radius: 50%;
-  background: #edf6e9;
-  box-shadow: 0 18rpx 38rpx rgba(42, 63, 43, 0.14);
-}
-
-.avatar-plus {
-  position: absolute;
-  right: 0;
-  bottom: 10rpx;
-  width: 50rpx;
-  height: 50rpx;
-  border-radius: 50%;
-  background: #2f8037;
-  color: #ffffff;
-  font-size: 36rpx;
-  line-height: 46rpx;
-  text-align: center;
 }
 
 .avatar-note {

@@ -11,32 +11,68 @@ export const DEPARTMENTS = [
 
 export type Department = (typeof DEPARTMENTS)[number];
 
-type DepartmentTagColors = {
+export type DepartmentThemeColors = {
   background: string;
   text: string;
+  head_title: string;
+  deputy_title: string;
 };
 
-const DEPARTMENT_TAG_COLORS: Record<Department, DepartmentTagColors> = {
-  生存保障部: { background: "#dff4e4", text: "#2f7545" },
-  活动部: { background: "#fff0d6", text: "#9a5d16" },
-  宣传部: { background: "#eee6ff", text: "#6c4a9c" },
-  秘书部: { background: "#fbe5ec", text: "#95536a" },
-  养护部: { background: "#deeff8", text: "#346f8a" },
+export const DEPARTMENT_THEMES: Record<Department, DepartmentThemeColors> = {
+  生存保障部: {
+    background: "#e7f1d9",
+    text: "#4d722c",
+    head_title: "#4d722c",
+    deputy_title: "#66745a",
+  },
+  活动部: {
+    background: "#fbe5da",
+    text: "#b74b1f",
+    head_title: "#b74b1f",
+    deputy_title: "#876b5f",
+  },
+  宣传部: {
+    background: "#f4dfed",
+    text: "#963b7a",
+    head_title: "#963b7a",
+    deputy_title: "#7f6778",
+  },
+  秘书部: {
+    background: "#dfe9f2",
+    text: "#365a7a",
+    head_title: "#365a7a",
+    deputy_title: "#657482",
+  },
+  养护部: {
+    background: "#ddf0ec",
+    text: "#24786c",
+    head_title: "#24786c",
+    deputy_title: "#607c77",
+  },
 };
 
-const UNKNOWN_DEPARTMENT_TAG_COLORS: DepartmentTagColors = {
+const UNKNOWN_DEPARTMENT_TAG_COLORS: DepartmentThemeColors = {
   background: "#edf0f3",
   text: "#526070",
+  head_title: "#526070",
+  deputy_title: "#6f7780",
 };
 
 export function isKnownDepartment(value: string): value is Department {
   return (DEPARTMENTS as readonly string[]).includes(value);
 }
 
-export function getDepartmentTagColors(department: string): DepartmentTagColors {
+export function getDepartmentThemeColors(department: string): DepartmentThemeColors {
   return isKnownDepartment(department)
-    ? DEPARTMENT_TAG_COLORS[department]
+    ? DEPARTMENT_THEMES[department]
     : UNKNOWN_DEPARTMENT_TAG_COLORS;
+}
+
+export function getDepartmentTagColors(
+  department: string,
+): Pick<DepartmentThemeColors, "background" | "text"> {
+  const colors = getDepartmentThemeColors(department);
+  return { background: colors.background, text: colors.text };
 }
 
 export function getDepartmentTagStyle(department: string): Record<string, string> {

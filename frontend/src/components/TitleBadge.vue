@@ -4,7 +4,11 @@
     class="title-badge"
     :style="{ backgroundColor: definition.tag_background, color: definition.tag_color }"
   >
-    <image class="title-shield" :src="shieldAssets[definition.shield]" mode="aspectFit" />
+    <image
+      class="title-shield"
+      :src="TITLE_SHIELD_ASSETS[definition.shield_asset]"
+      mode="aspectFit"
+    />
     <text class="title-label">{{ definition.label }}</text>
   </view>
 </template>
@@ -12,18 +16,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 
+import { TITLE_SHIELD_ASSETS } from "@/components/title-shield-assets";
 import { getTitleDefinition } from "@/constants/titles";
-import goldShield from "../../素材/svg/头衔/盾牌-金.svg";
-import greenShield from "../../素材/svg/头衔/盾牌-绿.svg";
-import purpleShield from "../../素材/svg/头衔/盾牌-紫.svg";
 
 const props = defineProps<{ title?: string | null }>();
 const definition = computed(() => getTitleDefinition(props.title));
-const shieldAssets = {
-  gold: goldShield,
-  purple: purpleShield,
-  green: greenShield,
-} as const;
 </script>
 
 <style scoped>

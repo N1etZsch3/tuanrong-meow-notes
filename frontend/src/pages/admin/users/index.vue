@@ -99,10 +99,11 @@
               @error="markAvatarFailed(user.id)"
             />
             <view class="member-main">
-              <view class="member-name-row">
-                <text class="member-name">{{ user.profile.nickname || "未命名成员" }}</text>
-                <TitleBadge :title="user.profile.title" />
-              </view>
+              <TitleIdentityName
+                :name="user.profile.nickname"
+                :title="user.profile.title"
+                size="list"
+              />
               <text class="member-no">{{ user.meow_no }}</text>
             </view>
             <view
@@ -170,8 +171,8 @@ import { resolveUserAvatarContentUrl } from "@/api/files";
 import { LOGIN_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import { DEPARTMENTS, getDepartmentTagStyle } from "@/constants/departments";
-import TitleBadge from "@/components/TitleBadge.vue";
 import IdentityAvatar from "@/components/IdentityAvatar.vue";
+import TitleIdentityName from "@/components/TitleIdentityName.vue";
 
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
@@ -413,7 +414,6 @@ onShow(() => {
 
 .nav-title,
 .nav-subtitle,
-.member-name,
 .member-no {
   display: block;
 }
@@ -559,26 +559,6 @@ onShow(() => {
   align-items: flex-start;
   gap: 0;
   flex: 1;
-}
-
-.member-name-row {
-  width: 100%;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 10rpx;
-}
-
-.member-name {
-  min-width: 0;
-  flex: 0 1 auto;
-  overflow: hidden;
-  color: #111827;
-  font-size: 34rpx;
-  font-weight: 900;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .member-no {

@@ -9,6 +9,7 @@ import adminUsersDetailSource from "../../src/pages/admin/users/detail.vue?raw";
 import adminUsersIndexSource from "../../src/pages/admin/users/index.vue?raw";
 import {
   DEPARTMENTS,
+  DEPARTMENT_THEMES,
   getDepartmentTagColors,
   getDepartmentTagStyle,
   isKnownDepartment,
@@ -42,9 +43,11 @@ describe("department tag picker component", () => {
     expect(isKnownDepartment("计算机学院")).toBe(false);
     expect(new Set(DEPARTMENTS.map((department) => getDepartmentTagColors(department).background)).size).toBe(5);
     expect(getDepartmentTagStyle("宣传部")).toEqual({
-      backgroundColor: "#eee6ff",
-      color: "#6c4a9c",
+      backgroundColor: "#f4dfed",
+      color: "#963b7a",
     });
+    expect(DEPARTMENT_THEMES.养护部.head_title).toBe("#24786c");
+    expect(DEPARTMENT_THEMES.养护部.deputy_title).toBe("#607c77");
     expect(getDepartmentTagStyle("未分部")).toEqual({
       backgroundColor: "#edf0f3",
       color: "#526070",
@@ -102,11 +105,11 @@ describe("multi-department forms", () => {
     expect(adminUsersIndexSource).not.toContain("function roleLabel(");
   });
 
-  it("places an optional title directly after the member name", () => {
-    expect(adminUsersIndexSource).toContain('class="member-name-row"');
-    expect(adminUsersIndexSource).toMatch(
-      /class="member-name-row"[\s\S]*class="member-name"[\s\S]*<TitleBadge :title="user\.profile\.title"/,
-    );
+  it("renders title identity as a shield and colored nickname without a title tag", () => {
+    expect(adminUsersIndexSource).toContain("TitleIdentityName");
+    expect(adminUsersIndexSource).toContain(':name="user.profile.nickname"');
+    expect(adminUsersIndexSource).toContain(':title="user.profile.title"');
+    expect(adminUsersIndexSource).not.toContain("TitleBadge");
   });
 
   it("keeps personnel cards uniform and places the raw member number near the name", () => {

@@ -20,10 +20,11 @@
             @error="avatarLoadFailed = true"
           />
           <view class="profile-main">
-            <view class="name-row">
-              <text class="nickname">{{ dashboard?.profile.nickname || "未命名成员" }}</text>
-              <TitleBadge :title="dashboard?.profile.title || userStore.currentUser?.title" />
-            </view>
+            <TitleIdentityName
+              :name="dashboard?.profile.nickname"
+              :title="dashboard?.profile.title || userStore.currentUser?.title"
+              size="profile"
+            />
             <text class="meta-line">喵喵号 {{ dashboard?.profile.meow_no || "--" }}</text>
             <scroll-view
               v-if="departmentTags.length"
@@ -108,7 +109,7 @@ import { resolveUserAvatarContentUrl } from "@/api/files";
 import { getMeDashboard, type MeDashboardResponse } from "@/api/me";
 import AppTabBar from "@/components/AppTabBar.vue";
 import IdentityAvatar from "@/components/IdentityAvatar.vue";
-import TitleBadge from "@/components/TitleBadge.vue";
+import TitleIdentityName from "@/components/TitleIdentityName.vue";
 import { LOGIN_ROUTE, PUBLIC_HOME_ROUTE } from "@/services/app-startup";
 import { useUserStore } from "@/stores/user";
 import { getDepartmentTagStyle } from "@/constants/departments";
@@ -314,24 +315,6 @@ onShow(() => {
   z-index: 1;
   min-width: 0;
   flex: 1;
-}
-
-.name-row {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16rpx;
-  min-width: 0;
-}
-
-.nickname {
-  overflow: hidden;
-  color: #171b22;
-  font-size: 36rpx;
-  font-weight: 900;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .meta-line {

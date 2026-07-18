@@ -30,7 +30,11 @@
               @error="avatarLoadFailed = true"
             />
             <view v-if="userDetail?.profile.title" class="avatar-title">
-              <TitleBadge :title="userDetail.profile.title" />
+              <TitleIdentityName
+                :name="userDetail.profile.nickname"
+                :title="userDetail.profile.title"
+                size="detail"
+              />
             </view>
             <text v-if="avatarReviewHint" class="avatar-review-hint">{{ avatarReviewHint }}</text>
           </view>
@@ -238,7 +242,7 @@ import {
 import DepartmentTagPicker from "@/components/DepartmentTagPicker.vue";
 import IdentityAvatar from "@/components/IdentityAvatar.vue";
 import MemberTitleActionsModal from "@/components/MemberTitleActionsModal.vue";
-import TitleBadge from "@/components/TitleBadge.vue";
+import TitleIdentityName from "@/components/TitleIdentityName.vue";
 import defaultAvatar from "../../../../素材/svg/萌猫/橘猫.svg";
 import loadingBackground from "../../../../素材/加载页素材/背景.jpg";
 import {

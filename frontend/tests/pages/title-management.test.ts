@@ -44,7 +44,7 @@ describe("title management pages", () => {
   });
 
   it("integrates title identity, creation, resignation, grant, and transfer flows", () => {
-    expect(profileIndexSource).toContain("TitleBadge");
+    expect(profileIndexSource).toContain("TitleIdentityName");
     expect(createUserSource).toContain("getTitleCatalog");
     expect(createUserSource).toContain("form.title");
     expect(settingsSource).toContain("resignMyTitle");
@@ -57,5 +57,6 @@ describe("title management pages", () => {
     expect(memberDetailSource).not.toContain('class="title-actions-card"');
     expect(titleModalSource).toContain("授予或变更头衔");
     expect(titleModalSource).toContain("同时转移超级管理员权限");
+    expect(titleModalSource).toContain("TitleBadge");
   });
 });

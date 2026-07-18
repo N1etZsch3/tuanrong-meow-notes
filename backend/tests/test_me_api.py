@@ -1,6 +1,5 @@
-from tests.test_auth_api import auth_headers, create_token, create_user
-
 from app.modules.auth.models import UserDepartment
+from tests.test_auth_api import auth_headers, create_token, create_user
 
 
 def test_me_dashboard_returns_profile_stats_and_admin_entry(api_client, db_session):
@@ -33,9 +32,12 @@ def test_me_dashboard_returns_profile_stats_and_admin_entry(api_client, db_sessi
         "avatar_url": None,
         "department": "宣传部",
         "departments": ["宣传部"],
-        "role": "admin",
-        "show_admin_entry": True,
-    }
+            "role": "admin",
+            "show_admin_entry": True,
+            "title": None,
+            "title_label": None,
+            "title_shield": None,
+        }
     assert data["stats"] == {
         "total_completed_tasks": 0,
         "monthly_completed_tasks": 0,

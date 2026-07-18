@@ -1,4 +1,8 @@
+import pytest
+
+from app.core.errors import APIError
 from app.modules.auth.models import AdminOperationLog, User
+from app.modules.titles.service import seed_president
 from tests.test_auth_api import auth_headers, create_token, create_user
 
 
@@ -269,3 +273,210 @@ def test_only_president_can_create_a_member_with_an_initial_title(api_client, db
     assert created.status_code == 200
     new_user = db_session.query(User).filter_by(student_no="trmx7130").one()
     assert new_user.profile.title == "secretary_head"
+
+
+def test_member_can_resign_a_non_president_title(api_client, db_session):
+    member = create_user(
+        db_session,
+        student_no="trmx7131",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    assign_title(db_session, member, "care_deputy")
+
+    response = api_client.post(
+        "/api/v1/profile/me/title/resign",
+        headers=auth_headers(create_token(member)),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {
+        "title": None,
+        "title_label": None,
+        "title_shield": None,
+    }
+    db_session.refresh(member.profile)
+    assert member.profile.title is None
+    log = db_session.query(AdminOperationLog).filter_by(operation_type="user_title_resign").one()
+    assert log.admin_id == member.id
+
+
+def test_resigning_without_a_title_is_idempotent(api_client, db_session):
+    member = create_user(
+        db_session,
+        student_no="trmx7132",
+        must_change_password=False,
+        profile_completed=True,
+    )
+
+    response = api_client.post(
+        "/api/v1/profile/me/title/resign",
+        headers=auth_headers(create_token(member)),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["title"] is None
+    assert (
+        db_session.query(AdminOperationLog).filter_by(operation_type="user_title_resign").count()
+        == 0
+    )
+
+
+def test_president_cannot_resign_without_transferring(api_client, db_session):
+    president = create_president(db_session, student_no="trmx7133")
+
+    response = api_client.post(
+        "/api/v1/profile/me/title/resign",
+        headers=auth_headers(create_token(president)),
+    )
+
+    assert response.status_code == 403
+    assert response.json()["code"] == 63012
+    db_session.refresh(president.profile)
+    assert president.profile.title == "president"
+
+
+def test_president_transfer_is_atomic_and_promotes_a_member(api_client, db_session):
+    president = create_president(db_session, student_no="trmx7134")
+    successor = create_user(
+        db_session,
+        student_no="trmx7135",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    assign_title(db_session, successor, "secretary_deputy")
+    previous_token_version = successor.token_version
+
+    response = api_client.post(
+        "/api/v1/admin/titles/transfer",
+        headers=auth_headers(create_token(president)),
+        json={"successor_id": str(successor.id)},
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["previous_president"]["id"] == str(president.id)
+    assert data["previous_president"]["profile"]["title"] is None
+    assert data["successor"]["id"] == str(successor.id)
+    assert data["successor"]["profile"]["title"] == "president"
+    db_session.refresh(president)
+    db_session.refresh(successor)
+    db_session.refresh(president.profile)
+    db_session.refresh(successor.profile)
+    assert president.profile.title is None
+    assert successor.profile.title == "president"
+    assert successor.role == "admin"
+    assert successor.token_version == previous_token_version + 1
+    assert (
+        db_session.query(AdminOperationLog).filter_by(operation_type="president_transfer").count()
+        == 1
+    )
+
+
+def test_president_transfer_keeps_existing_admin_token_version(api_client, db_session):
+    president = create_president(db_session, student_no="trmx7136")
+    successor = create_user(
+        db_session,
+        student_no="trmx7137",
+        role="admin",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    previous_token_version = successor.token_version
+
+    response = api_client.post(
+        "/api/v1/admin/titles/transfer",
+        headers=auth_headers(create_token(president)),
+        json={"successor_id": str(successor.id)},
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(successor)
+    assert successor.token_version == previous_token_version
+
+
+def test_president_transfer_rejects_self_and_non_president_actor(api_client, db_session):
+    president = create_president(db_session, student_no="trmx7138")
+    self_response = api_client.post(
+        "/api/v1/admin/titles/transfer",
+        headers=auth_headers(create_token(president)),
+        json={"successor_id": str(president.id)},
+    )
+    assert self_response.status_code == 422
+    assert self_response.json()["code"] == 63011
+
+    admin = create_user(
+        db_session,
+        student_no="trmx7139",
+        role="admin",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    target = create_user(
+        db_session,
+        student_no="trmx7140",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    rejected = api_client.post(
+        "/api/v1/admin/titles/transfer",
+        headers=auth_headers(create_token(admin)),
+        json={"successor_id": str(target.id)},
+    )
+    assert rejected.status_code == 403
+    assert rejected.json()["code"] == 63010
+
+
+def test_soft_deleting_a_titled_member_releases_the_title(api_client, db_session):
+    admin = create_user(
+        db_session,
+        student_no="trmx7141",
+        role="admin",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    member = create_user(
+        db_session,
+        student_no="trmx7142",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    assign_title(db_session, member, "activity_deputy")
+
+    response = api_client.delete(
+        f"/api/v1/admin/users/{member.id}",
+        headers=auth_headers(create_token(admin)),
+    )
+
+    assert response.status_code == 200
+    db_session.refresh(member.profile)
+    assert member.profile.title is None
+
+
+def test_seed_president_promotes_user_and_rejects_a_second_president(db_session):
+    first = create_user(
+        db_session,
+        student_no="trmx7143",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    previous_token_version = first.token_version
+
+    seeded = seed_president(db_session, user=first)
+
+    assert seeded.profile.title == "president"
+    assert seeded.role == "admin"
+    assert seeded.token_version == previous_token_version + 1
+
+    second = create_user(
+        db_session,
+        student_no="trmx7144",
+        must_change_password=False,
+        profile_completed=True,
+    )
+    with pytest.raises(APIError) as exc_info:
+        seed_president(db_session, user=second)
+    assert exc_info.value.status_code == 409
+    assert exc_info.value.code == 63009
+    db_session.refresh(second.profile)
+    assert second.profile.title is None

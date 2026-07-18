@@ -1,3 +1,5 @@
+from uuid import UUID
+
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -11,6 +13,7 @@ from app.modules.titles.constants import (
     UNIQUE_TITLE_KEYS,
     normalize_title,
     shield_variant,
+    title_payload,
 )
 
 
@@ -139,3 +142,164 @@ def set_member_title(
         ) from exc
     db.refresh(target)
     return auth_service.admin_user_payload(target)
+
+
+def resign_title(db: Session, *, user: User) -> dict:
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == user.id)
+        .with_for_update()
+    )
+    if profile is None or profile.title is None:
+        return title_payload(None)
+    if profile.title == PRESIDENT:
+        raise APIError(
+            code=ErrorCode.TITLE_PRESIDENT_TRANSFER_REQUIRED,
+            message="会长需要先完成头衔转让",
+            status_code=403,
+        )
+
+    before_title = profile.title
+    profile.title = None
+    auth_service.log_admin_operation(
+        db,
+        admin=user,
+        operation_type="user_title_resign",
+        target_id=user.id,
+        summary=f"成员主动退出头衔 {user.student_no}",
+        before_data={"title": before_title},
+        after_data={"title": None},
+    )
+    db.commit()
+    return title_payload(None)
+
+
+def transfer_president(
+    db: Session,
+    *,
+    actor: User,
+    successor_id: UUID,
+) -> dict:
+    ensure_president(actor)
+    if actor.id == successor_id:
+        raise APIError(
+            code=ErrorCode.TITLE_INVALID,
+            message="不能将会长头衔转让给自己",
+            status_code=422,
+        )
+
+    successor = auth_service.get_target_user(db, successor_id)
+    profiles = db.scalars(
+        select(UserProfile)
+        .where(UserProfile.user_id.in_([actor.id, successor.id]))
+        .order_by(UserProfile.user_id)
+        .with_for_update()
+    ).all()
+    profiles_by_user_id = {profile.user_id: profile for profile in profiles}
+    actor_profile = profiles_by_user_id.get(actor.id)
+    successor_profile = profiles_by_user_id.get(successor.id)
+    if actor_profile is None or actor_profile.title != PRESIDENT:
+        raise APIError(
+            code=ErrorCode.TITLE_PRESIDENT_REQUIRED,
+            message="仅会长可执行此操作",
+            status_code=403,
+        )
+    if successor_profile is None:
+        successor_profile = UserProfile(user_id=successor.id, nickname="")
+        db.add(successor_profile)
+        db.flush()
+
+    successor_previous_title = successor_profile.title
+    successor_previous_role = successor.role
+    actor_profile.title = None
+    db.flush()
+    successor_profile.title = PRESIDENT
+    if successor.role not in {"admin", "super_admin"}:
+        successor.role = "admin"
+        successor.token_version += 1
+
+    auth_service.log_admin_operation(
+        db,
+        admin=actor,
+        operation_type="president_transfer",
+        target_id=successor.id,
+        summary=f"转让会长头衔给 {successor.student_no}",
+        before_data={
+            "president_user_id": str(actor.id),
+            "successor_title": successor_previous_title,
+            "successor_role": successor_previous_role,
+        },
+        after_data={
+            "president_user_id": str(successor.id),
+            "successor_title": PRESIDENT,
+            "successor_role": successor.role,
+        },
+    )
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise APIError(
+            code=ErrorCode.TITLE_OCCUPIED,
+            message="会长头衔已被其他成员使用",
+            status_code=409,
+        ) from exc
+
+    db.refresh(actor)
+    db.refresh(successor)
+    return {
+        "previous_president": auth_service.admin_user_payload(actor),
+        "successor": auth_service.admin_user_payload(successor),
+    }
+
+
+def seed_president(db: Session, *, user: User) -> User:
+    existing_profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.title == PRESIDENT)
+        .with_for_update()
+    )
+    if existing_profile is not None and existing_profile.user_id != user.id:
+        raise APIError(
+            code=ErrorCode.TITLE_OCCUPIED,
+            message="系统中已经存在会长",
+            status_code=409,
+        )
+
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == user.id)
+        .with_for_update()
+    )
+    if profile is None:
+        profile = UserProfile(user_id=user.id, nickname="")
+        db.add(profile)
+        db.flush()
+
+    before_title = profile.title
+    before_role = user.role
+    profile.title = PRESIDENT
+    if user.role not in {"admin", "super_admin"}:
+        user.role = "admin"
+        user.token_version += 1
+    if before_title != PRESIDENT or before_role != user.role:
+        auth_service.log_admin_operation(
+            db,
+            admin=user,
+            operation_type="president_seed",
+            target_id=user.id,
+            summary=f"初始化会长 {user.student_no}",
+            before_data={"title": before_title, "role": before_role},
+            after_data={"title": PRESIDENT, "role": user.role},
+        )
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise APIError(
+            code=ErrorCode.TITLE_OCCUPIED,
+            message="系统中已经存在会长",
+            status_code=409,
+        ) from exc
+    db.refresh(user)
+    return user

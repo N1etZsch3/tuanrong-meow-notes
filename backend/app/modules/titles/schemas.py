@@ -23,3 +23,7 @@ class TitleCatalogResponse(BaseModel):
 
 class SetMemberTitleRequest(BaseModel):
     title: str | None = Field(default=None, max_length=64)
+
+
+class TransferPresidentRequest(BaseModel):
+    successor_id: UUID

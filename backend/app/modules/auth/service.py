@@ -827,7 +827,10 @@ def soft_delete_user(
         "status": user.status,
         "token_version": user.token_version,
         "deleted_at": None,
+        "title": user.profile.title if user.profile else None,
     }
+    if user.profile is not None:
+        user.profile.title = None
     user.status = "left"
     user.deleted_at = now_utc()
     user.token_version += 1
@@ -841,6 +844,7 @@ def soft_delete_user(
         after_data={
             "status": user.status,
             "deleted_at": user.deleted_at.isoformat(),
+            "title": None,
         },
     )
     db.commit()

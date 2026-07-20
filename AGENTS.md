@@ -66,6 +66,17 @@ For documentation-only tasks, still inspect current state. Documentation that de
 - Do not inspect or print environment file contents unless the user explicitly asks and it is safe to do so.
 - Use structured parsers or project APIs when available instead of brittle string manipulation.
 
+## Code Organization And Quality Standards
+
+These rules apply to backend, frontend, scripts, tests, and other source code.
+
+- Give each independently changeable feature or responsibility its own implementation file within the relevant module. A file may contain tightly related helpers, but it must not become a catch-all containing all routes, services, state, UI, validation, and utilities for an entire module.
+- Split code when a file contains multiple unrelated reasons to change, mixes orchestration with reusable business logic, or prevents a feature from being understood and tested independently. File length alone is not the deciding factor; responsibility boundaries are.
+- Keep modules highly cohesive and loosely coupled. Use explicit inputs, outputs, types, and interfaces; keep side effects at clear boundaries; avoid circular dependencies, hidden mutable global state, and imports of another module's private internals.
+- When the same behavior, business rule, integration, or UI pattern is needed in more than one place, extract it into the narrowest appropriate shared function, service, composable, component, or module instead of copying the implementation.
+- Keep abstractions purposeful. Shared code must represent the same semantics, have a clear owner and name, and remain independently testable; do not create generic dumping-ground utility files or over-parameterized abstractions merely to reduce line count.
+- Organize tests around the same feature and responsibility boundaries. Reusable logic should be covered at its shared boundary, while callers should test their own integration and behavior.
+
 ## Git And Worktree Workflow
 
 The repository root is the production-facing workspace. Normal development should happen in project-local worktrees under:
@@ -112,13 +123,38 @@ If a worktree has unrelated uncommitted files, do not touch them. If they block 
 
 Ignored environment and local config files are required for many checks, builds, and deployments.
 
-- Copy required ignored env files from the local `dev` worktree into a new focused worktree using the same relative paths.
+- Copy required ignored env files from the local `dev` worktree into a new focused worktree using the same relative paths only after confirming they are intended for that runtime environment.
 - Do not invent placeholder secrets.
 - If required env files are missing from `dev`, ask the user instead of fabricating values.
 - Verify copied env files remain ignored with `git status --short --ignored -- <path>`.
 - Do not print env contents.
+- Do not infer an environment from its worktree or filename. Before a development deployment, check only non-sensitive boolean conditions: the database name is `catmap_dev`, the database role is `catmap_dev_app`, and `CATMAP_TENCENT_COS_ENV_PREFIX` is `dev-sandbox`.
+- Before a production deployment, verify the effective environment targets database `catmap`, does not use the development database role, retains the production legacy COS prefix `dev`, and enforces image content security. Prefer preserving the verified server production `.env` when no production configuration change is required.
 
 Mini Program AppIDs and third-party service keys are push-sensitive. Keep local development config aligned with the authorized app, but inspect staged diffs and push ranges before pushing. Do not push real AppIDs, keys, tokens, or private credentials to a remote unless the user explicitly approves that remote state.
+
+## Same-Host Development And Production Isolation
+
+Until separate physical servers are funded, production and development share one host but must remain logically isolated. This is a deployment boundary, not an invitation to treat the environments as interchangeable.
+
+| Concern | Production | Development |
+|---|---|---|
+| Backend directory | `/opt/catmap/backend` | `/opt/catmap-dev/backend` |
+| systemd unit | `catmap-backend` | `catmap-backend-dev` |
+| Backend listener | `127.0.0.1:8000` | `127.0.0.1:8001` |
+| Database | `catmap` | `catmap_dev` using `catmap_dev_app` |
+| Public API domain | production domain | `dev-api.trmx.fun` |
+| Mini Program build | `npm run build:mp-weixin:prod` only | `npm run build`, `npm run build:mp-weixin`, or `npm run build:mp-weixin:dev` |
+
+- The production deployment script, production unit, production Nginx vhost, production database, and production service must remain untouched during development deployment work.
+- Development deployment must use `scripts/deploy-backend-dev.ps1` with an explicit server host and ignored development environment file. Its fixed deployment directory, service name, domain, database, database role, and COS prefix guards must not be weakened or parameterized to production values.
+- The development service must run as the dedicated non-root `catmap-dev` system user, listen only on loopback, and must never add a public firewall/security-group rule for port 8001.
+- The development Nginx vhost must not use `default_server`. Obtain the development certificate with the HTTP webroot/bootstrap vhost; never use a standalone ACME mode that stops or occupies production 80/443 listeners.
+- One COS bucket may be shared temporarily. Production retains its legacy `catmap/dev/` object paths, while development writes must use `catmap/dev-sandbox/`; cloned production references remain readable but cannot be deleted by the development runtime. Treat this as naming isolation only: request a CAM policy limited to `catmap/dev-sandbox/*` before considering object storage access fully isolated.
+- Do not automatically copy production data into development. Any later refresh must be a separate, approved procedure with backup, masking, restore validation, and rollback notes.
+- Deploy only a committed source baseline whose Alembic migrations are compatible with `catmap_dev`. Never deploy uncommitted worktree changes as a development release.
+- After a development deployment, verify both production and development health endpoints, both systemd units, the development database/role identity, the development migration version, loopback-only port 8001, and that production resource files and database version did not change.
+- The default frontend build is development by design. Production Mini Program validation is a deliberate release action using `npm run build:mp-weixin:prod`; do not use a development artifact for production upload.
 
 ## Commit And Push Discipline
 
@@ -218,6 +254,11 @@ General rules:
 
 - Design for phone-sized Mini Program viewports first.
 - Every frontend page should be checked against a phone-sized 微信小程序视口 first.
+- Before implementing any frontend feature or component, first consult the official [WeChat Mini Program development documentation](https://developers.weixin.qq.com/miniprogram/dev/framework/), including its component and API references, to determine whether WeChat provides a corresponding native component or API.
+- When a suitable native Mini Program component or API exists and supports the project's target base-library/runtime versions, prefer it over a custom implementation or third-party dependency. Check its documented properties, events, limits, permissions, privacy requirements, and compatibility before coding.
+- Use a custom component, uni-app abstraction, or third-party library only when the native capability is unavailable, insufficient, or incompatible with an explicit project requirement. Record that reason and the chosen fallback in the relevant plan, progress entry, or handoff.
+- Keep platform-specific native calls behind a focused reusable component, composable, service, or adapter when they would otherwise leak across pages or business modules. Preserve required H5 behavior without weakening the Mini Program-first implementation.
+- Native capabilities involving authorization, navigation, maps, media, files, device access, or other platform behavior must handle denial, cancellation, failure, and unsupported-version states and receive the required WeChat Developer Tools or real-device verification.
 - Keep pages usable, dense enough for mobile, and free of accidental overflow.
 - Use existing app components, request services, stores, and assets before creating new abstractions.
 - Use the shared page background `frontend/素材/加载页素材/背景.jpg` unless the user explicitly asks for a page-specific exception.
@@ -281,6 +322,8 @@ npm run type-check
 npm run build:mp-weixin
 ```
 
+`npm run build:mp-weixin` is intentionally the development build. For an approved production release validation, additionally run `npm run build:mp-weixin:prod` and confirm the resulting artifact uses only the production API domain.
+
 Deployment-impacting backend work should also run the repository deployment verification path unless the user explicitly scopes the task to local-only work:
 
 ```powershell
@@ -288,6 +331,14 @@ powershell -ExecutionPolicy Bypass -File scripts\deploy-backend.ps1 -EnvFile bac
 ```
 
 Then verify the deployed `/api/v1/health` endpoint using the currently configured production or test host from scripts and progress notes.
+
+For an approved development-server deployment, use the isolated path instead:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts\deploy-backend-dev.ps1 -ServerHost <server-host> -EnvFile backend\.env
+```
+
+Do not run this command until the intended source baseline is committed and the development environment-file guard has passed. The post-deploy checks must cover both environments as defined in `Same-Host Development And Production Isolation`.
 
 If a verification step cannot be run, record exactly why and what risk remains.
 
@@ -356,9 +407,11 @@ Before handing off:
 
 - Relevant current docs and code were checked.
 - Scope stayed focused.
+- New or changed code follows the one-feature/one-responsibility file rule; repeated behavior is shared at an appropriate boundary, and no catch-all module file or avoidable cross-module coupling was introduced.
 - API/schema changes, if any, have docs and tests.
 - Database changes, if any, have migrations.
 - Frontend changes handle important states and Mini Program constraints.
+- For frontend features or components, the applicable WeChat native components and APIs were checked first; native preference, compatibility, permissions, fallback behavior, and any required manual verification were addressed or documented.
 - Backend changes preserve auth, response envelopes, and transaction safety.
 - Relevant tests, type checks, linters, builds, migrations, or deployment checks were run.
 - `docs/开发进度.md` was updated when appropriate.

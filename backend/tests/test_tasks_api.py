@@ -338,7 +338,9 @@ def test_admin_can_publish_summer_feeding_task_and_map_marker_is_visible(
 def test_cancelled_task_is_filterable_but_hidden_from_map_markers(
     api_client,
     db_session,
+    monkeypatch,
 ):
+    freeze_task_clock(monkeypatch, date(2026, 7, 3))
     admin = create_user(db_session, role="admin", nickname="管理员")
     member = create_user(db_session)
     campus = seed_campus(db_session)
@@ -584,7 +586,9 @@ def test_map_point_summary_uses_uploaded_task_photos_for_detail_thumbnails(
 def test_task_photos_use_file_asset_cos_urls_instead_of_client_content_urls(
     api_client,
     db_session,
+    monkeypatch,
 ):
+    freeze_task_clock(monkeypatch, date(2026, 7, 3))
     admin = create_user(db_session, role="admin", nickname="管理员")
     member = create_user(db_session)
     campus = seed_campus(db_session)
@@ -639,7 +643,9 @@ def test_task_photos_use_file_asset_cos_urls_instead_of_client_content_urls(
 def test_task_detail_normalizes_legacy_localhost_photo_urls_from_file_asset(
     api_client,
     db_session,
+    monkeypatch,
 ):
+    freeze_task_clock(monkeypatch, date(2026, 7, 3))
     admin = create_user(db_session, role="admin", nickname="管理员")
     member = create_user(db_session)
     campus = seed_campus(db_session)
@@ -1085,7 +1091,8 @@ def test_member_list_filters_by_execution_status_instead_of_parent_task_status(
     assert completed_items[0]["current_execution"]["status"] == "completed"
 
 
-def test_member_list_filters_by_execution_date_range(api_client, db_session):
+def test_member_list_filters_by_execution_date_range(api_client, db_session, monkeypatch):
+    freeze_task_clock(monkeypatch, date(2026, 7, 3))
     admin = create_user(db_session, role="admin", nickname="管理员")
     member = create_user(db_session)
     campus = seed_campus(db_session)

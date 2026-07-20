@@ -66,6 +66,17 @@ For documentation-only tasks, still inspect current state. Documentation that de
 - Do not inspect or print environment file contents unless the user explicitly asks and it is safe to do so.
 - Use structured parsers or project APIs when available instead of brittle string manipulation.
 
+## Code Organization And Quality Standards
+
+These rules apply to backend, frontend, scripts, tests, and other source code.
+
+- Give each independently changeable feature or responsibility its own implementation file within the relevant module. A file may contain tightly related helpers, but it must not become a catch-all containing all routes, services, state, UI, validation, and utilities for an entire module.
+- Split code when a file contains multiple unrelated reasons to change, mixes orchestration with reusable business logic, or prevents a feature from being understood and tested independently. File length alone is not the deciding factor; responsibility boundaries are.
+- Keep modules highly cohesive and loosely coupled. Use explicit inputs, outputs, types, and interfaces; keep side effects at clear boundaries; avoid circular dependencies, hidden mutable global state, and imports of another module's private internals.
+- When the same behavior, business rule, integration, or UI pattern is needed in more than one place, extract it into the narrowest appropriate shared function, service, composable, component, or module instead of copying the implementation.
+- Keep abstractions purposeful. Shared code must represent the same semantics, have a clear owner and name, and remain independently testable; do not create generic dumping-ground utility files or over-parameterized abstractions merely to reduce line count.
+- Organize tests around the same feature and responsibility boundaries. Reusable logic should be covered at its shared boundary, while callers should test their own integration and behavior.
+
 ## Git And Worktree Workflow
 
 The repository root is the production-facing workspace. Normal development should happen in project-local worktrees under:
@@ -243,6 +254,11 @@ General rules:
 
 - Design for phone-sized Mini Program viewports first.
 - Every frontend page should be checked against a phone-sized 微信小程序视口 first.
+- Before implementing any frontend feature or component, first consult the official [WeChat Mini Program development documentation](https://developers.weixin.qq.com/miniprogram/dev/framework/), including its component and API references, to determine whether WeChat provides a corresponding native component or API.
+- When a suitable native Mini Program component or API exists and supports the project's target base-library/runtime versions, prefer it over a custom implementation or third-party dependency. Check its documented properties, events, limits, permissions, privacy requirements, and compatibility before coding.
+- Use a custom component, uni-app abstraction, or third-party library only when the native capability is unavailable, insufficient, or incompatible with an explicit project requirement. Record that reason and the chosen fallback in the relevant plan, progress entry, or handoff.
+- Keep platform-specific native calls behind a focused reusable component, composable, service, or adapter when they would otherwise leak across pages or business modules. Preserve required H5 behavior without weakening the Mini Program-first implementation.
+- Native capabilities involving authorization, navigation, maps, media, files, device access, or other platform behavior must handle denial, cancellation, failure, and unsupported-version states and receive the required WeChat Developer Tools or real-device verification.
 - Keep pages usable, dense enough for mobile, and free of accidental overflow.
 - Use existing app components, request services, stores, and assets before creating new abstractions.
 - Use the shared page background `frontend/素材/加载页素材/背景.jpg` unless the user explicitly asks for a page-specific exception.
@@ -391,9 +407,11 @@ Before handing off:
 
 - Relevant current docs and code were checked.
 - Scope stayed focused.
+- New or changed code follows the one-feature/one-responsibility file rule; repeated behavior is shared at an appropriate boundary, and no catch-all module file or avoidable cross-module coupling was introduced.
 - API/schema changes, if any, have docs and tests.
 - Database changes, if any, have migrations.
 - Frontend changes handle important states and Mini Program constraints.
+- For frontend features or components, the applicable WeChat native components and APIs were checked first; native preference, compatibility, permissions, fallback behavior, and any required manual verification were addressed or documented.
 - Backend changes preserve auth, response envelopes, and transaction safety.
 - Relevant tests, type checks, linters, builds, migrations, or deployment checks were run.
 - `docs/开发进度.md` was updated when appropriate.
